@@ -11,5 +11,11 @@ Submodules
 
 .. toctree::
 
-   sn_tools.cadence_tools
+   sn_tools.observations
+   sn_tools.sn_analyze_simu
+   sn_tools.sn_cadence_tools
+   sn_tools.sn_rate
+   sn_tools.sn_telescope
+   sn_tools.sn_throughputs
+   sn_tools.sn_utils
 

@@ -1,7 +1,7 @@
 from lsst.sims.photUtils import SignalToNoise
 from lsst.sims.photUtils import PhotometricParameters
 from lsst.sims.photUtils import Bandpass, Sed
-from sn_utils.utils.sn_throughputs import Throughputs
+from sn_tools.sn_throughputs import Throughputs
 
 import numpy as np
 import matplotlib.pyplot as plt

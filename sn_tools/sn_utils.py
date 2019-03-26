@@ -1,5 +1,5 @@
 import numpy as np
-from sn_utils.utils.sn_rate import SN_Rate
+from sn_tools.sn_rate import SN_Rate
 import os
 import numpy.lib.recfunctions as rf
 from astropy.table import Table

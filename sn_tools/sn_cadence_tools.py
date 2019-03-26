@@ -6,7 +6,7 @@ import matplotlib._cntr as cntr
 import h5py
 from astropy.table import Table, Column, vstack
 from scipy.interpolate import griddata, interpn, CloughTocher2DInterpolator, LinearNDInterpolator
-from sn_utils.utils.sn_telescope import Telescope
+from sn_tools.sn_telescope import Telescope
 
 
 class Reference_Data:

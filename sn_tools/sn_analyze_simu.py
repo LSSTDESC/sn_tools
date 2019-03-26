@@ -3,7 +3,7 @@ import h5py
 import argparse
 from astropy.table import Table
 import pylab as plt
-from sn_utils.utils.sn_rate import SN_Rate
+from sn_tools.sn_rate import SN_Rate
 
 
 def Plot_Parameters(tab, season):
