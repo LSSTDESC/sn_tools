@@ -10,6 +10,20 @@ from sn_tools.sn_telescope import Telescope
 
 
 class Reference_Data:
+    """
+    class to handle light curve of SN
+
+    Parameters
+    ---------------
+    Li_files : str
+      light curve reference file
+    mag_to_flux_files : str
+      files of magnitude to flux
+    band : str
+      band considered
+    z : float
+      redshift considered
+    """
 
     def __init__(self, Li_files, mag_to_flux_files, band, z):
         self.band = band
@@ -25,19 +39,22 @@ class Reference_Data:
                 self.Get_Interp_mag(self.band, np.load(val)))
 
     def Get_Interp_Fluxes(self, band, tab, z):
-        """Flux interpolation for a given band and redshift
+        """
+        Flux interpolator
 
         Parameters
         ---------------
-        band : filter
-        tab : array of data
-        z : redshift
+        band : str
+           band considered
+        tab : array
+           reference data with (at least) fields z,band,time,DayMax
+        z : float
+         redshift considered
 
         Returns
-        -----------
-        fluxes (in phote/sec)
+        -----
+        list (float) of interpolated fluxes (in e/sec)
         """
-
         lims = {}
         idx = (np.abs(tab['z'] - z) < 1.e-5) & (tab['band'] == 'LSST::'+band)
         sel = tab[idx]
@@ -47,32 +64,42 @@ class Reference_Data:
         return interpolate.interp1d(selc['deltaT'], selc['flux_e'], bounds_error=False, fill_value=0.)
 
     def Get_Interp_mag(self, band, tab):
-        """mag interpolation for a given band and m5 values
+        """
+        magnitude (m5) to flux (e/sec) interpolator
 
         Parameters
         ---------------
-        band : filter
-        tab : array of data
+        band : str
+           band considered
+        tab : array
+           reference data with (at least) fields band,m5,flux_e,
+        z : float
+         redshift considered
 
         Returns
-        -----------
-        fluxes (in phote/sec)
+        -----
+        list (float) of interpolated fluxes (in e/sec)
         """
 
-        print(tab.dtype)
-        idx = tab['band'] == band
-        sel = tab[idx]
-        return interpolate.interp1d(sel['m5'], sel['flux_e'], bounds_error=False, fill_value=0.)
+    idx = tab['band'] == band
+    sel = tab[idx]
+    return interpolate.interp1d(sel['m5'], sel['flux_e'], bounds_error=False, fill_value=0.)
 
 
 class Generate_Fake_Observations:
     """ Class to generate Fake observations
-    Input
+
+    Parameters
     ---------
-    parameter file (filter, cadence, m5,Nseasons, ...)
-    Production: Observations
+    config: yaml-like
+       configuration file (parameter choice: filter, cadence, m5,Nseasons, ...)
+    list : str,opt
+        Name of the columns used.
+        Default : 'observationStartMJD', 'fieldRA', 'fieldDec','filter','fiveSigmaDepth','visitExposureTime','numExposures','visitTime','season'
+
+    Returns
     ---------
-    recordarray of observations:
+    recordarray of observations with the fields:
     MJD, Ra, Dec, band,m5,Nexp, ExpTime, Season
     """
 
@@ -95,7 +122,15 @@ class Generate_Fake_Observations:
         self.make_fake(config)
 
     def make_fake(self, config):
+        """ Generate Fake observations
 
+        Parameters
+        ---------
+        config: yaml-like
+          configuration file (parameter choice: filter, cadence, m5,Nseasons, ...)
+
+
+        """
         bands = config['bands']
         cadence = dict(zip(bands, config['Cadence']))
         shift_days = dict(
@@ -133,6 +168,23 @@ class Generate_Fake_Observations:
         self.Observations = res
 
     def m5_coadd(self, m5, Nvisits, Tvisit):
+        """ Coadded m5 estimation
+
+        Parameters
+        ---------
+        m5 : list(float)
+           list of five-sigma depth values
+         Nvisits : list(float)
+           list of the number of visits
+          Tvisit : list(float)
+           list of the visit times
+
+       Returns
+        ---------
+       m5_coadd : list(float)
+          list of m5 coadded values
+
+        """
         m5_coadd = m5+1.25*np.log10(float(Nvisits)*Tvisit/30.)
         return m5_coadd
 
@@ -143,8 +195,6 @@ class TemplateData(object):
     """
 
     def __init__(self, filename, band):
-        """
-        """
         self.fi = filename
         self.refdata = self.Stack()
         self.telescope = Telescope(airmass=1.1)

@@ -169,3 +169,13 @@ texinfo_documents = [
      author, 'sn_tools', 'One line description of project.',
      'Miscellaneous'),
 ]
+
+
+def skip(app, what, name, obj, would_skip, options):
+    if name == "__call__":
+        return False
+    return would_skip
+
+
+def setup(app):
+    app.connect("autodoc-skip-member", skip)

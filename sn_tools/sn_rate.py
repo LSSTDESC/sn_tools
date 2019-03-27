@@ -8,23 +8,28 @@ norm = 1. / (4. * np.pi)
 
 
 class SN_Rate:
-    """ class SNRate
+    """ 
     Estimate production rates of typeIa SN
-    Available rates: Ripoche, Perrett,Dilday
 
-    Input
-    ---------
-    Rate type, cosmology (H0, Om0)
-    min and max rf phases
+    Available rates: Ripoche, Perrett, Dilday
 
-    Returns (call)
-    ---------
-    Lists:
-    zz: redshift
-    rate: production rate
-    err_rate: production rate error
-    nsn: number of SN
-    err_nsn: error on nsn
+    Parameters
+    -------------
+    rate :  str,opt
+      type of rate chosen (Ripoche, Perrett, Dilday)
+      Default : Ripoche
+    H0 : float, opt
+       Hubble constant value
+       Default : 70.
+    Om0 : float, opt
+        $\Omega_{0}$ value
+        Default : 0.25
+    min_rf_phase : float, opt
+       min rest-frame phase
+       Default : -15.
+    max_rf_phase : float, opt
+       max rest-frame phase
+       Default : 20.
     """
 
     def __init__(self, rate='Ripoche', H0=70, Om0=0.25,
@@ -36,25 +41,50 @@ class SN_Rate:
         self.max_rf_phase = max_rf_phase
 
     def __call__(self, zmin=0.1, zmax=0.2,
-                 dz=0.01, survey_area = 9.6,
+                 dz=0.01, survey_area=9.6,
                  bins=None, account_for_edges=False,
                  duration=140., duration_z=None):
         """
-        Input
-        ---------
-        Redshift limit and bin
-        account for edges:
-        duration: duration of obs (z indep.)
-        duration_z: duration os obs (z dep.)
+        Parameters
+        --------------
+        zmin : float, opt
+          minimal redshift
+          Default : 0.1
+        zmax : float,opt
+           max redshift
+           Default : 0.2
+        dz : float, opt
+           redshift bin
+           Default : 0.001
+        survey_area : float, opt
+           area of the survey (deg$^{2}$)
+           Default : 9.6 deg$^{2}$
+        bins : list(float), opt
+          redshift bins
+          Default : None
+        account_for_edges : bool
+          to account for season edges. If true, duration of the survey will be reduced by (1+z)*(maf_rf_phase-min_rf_phase)/365.25
+          Default : False
+        duration : float, opt
+           survey duration (in days)
+           Default : 140 days
+        duration_z : list(float),opt
+          survey duration (as a function of z)
+          Default : None
 
-        Returns (call)
+        Returns
         ---------
-        Lists:
-        zz: redshift
-        rate: production rate
-        err_rate: production rate error
-        nsn: number of SN
-        err_nsn: error on nsn
+        Lists :
+        zz : float
+           redshift values
+        rate : float
+           production rate
+        err_rate : float
+           production rate error
+        nsn : float
+           number of SN
+        err_nsn : float 
+           error on the number of SN
         """
 
         if bins is None:
@@ -64,7 +94,7 @@ class SN_Rate:
             zz = bins
             thebins = bins
 
-        rate, err_rate = self.sn_rate(zz)
+        rate, err_rate = self.SNRate(zz)
         error_rel = err_rate/rate
 
         area = survey_area / STERADIAN2SQDEG
@@ -90,8 +120,18 @@ class SN_Rate:
 
         return zz, rate, err_rate, nsn, err_nsn
 
-    def ripoche_rate(self, z):
+    def RipocheRate(self, z):
         """The SNLS SNIa rate according to the (unpublished) Ripoche et al study.
+
+        Parameters
+        --------------
+        z : float
+          redshift
+
+        Returns
+        ----------
+        rate : float
+        error_rate : float
         """
         rate = 1.53e-4*0.343
         expn = 2.14
@@ -100,8 +140,18 @@ class SN_Rate:
         rate_sn = rate * np.power((1+my_z)/1.5, expn)
         return rate_sn, 0.2*rate_sn
 
-    def perrett_rate(self, z):
-        """The SNLS SNIa rate according to (Perrett et al, 201?)
+    def PerrettRate(self, z):
+        """The SNLS SNIa rate according to (Perrett et al, 201?) 
+
+        Parameters
+        --------------
+        z : float
+          redshift
+
+        Returns
+        ----------
+        rate : float
+        error_rate : float
         """
         rate = 0.17E-4
         expn = 2.11
@@ -114,9 +164,20 @@ class SN_Rate:
 
         return rate_sn, np.power(err_rate_sn, 0.5)
 
-    def dilday_rate(self, z):
+    def DildayRate(self, z):
         """The Dilday rate according to
+
+         Parameters
+        --------------
+        z : float
+          redshift
+
+        Returns
+        ----------
+        rate : float
+        error_rate : float
         """
+
         rate = 2.6e-5
         expn = 1.5
         err_rate = 0.01
@@ -127,24 +188,39 @@ class SN_Rate:
         err_rate_sn = rate_sn*np.log(1+my_z)*err_expn
         return rate_sn, err_rate_sn
 
+    """
     def flat_rate(self, z):
         return 1., 0.1
+    """
 
-    def sn_rate(self, z):
+    def SNRate(self, z):
+        """SN rate estimation
+
+        Parameters
+        --------------
+        z : float
+          redshift
+
+        Returns
+        ----------
+        rate : float
+        error_rate : float
+        """
         if self.rate == 'Ripoche':
-            return self.ripoche_rate(z)
+            return self.RipocheRate(z)
         if self.rate == 'Perrett':
-            return self.perrett_rate(z)
+            return self.PerrettRate(z)
         if self.rate == 'Dilday':
-            return self.dilday_rate(z)
+            return self.DildayRate(z)
         """
         if self.rate == 'Flat':
             return self.flat_rate(z)
-        """
+       """
 
+    """
     def N_SN(self, z, survey_area):
 
-        rate, err_rate = self.sn_rate(z)
+        rate, err_rate = self.SNRate(z)
 
         area = survey_area / STERADIAN2SQDEG
         vol = self.astropy_cosmo.comoving_volume(z).value
@@ -153,12 +229,42 @@ class SN_Rate:
         err_nsn = err_rate*norm*area*vol*duration/(1.+z)
 
         return nsn, err_nsn
+    """
 
-    def Plot_Rate(self, zmin=0.1, zmax=0.2, dz=0.01,
-                  bins=None, account_for_edges=False,
-                  duration_z=None):
-        """ Plot production rate as a function of redshift
-        uses the call function (see previoulsy)
+    def PlotNSN(self, zmin=0.1, zmax=0.2,
+                dz=0.01, survey_area=9.6,
+                bins=None, account_for_edges=False,
+                duration=140., duration_z=None):
+        """ Plot integrated number of supernovae as a function of redshift
+        uses the __call__ function
+
+        Parameters
+        --------------
+        zmin : float, opt
+          minimal redshift
+          Default : 0.1
+        zmax : float,opt
+           max redshift
+           Default : 0.2
+        dz : float, opt
+           redshift bin
+           Default : 0.001
+        survey_area : float, opt
+           area of the survey (deg$^{2}$)
+           Default : 9.6 deg$^{2}$
+        bins : list(float), opt
+          redshift bins
+          Default : None
+        account_for_edges : bool
+          to account for season edges. If true, duration of the survey will be reduced by (1+z)*(maf_rf_phase-min_rf_phase)/365.25
+          Default : False
+        duration : float, opt
+           survey duration (in days)
+           Default : 140 days
+        duration_z : list(float),opt
+          survey duration (as a function of z)
+          Default : None
+
         """
         import pylab as plt
 

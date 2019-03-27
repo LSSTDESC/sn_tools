@@ -7,12 +7,33 @@ from astropy.table import Table
 
 class Generate_Sample:
     """ Generates a sample of parameters for simulation
-    Input
-    ---------
-    sn_parameters: X1, Color, z, DayMax, ...
-    (see yaml file input)
-    cosmology parameters: H0, Om0
-    Returns (call)
+
+    Parameters
+    -----------
+    sn_parameters : dict
+      supernovae parameters: x1, color, z, daymax, ...
+    cosmo_parameters: dict
+      cosmology parameters: H0, Om0
+    mjdCol : str,opt
+       name of the column corresponding to MJD
+       Default : 'mjd'
+    seasonCol : str, opt
+      name of the column corresponding to season
+      Default : 'season'
+    filterCol : str, opt
+      name of the column corresponding to filter
+      Default : 'filter'
+    min_rf_phase : float, opt
+       min rest-frame phase for supernovae
+       Default : -15.
+    max_rf_phase : float, opt
+       max rest-frame phase for supernovae
+       Default : 30.
+    area : float, opt
+       area of the survey (in deg\^2)
+       Default : 9.6 deg\^2
+
+    Returns 
     ---------
     recordarray of parameters to simulate:
     X1,Color,z,DayMax
