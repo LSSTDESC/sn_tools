@@ -60,9 +60,9 @@ class GenerateSample:
 
         Returns
         ---------
-        recarray of sn parameters for simulation:
+        array of sn parameters for simulation:
         z, float
-          redshift 
+          redshift
         x1, float
            x1 parameter
         color, float,
@@ -97,11 +97,52 @@ class GenerateSample:
                 r += rp
         print('Number of SN to simulate:', len(r))
         if len(r) > 0:
-            return np.rec.fromrecords(r, names=['z', 'x1', 'color', 'daymax', 'epsilon_x0', 'epsilon_x1', 'epsilon_color', 'min_rf_phase', 'max_rf_phase'])
+            names = ['z', 'x1', 'color', 'daymax',
+                     'epsilon_x0', 'epsilon_x1', 'epsilon_color',
+                     'min_rf_phase', 'max_rf_phase']
+            types = ['f8']*len(names)
+            params = np.zeros(len(r), dtype=list(zip(names, types)))
+            params = np.asarray(r)
+            return params
         else:
             return None
 
     def GetParameters(self, daymin, daymax, duration):
+        """ Get parameters
+
+        Parameters
+        --------------
+        daymin : float
+           min MJD
+        daymax, float
+           max MJD
+        duration : float
+           duration of observations
+
+        Returns
+        ----------
+        list of parameters
+        z, float
+          redshift
+        x1, float
+           x1 parameter
+        color, float,
+          color parameter
+        daymax, float
+          T0 parameter
+        epsilon_x0,float
+          epsilon for x0 parameter
+        epsilon_x1, float
+          epsilon for x1 parameter
+        epsilon_color, float
+          epsilon for color parameter
+        min_rf_phase, float
+          min rest-frame phase for LC points
+        max_rf_phase, float
+          max rest-frame phase for LC points
+
+        """
+
         # get z range
         zmin = self.params['z']['min']
         zmax = self.params['z']['max']
@@ -109,15 +150,20 @@ class GenerateSample:
         epsilon = 1.e-8
         if self.params['z']['type'] == 'random':
             # get sn rate for this z range
+            print(zmin, zmax, duration, self.area)
             zz, rate, err_rate, nsn, err_nsn = self.sn_rate(
                 zmin=zmin, zmax=zmax,
                 duration=duration,
                 survey_area=self.area,
                 account_for_edges=True)
             # get number of supernovae
+
             N_SN = int(np.cumsum(nsn)[-1])
             weight_z = np.cumsum(nsn)/np.sum(np.cumsum(nsn))
-
+            if N_SN < 1:
+                N_SN = 1
+                weight_z = 1
+            print('nsn', N_SN)
             for j in range(N_SN):
                 z = self.GetVal(self.params['z']['type'], zmin, zz, weight_z)
                 zrange = 'low_z'
@@ -155,8 +201,8 @@ class GenerateSample:
                         daymin-(1.+z)*self.min_rf_phase, daymax-(1.+z)*self.max_rf_phase, daystep)
                 if self.params['daymax']['type'] == 'unique':
                     T0_values = [daymin+20.*(1.+z)]
-                #print('phases', z, daymin, daymax, (daymax-daymin)/(1.+z))
-                #print('T0s', T0_values)
+                # print('phases', z, daymin, daymax, (daymax-daymin)/(1.+z))
+                # print('T0s', T0_values)
                 for T0 in T0_values:
                     r.append((z, x1_color[0], x1_color[1], T0, 0.,
                               0., 0., self.min_rf_phase, self.max_rf_phase))
@@ -192,15 +238,21 @@ class GenerateSample:
 
     def GetVal(self, type, val, distrib, weight):
         """ Get values of a given parameter
-        Input
-        ---------
-        type: random or not
-        val : return value (if not random)
-        distrib, weight: distrib and weight to get the parameter
+
+        Parameters
+        ------------
+        type: str
+           random or not
+        val : float
+            value to retuen (if not random)
+        distrib : float
+           distribution where to get the parameters
+        weight : float
+           weight corresponding to the distribution
 
         Returns
         ---------
-        parameter value
+        parameter value : float
         """
 
         if type == 'random':
@@ -213,13 +265,14 @@ class GenerateSample:
 
         Parameters
         ---------
-        rate: name of the x1_color distrib (JLA, ...)
+        rate: str
+            name of the x1_color distrib (JLA, ...)
 
         Returns
         ---------
         dict of (x1,color) rates
-        keys: 'low_z' and 'high_z'
-        val: recarray with X1,Color,weight_X1,weight_Color,weight
+        keys : 'low_z' and 'high_z'
+        values (float) : recarray with X1,Color,weight_X1,weight_Color,weight 
         """
 
         prefix = os.getenv('SN_UTILS_DIR')+'/input/Dist_X1_Color_'+rate+'_'
@@ -237,6 +290,13 @@ class GenerateSample:
     def PlotParameters(self, gen_params):
         """ Plot the generated parameters
         (z,x1,color,daymax)
+
+        Parameters
+        --------------
+        gen_params : array
+          array of parameters
+          should at least contain ['z', 'x1', 'color', 'daymax'] fields
+
         """
         import pylab as plt
 
@@ -258,7 +318,7 @@ class GenerateSample:
 class Make_Files_for_Cadence_Metric:
 
     def __init__(self, file_name, telescope, simulator_name):
-        """ Class to generate two files that will be used as input for the Cadence metric 
+        """ Class to generate two files that will be used as input for the Cadence metric
 
         Parameters
         ---------
@@ -275,9 +335,13 @@ class Make_Files_for_Cadence_Metric:
         self.simulator_name = simulator_name
 
         self.Prod_mag_to_flux()
-        # self.Prod_(file_name)
+        self.Prod_(file_name)
 
     def Prod_mag_to_flux(self):
+        """
+        Mag to flux estimation
+        Output file created: Mag_to_Flux_simulator.npy
+        """
         mag_range = (20., 28.0)
         m5 = np.linspace(mag_range[0], mag_range[1], 50)
         mag_to_flux_tot = None
@@ -286,9 +350,8 @@ class Make_Files_for_Cadence_Metric:
             exptime = [30.] * len(m5)
             b = [band] * len(m5)
             f5 = self.telescope.mag_to_flux_e_sec(m5, b)
-            #print(b, f5[:], f5[:, [0]])
             mag_to_flux = rf.append_fields(mag_to_flux, ['band', 'flux_e'], [
-                                           b, f5[:, [1]]], dtypes=['U256', 'f8'])
+                b, f5[:, [1]]], dtypes=['U256', 'f8'])
             if mag_to_flux_tot is None:
                 mag_to_flux_tot = mag_to_flux
             else:
@@ -300,6 +363,32 @@ class Make_Files_for_Cadence_Metric:
                 '.npy', np.copy(mag_to_flux_tot))
 
     def Prod_(self, filename):
+        """
+        Reformat LC input files to numpy array
+
+        Parameters
+        --------------
+        filename : str
+          name of the file with LC points (format: hdf5 ! )
+
+        Returns
+        ----------
+        npy file produced 
+        name of the file: Li_simulator_x1_color.npy
+        numpy array with the following fields:
+        time : float
+           time (MJD)
+         band : str
+           band
+         flux_e : float
+           flux (in e/sec)
+        flux : float
+          flux (Jky?)
+        z : float
+          redshift
+        daymax : float
+          T0
+        """
         import h5py
         f = h5py.File(filename, 'r')
         # print(f.keys())
@@ -312,15 +401,15 @@ class Make_Files_for_Cadence_Metric:
         for key, val in simu.items():
             # print(val.meta)
             z = val.meta['z']
-            X1 = val.meta['X1']
-            Color = val.meta['Color']
-            DayMax = val.meta['DayMax']
+            x1 = val.meta['x1']
+            color = val.meta['color']
+            daymax = val.meta['daymax']
             idx = val['flux_e'] > 0.
             sel = val[idx]
-            #print(z, len(val), len(val[idx]))
+
             res = np.array(np.copy(sel[['time', 'band', 'flux_e', 'flux']]), dtype=[
-                           ('time', '<f8'), ('band', 'U8'), ('flux_e', '<f8'), ('flux', '<f8')])
-            #print(res.dtype, z)
+                ('time', '<f8'), ('band', 'U8'), ('flux_e', '<f8'), ('flux', '<f8')])
+
             res = rf.append_fields(res, 'z', [z]*len(res))
             res = rf.append_fields(res, 'DayMax', [DayMax]*len(res))
             if restot is None:
@@ -329,5 +418,5 @@ class Make_Files_for_Cadence_Metric:
                 restot = np.concatenate((restot, res))
 
         # print(restot)
-        np.save('Li_'+self.simulator_name+'_'+str(X1) +
-                '_'+str(Color)+'.npy', np.copy(restot))
+        np.save('Li_'+self.simulator_name+'_'+str(x1) +
+                '_'+str(color)+'.npy', np.copy(restot))

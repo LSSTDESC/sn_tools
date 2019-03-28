@@ -4,6 +4,7 @@ import unittest
 import lsst.utils.tests
 from sn_tools.sn_rate import SN_Rate
 from sn_tools.sn_utils import GenerateSample
+from numpy.testing import assert_almost_equal
 
 m5_ref = dict(zip('ugrizy', [23.60, 24.83, 24.38, 23.92, 23.35, 22.44]))
 
@@ -53,14 +54,20 @@ class TestSNRate(unittest.TestCase):
         sn_parameters = {}
         # redshift
         sn_parameters['z'] = {}
-        sn_parameters['z']['type'] = 'random'
-        sn_parameters['z']['min'] = 0.01
-        sn_parameters['z']['max'] = 0.1
-        sn_parameters['z']['step'] = 0.05
+        sn_parameters['z']['type'] = 'uniform'
+        sn_parameters['z']['min'] = 0.1
+        sn_parameters['z']['max'] = 0.2
+        sn_parameters['z']['step'] = 0.1
         sn_parameters['z']['rate'] = 'Perrett'
+        # X1_Color
+        sn_parameters['x1_color'] = {}
+        sn_parameters['x1_color']['type'] = 'unique'
+        sn_parameters['x1_color']['min'] = [-2.0, 0.2]
+        sn_parameters['x1_color']['max'] = [0.2, 0.2]
+        sn_parameters['x1_color']['rate'] = 'JLA'
         # DayMax
         sn_parameters['daymax'] = {}
-        sn_parameters['daymax']['type'] = 'uniform'
+        sn_parameters['daymax']['type'] = 'unique'
         sn_parameters['daymax']['step'] = 1.
         # Miscellaneous
         sn_parameters['min_rf_phase'] = -20.   # obs min phase (rest frame)
@@ -69,11 +76,6 @@ class TestSNRate(unittest.TestCase):
         sn_parameters['band'] = 'bessellB'     # band for absmag
         sn_parameters['magsys'] = 'vega'      # magsys for absmag
         sn_parameters['differential_flux'] = False
-        # X1_Color
-        sn_parameters['x1_color'] = {}
-        sn_parameters['x1_color']['min'] = [-2.0, 0.2]
-        sn_parameters['x1_color']['max'] = [0.2, 0.2]
-        sn_parameters['x1_color']['rate'] = 'JLA'
         # Cosmology
         cosmo_parameters = {}
         cosmo_parameters['model'] = 'w0waCDM'      # Cosmological model
@@ -89,9 +91,25 @@ class TestSNRate(unittest.TestCase):
         observations = self.Observations()
         params = genpar(observations)
 
-        print(params)
-        print(params.dtype)
-        print(test)
+        r = []
+        r.append([0.1, -2., 0.2, 59022., 0., 0., 0., -15., 30.])
+        r.append([0.2, -2., 0.2, 59024., 0., 0., 0., -15., 30.])
+        r.append([0.3, -2., 0.2, 59026., 0., 0., 0., -15., 30.])
+        tt = None
+        for val in r:
+            if tt is None:
+                tt = np.asarray([val])
+            else:
+                tt = np.concatenate((tt, np.asarray([val])))
+
+        names = ['z', 'x1', 'color', 'daymax',
+                 'epsilon_x0', 'epsilon_x1', 'epsilon_color',
+                 'min_rf_phase', 'max_rf_phase']
+        types = ['f8']*len(names)
+        npts = len(r)
+        params_ref = np.zeros(npts, dtype=list(zip(names, types)))
+        params_ref = tt
+        assert_almost_equal(params, params_ref, decimal=5)
 
     def Observations(self):
         band = 'r'
