@@ -3,6 +3,9 @@ import numpy as np
 import unittest
 import lsst.utils.tests
 from sn_tools.sn_rate import SN_Rate
+from sn_tools.sn_utils import GenerateSample
+
+m5_ref = dict(zip('ugrizy', [23.60, 24.83, 24.38, 23.92, 23.35, 22.44]))
 
 
 class TestSNRate(unittest.TestCase):
@@ -45,3 +48,75 @@ class TestSNRate(unittest.TestCase):
         assert(np.isclose(np.array(err_rate), np.array(err_rate_ref)).all())
         assert(np.isclose(np.array(nsn), np.array(nsn_ref)).all())
         assert(np.isclose(np.array(err_nsn), np.array(err_nsn_ref)).all())
+
+    def testGenerateSample(self):
+        sn_parameters = {}
+        # redshift
+        sn_parameters['z'] = {}
+        sn_parameters['z']['type'] = 'random'
+        sn_parameters['z']['min'] = 0.01
+        sn_parameters['z']['max'] = 0.1
+        sn_parameters['z']['step'] = 0.05
+        sn_parameters['z']['rate'] = 'Perrett'
+        # DayMax
+        sn_parameters['daymax'] = {}
+        sn_parameters['daymax']['type'] = 'uniform'
+        sn_parameters['daymax']['step'] = 1.
+        # Miscellaneous
+        sn_parameters['min_rf_phase'] = -20.   # obs min phase (rest frame)
+        sn_parameters['max_rf_phase'] = 60.  # obs max phase (rest frame)
+        sn_parameters['absmag'] = -19.0906      # peak abs mag
+        sn_parameters['band'] = 'bessellB'     # band for absmag
+        sn_parameters['magsys'] = 'vega'      # magsys for absmag
+        sn_parameters['differential_flux'] = False
+        # X1_Color
+        sn_parameters['x1_color'] = {}
+        sn_parameters['x1_color']['min'] = [-2.0, 0.2]
+        sn_parameters['x1_color']['max'] = [0.2, 0.2]
+        sn_parameters['x1_color']['rate'] = 'JLA'
+        # Cosmology
+        cosmo_parameters = {}
+        cosmo_parameters['model'] = 'w0waCDM'      # Cosmological model
+        cosmo_parameters['Omega_m'] = 0.30             # Omega_m
+        cosmo_parameters['Omega_l '] = 0.70             # Omega_l
+        cosmo_parameters['H0'] = 72.0                  # H0
+        cosmo_parameters['w0'] = -1.0                  # w0
+        cosmo_parameters['wa'] = 0.0                   # wa
+
+        genpar = GenerateSample(
+            sn_parameters, cosmo_parameters, mjdCol='observationStartMJD')
+
+        observations = self.Observations()
+        params = genpar(observations)
+
+        print(params)
+        print(params.dtype)
+        print(test)
+
+    def Observations(self):
+        band = 'r'
+        # Define fake data
+        names = ['observationStartMJD', 'fieldRA', 'fieldDec',
+                 'fiveSigmaDepth', 'visitExposureTime', 'numExposures', 'visitTime', 'season']
+        types = ['f8']*len(names)
+        names += ['night']
+        types += ['i2']
+        names += ['filter']
+        types += ['O']
+
+        day0 = 59000
+        daylast = day0+140.
+        cadence = 3.
+        dayobs = np.arange(day0, daylast, cadence)
+        npts = len(dayobs)
+        data = np.zeros(npts, dtype=list(zip(names, types)))
+        data['observationStartMJD'] = dayobs
+        # data['night'] = np.floor(data['observationStartMJD']-day0)
+        data['night'] = 10
+        data['fiveSigmaDepth'] = m5_ref[band]
+        data['visitExposureTime'] = 15.
+        data['numExposures'] = 2
+        data['visitTime'] = 2.*15.
+        data['filter'] = band
+        data['season'] = 1.
+        return data

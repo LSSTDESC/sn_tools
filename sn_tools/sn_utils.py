@@ -5,7 +5,7 @@ import numpy.lib.recfunctions as rf
 from astropy.table import Table
 
 
-class Generate_Sample:
+class GenerateSample:
     """ Generates a sample of parameters for simulation
 
     Parameters
@@ -33,10 +33,6 @@ class Generate_Sample:
        area of the survey (in deg\^2)
        Default : 9.6 deg\^2
 
-    Returns 
-    ---------
-    recordarray of parameters to simulate:
-    X1,Color,z,DayMax
     """
 
     def __init__(self, sn_parameters, cosmo_parameters, mjdCol='mjd', seasonCol='season', filterCol='filter', min_rf_phase=-15., max_rf_phase=30., area=9.6):
@@ -46,7 +42,7 @@ class Generate_Sample:
                                H0=cosmo_parameters['H0'],
                                Om0=cosmo_parameters['Omega_m'])
 
-        self.x1_color = self.Get_Dist(self.params['X1_Color']['rate'])
+        self.x1_color = self.GetDist(self.params['x1_color']['rate'])
         self.mjdCol = mjdCol
         self.seasonCol = seasonCol
         self.filterCol = filterCol
@@ -56,14 +52,33 @@ class Generate_Sample:
 
     def __call__(self, obs):
         """
-        Input
+        Compute set of parameters for simulation
+
+        Parameters
         ---------
-        recarray of observations
+        array of observations
 
         Returns
         ---------
         recarray of sn parameters for simulation:
-        z, X1 , Color ,  DayMax
+        z, float
+          redshift 
+        x1, float
+           x1 parameter
+        color, float,
+          color parameter
+        daymax, float
+          T0 parameter
+        epsilon_x0,float
+          epsilon for x0 parameter
+        epsilon_x1, float
+          epsilon for x1 parameter
+        epsilon_color, float
+          epsilon for color parameter
+        min_rf_phase, float
+          min rest-frame phase for LC points
+        max_rf_phase, float
+          max rest-frame phase for LC points
         """
         epsilon = 1.e-08
 
@@ -77,16 +92,16 @@ class Generate_Sample:
             daymax = np.max(sel_obs[self.mjdCol])
             duration = daymax-daymin
 
-            rp = self.Get_parameters(daymin, daymax, duration)
+            rp = self.GetParameters(daymin, daymax, duration)
             if len(rp) > 0:
                 r += rp
         print('Number of SN to simulate:', len(r))
         if len(r) > 0:
-            return np.rec.fromrecords(r, names=['z', 'X1', 'Color', 'DayMax', 'epsilon_X0', 'epsilon_X1', 'epsilon_Color', 'min_rf_phase', 'max_rf_phase'])
+            return np.rec.fromrecords(r, names=['z', 'x1', 'color', 'daymax', 'epsilon_x0', 'epsilon_x1', 'epsilon_color', 'min_rf_phase', 'max_rf_phase'])
         else:
             return None
 
-    def Get_parameters(self, daymin, daymax, duration):
+    def GetParameters(self, daymin, daymax, duration):
         # get z range
         zmin = self.params['z']['min']
         zmax = self.params['z']['max']
@@ -104,43 +119,41 @@ class Generate_Sample:
             weight_z = np.cumsum(nsn)/np.sum(np.cumsum(nsn))
 
             for j in range(N_SN):
-                z = self.Get_Val(self.params['z']['type'], zmin, zz, weight_z)
+                z = self.GetVal(self.params['z']['type'], zmin, zz, weight_z)
                 zrange = 'low_z'
                 if z >= 0.1:
                     zrange = 'high_z'
-                x1_color = self.Get_Val(self.params['X1_Color']['type'],
-                                        self.params['X1_Color']['min'],
-                                        self.x1_color[zrange][['X1', 'Color']],
-                                        self.x1_color[zrange]['weight'])
+                x1_color = self.GetVal(self.params['x1_color']['type'],
+                                       self.params['x1_color']['min'],
+                                       self.x1_color[zrange][['x1', 'color']],
+                                       self.x1_color[zrange]['weight'])
                 T0_values = []
-                if self.params['DayMax']['type'] == 'unique':
+                if self.params['daymax']['type'] == 'unique':
                     T0_values = [daymin+20.*(1.+z)]
-                if self.params['DayMax']['type'] == 'random':
+                if self.params['daymax']['type'] == 'random':
                     T0_values = np.arange(
                         daymin-(1.+z)*self.min_rf_phase, daymax-(1.+z)*self.max_rf_phase, 0.1)
                 dist_daymax = T0_values
-                T0 = self.Get_Val(self.params['DayMax']['type'],
-                                  -1., dist_daymax,
-                                  [1./len(dist_daymax)]*len(dist_daymax))
+                T0 = self.GetVal(self.params['daymax']['type'],
+                                 -1., dist_daymax,
+                                 [1./len(dist_daymax)]*len(dist_daymax))
                 r.append((z, x1_color[0], x1_color[1], T0, 0.,
                           0., 0., self.min_rf_phase, self.max_rf_phase))
 
         if self.params['z']['type'] == 'uniform':
             zstep = self.params['z']['step']
-            daystep = self.params['DayMax']['step']
-            x1_color = self.params['X1_Color']['min']
-            # if self.params['DayMax']['type'] == 'uniform':
-            #T0_values = np.arange(daymin, daymax, daystep)
-            #T0_values = np.arange(daymin+(1.+z)*self.min_rf_phase, daymax-(1.+z)*self.max_rf_phase, daystep)
+            daystep = self.params['daymax']['step']
+            x1_color = self.params['x1_color']['min']
+
             if zmin == 0.01:
                 zmin = 0.
             for z in np.arange(zmin, zmax+zstep, zstep):
                 if z == 0.:
                     z = 0.01
-                if self.params['DayMax']['type'] == 'uniform':
+                if self.params['daymax']['type'] == 'uniform':
                     T0_values = np.arange(
                         daymin-(1.+z)*self.min_rf_phase, daymax-(1.+z)*self.max_rf_phase, daystep)
-                if self.params['DayMax']['type'] == 'unique':
+                if self.params['daymax']['type'] == 'unique':
                     T0_values = [daymin+20.*(1.+z)]
                 #print('phases', z, daymin, daymax, (daymax-daymin)/(1.+z))
                 #print('T0s', T0_values)
@@ -156,12 +169,12 @@ class Generate_Sample:
                             r.append(tuple(rstartc))
 
         if self.params['z']['type'] == 'unique':
-            daystep = self.params['DayMax']['step']
-            x1_color = self.params['X1_Color']['min']
+            daystep = self.params['daymax']['step']
+            x1_color = self.params['x1_color']['min']
             z = self.params['z']['min']
-            if self.params['DayMax']['type'] == 'uniform':
+            if self.params['daymax']['type'] == 'uniform':
                 T0_values = np.arange(daymin, daymax, daystep)
-            if self.params['DayMax']['type'] == 'unique':
+            if self.params['daymax']['type'] == 'unique':
                 T0_values = [daymin+20.*(1.+z)]
             for T0 in T0_values:
                 r.append((z, x1_color[0], x1_color[1], T0, 0.,
@@ -177,7 +190,7 @@ class Generate_Sample:
 
         return r
 
-    def Get_Val(self, type, val, distrib, weight):
+    def GetVal(self, type, val, distrib, weight):
         """ Get values of a given parameter
         Input
         ---------
@@ -195,15 +208,16 @@ class Generate_Sample:
         else:
             return val
 
-    def Get_Dist(self, rate):
-        """ get (X1,C) distributions
-        Input
+    def GetDist(self, rate):
+        """ get (x1,color) distributions
+
+        Parameters
         ---------
-        rate: name of the X1_C distrib (JLA, ...)
+        rate: name of the x1_color distrib (JLA, ...)
 
         Returns
         ---------
-        dict of (X1,C) rates
+        dict of (x1,color) rates
         keys: 'low_z' and 'high_z'
         val: recarray with X1,Color,weight_X1,weight_Color,weight
         """
@@ -211,8 +225,8 @@ class Generate_Sample:
         prefix = os.getenv('SN_UTILS_DIR')+'/input/Dist_X1_Color_'+rate+'_'
         suffix = '.txt'
         # names=['x1','c','weight_x1','weight_c','weight_tot']
-        dtype = np.dtype([('X1', np.float), ('Color', np.float),
-                          ('weight_X1', np.float), ('weight_Color', np.float),
+        dtype = np.dtype([('x1', np.float), ('color', np.float),
+                          ('weight_x1', np.float), ('weight_color', np.float),
                           ('weight', np.float)])
         x1_color = {}
         for val in ['low_z', 'high_z']:
@@ -220,15 +234,15 @@ class Generate_Sample:
 
         return x1_color
 
-    def Plot_Parameters(self, gen_params):
+    def PlotParameters(self, gen_params):
         """ Plot the generated parameters
-        (z,X1,Color,DayMax)
+        (z,x1,color,daymax)
         """
         import pylab as plt
 
         fig, ax = plt.subplots(ncols=2, nrows=2, figsize=(10, 9))
 
-        todraw = ['z', 'X1', 'Color', 'DayMax']
+        todraw = ['z', 'x1', 'color', 'daymax']
         idx = dict(zip(todraw, [(0, 0), (0, 1), (1, 1), (1, 0)]))
 
         for name in todraw:
@@ -245,10 +259,12 @@ class Make_Files_for_Cadence_Metric:
 
     def __init__(self, file_name, telescope, simulator_name):
         """ Class to generate two files that will be used as input for the Cadence metric 
-        Input
+
+        Parameters
         ---------
         LC file (filename)
-        Output: 
+
+        Returns
         ---------
         recordarray of LC:
         MJD, Ra, Dec, band,m5,Nexp, ExpTime, Season
