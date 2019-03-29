@@ -5,9 +5,11 @@ import lsst.utils.tests
 from sn_tools.sn_rate import SN_Rate
 from sn_tools.sn_utils import GenerateSample
 from sn_tools.sn_cadence_tools import ReferenceData, GenerateFakeObservations, TemplateData
+from sn_tools.sn_telescope import Telescope
 import os
-
-from numpy.testing import assert_almost_equal
+from lsst.sims.photUtils import PhotometricParameters
+from lsst.sims.photUtils import Bandpass, Sed
+from numpy.testing import assert_almost_equal, assert_equal
 
 m5_ref = dict(zip('ugrizy', [23.60, 24.83, 24.38, 23.92, 23.35, 22.44]))
 
@@ -281,3 +283,53 @@ class TestSNRate(unittest.TestCase):
                 assert(np.isclose(simulations[name], refsimu[name]).all())
             else:
                 assert((simulations[name] == refsimu[name]).all())
+
+    def testTelescope(self):
+
+        airmass = 1.32
+        bands = 'ugrizy'
+
+        tel = Telescope(airmass=airmass)
+        assert_equal(tel.airmass, airmass)
+        sigmab = tel.Sigmab(bands)
+        Tb = tel.Tb(bands)
+        zp = tel.zp(bands)
+        m5 = tel.m5(bands)
+        gamma = {}
+        for key, val in m5.items():
+            gamma[key] = tel.gamma(val, key, 15.)
+
+        mag_to_flux_e_sec = {}
+        mag_to_flux = {}
+
+        for key, val in m5.items():
+            mag_to_flux_e_sec[key] = tel.mag_to_flux_e_sec(val, key, 15.)
+            mag_to_flux[key] = tel.mag_to_flux(val, key, 15.)
+
+        sigmab_ref = {'u': 0.035785915980876104, 'g': 0.1432890267516797, 'r': 0.11262226010146574,
+                      'i': 0.08043284004643284, 'z': 0.054764490348215365, 'y': 0.028509921564443697}
+        Tb_ref = {'u': 0.021222760832847506, 'g': 0.11847125554400734, 'r': 0.10148007886034267,
+                  'i': 0.0748474199497848, 'z': 0.05226328510071998, 'y': 0.024195249318660562}
+        zp_ref = {'u': 26.4401122237477, 'g': 28.30714000177329, 'r': 28.13905951417312,
+                  'i': 27.80854961022156, 'z': 27.418599285553352, 'y': 26.58243277815136}
+        m5_ref = {'u': 23.35183820200688, 'g': 24.7706326858414, 'r': 24.35514965603368,
+                  'i': 23.912873887926537, 'z': 23.34804737271212, 'y': 22.42200234510623}
+        gamma_ref = {'u': 0.03612290845059692, 'g': 0.037434259447649, 'r': 0.03795707830010742,
+                     'i': 0.03815691495227663, 'z': 0.03843110131265436, 'y': 0.038555746290894546}
+
+        mag_to_flux_e_sec_ref = {'u': (112.14143466965382, 17.19501998268025), 'g': (169.45696566913534, 25.98340140260075), 'r': (212.82392209085376, 32.63300138726424), 'i': (
+            235.8993738420849, 36.17123732245302), 'z': (277.1259943057538, 42.49265246021558), 'y': (301.04309648264643, 46.15994146067245)}
+        mag_to_flux_ref = {'u': 0.00045631497273323314, 'g': 0.0001235227425539364, 'r': 0.00018110904377852902,
+                           'i': 0.0002721763870527382, 'z': 0.0004579109731990962, 'y': 0.001074481795844473}
+
+        """
+        print(sigmab)
+        print(Tb)
+        print(zp)
+        print(m5)
+        print(gamma)
+        print(mag_to_flux_e_sec, mag_to_flux)
+        """
+        for band in bands:
+            for val in [(sigmab, sigmab_ref), (Tb, Tb_ref), (zp, zp_ref), (m5, m5_ref), (gamma, gamma_ref), (mag_to_flux, mag_to_flux_ref), (mag_to_flux_e_sec, mag_to_flux_e_sec_ref)]:
+                assert_almost_equal(val[0][band], val[1][band])

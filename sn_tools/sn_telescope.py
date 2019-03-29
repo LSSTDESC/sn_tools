@@ -24,21 +24,53 @@ class Telescope(Throughputs):
     inherits from Throughputs
     estimate quantities defined in LSE-40
 
-    Input
-    ---------
-    set of parameters to
-    - locate and load instrument files:
-    through_dir: throughput dir
-    default: LSST_THROUGHPUTS_BASELINE
-    atmos_dir: dir of atmos files
-    default: THROUGHPUTS_DIR
-    telescope_files: list of throughput files
-    filterlist: list of filters to consider
-    wave_min, wave_max: min and max wavelength of throughput
-    - set the type of throughput to estimate:
-    atmos: =True if atmosphere to consider
-    aerosol: = True if aerosol to consider
-    - airmass : value of airmass (default: 1.)
+    The following quantities are accessible:
+
+    mag_sky: sky magnitude
+
+    m5: 5-sigma depth
+
+    Sigmab: see eq. (36) of LSE-40
+
+    zp: see eq. (43) of LSE-40
+
+    counts_zp:
+
+    Skyb: see eq. (40) of LSE-40
+
+    flux_sky:
+
+
+    Parameters
+    -------------
+    through_dir : str, opt
+       throughput directory
+       Default : LSST_THROUGHPUTS_BASELINE
+    atmos_dir : str, opt
+       directory of atmos files
+       Default : THROUGHPUTS_DIR
+    telescope_files : list(str),opt
+       list of of throughput files
+       Default : ['detector.dat', 'lens1.dat','lens2.dat',
+           'lens3.dat','m1.dat', 'm2.dat', 'm3.dat']
+    filterlist: list(str), opt
+       list of filters to consider
+       Default : 'ugrizy'
+    wave_min : float, opt
+        min wavelength for throughput
+        Default : 300
+    wave_max : float, opt
+        max wavelength for throughput
+        Default : 1150
+    atmos : bool, opt
+         to include atmosphere affects
+         Default : True
+    aerosol : bool, opt
+         to include aerosol effects
+         Default : True
+    airmass : float, opt
+         airmass value
+         Default : 1.
 
     Returns
     ---------
@@ -47,17 +79,10 @@ class Telescope(Throughputs):
     lsst_atmos: lsst_system+atmosphere
     lsst_atmos_aerosol: lsst_system+atmosphere+aerosol
 
-    The following parameters are estimated "on demand":
-    mag_sky: sky magnitude
-    m5: 5-sigma depth
-    Sigmab: see eq. (36) of LSE-40
-    zp: see eq. (43) of LSE-40
-    counts_zp:
-    Skyb: see eq. (40) of LSE-40
-    flux_sky:
+
     """
 
-    def __init__(self, name='unknown', airmass=1, **kwargs):
+    def __init__(self, name='unknown', airmass=1., **kwargs):
         self.name = name
         Throughputs.__init__(self, **kwargs)
 
@@ -71,13 +96,14 @@ class Telescope(Throughputs):
         self.data['FWHMeff'] = dict(
             zip('ugrizy', [0.92, 0.87, 0.83, 0.80, 0.78, 0.76]))
 
-        #self.atmos = atmos
+        # self.atmos = atmos
 
-        # self.Load_Atmosphere(airmass)
+        self.Load_Atmosphere(airmass)
 
     @get_val_decor
     def get(self, what, band):
-
+        """Decorator to access quantities
+        """
         filter_trans = self.system[band]
         wavelen_min, wavelen_max, wavelen_step = filter_trans.getWavelenLimits(
             None, None, None)
@@ -103,7 +129,8 @@ class Telescope(Throughputs):
 
     @get_val_decor
     def get_inputs(self, what, band):
-
+        """decorator to access Tb, Sigmab, mag_sky
+        """
         myup = self.Calc_Integ_Sed(self.darksky, self.system[band])
         self.data['Tb'][band] = self.Calc_Integ(self.atmosphere[band])
         self.data['Sigmab'][band] = self.Calc_Integ(self.system[band])
@@ -112,7 +139,7 @@ class Telescope(Throughputs):
 
     @get_val_decor
     def get_zp(self, what, band):
-        """ get zero points
+        """ decorator get zero points
         formula used here are extracted from LSE-40
         """
         photParams = PhotometricParameters(bandpass=band)
@@ -143,36 +170,59 @@ class Telescope(Throughputs):
         self.data['counts_zp'][band] = counts/2.*photParams.exptime
 
     def return_value(self, what, band):
+        """accessor
+        """
         if len(band) > 1:
             return self.data[what]
         else:
             return self.data[what][band]
 
     def m5(self, filtre):
+        """m5 accessor
+        """
         self.get('m5', filtre)
         return self.return_value('m5', filtre)
 
     def Tb(self, filtre):
+        """Tb accessor
+        """
         self.get_inputs('Tb', filtre)
         return self.return_value('Tb', filtre)
 
     def mag_sky(self, filtre):
+        """mag_sky accessor
+        """
         self.get_inputs('mag_sky', filtre)
         return self.return_value('mag_sky', filtre)
 
     def Sigmab(self, filtre):
+        """Sigmab accessor
+        """
         self.get_inputs('Sigmab', filtre)
         return self.return_value('Sigmab', filtre)
 
     def zp(self, filtre):
+        """zp accessor
+        """
         self.get_zp('zp', filtre)
         return self.return_value('zp', filtre)
 
     def FWHMeff(self, filtre):
+        """ FWHMeff
+        """
         return self.return_value('FWHMeff', filtre)
 
     def Calc_Integ(self, bandpass):
         """ integration over bandpass
+
+        Parameters
+        --------------
+        bandpass : float
+
+        Returns
+        ---------
+        integration
+
         """
         resu = 0.
         dlam = 0
@@ -186,6 +236,24 @@ class Telescope(Throughputs):
 
     def Calc_Integ_Sed(self, sed, bandpass, wavelen=None, fnu=None):
         """ SED integration
+
+        Parameters
+        --------------
+        sed : float
+          sed to integrate
+        bandpass : float
+          bandpass
+        wavelength : float, opt
+          wavelength values
+           Default : None
+        fnu : float, opt
+           fnu values
+           Default : None
+
+        Returns
+        ----------
+        integrated sed over the bandpass
+
         """
         use_self = sed._checkUseSelf(wavelen, fnu)
         # Use self values if desired, otherwise use values passed to function.
@@ -206,7 +274,22 @@ class Telescope(Throughputs):
         return nphoton * dlambda
 
     def flux_to_mag(self, flux, band, zp=None):
-        """ conversion flux->mag
+        """ Flux to magnitude conversion
+
+        Parameters
+        --------------
+        flux : float
+          input fluxes
+        band : str
+           input band
+        zp : float, opt
+           zeropoints
+           Default : None
+
+        Returns
+        ---------
+        magnitudes
+
         """
         if zp is None:
             zp = self.zero_points(band)
@@ -215,17 +298,61 @@ class Telescope(Throughputs):
         return m
 
     def mag_to_flux(self, mag, band, zp=None):
-        """conversion mag->flux
+        """Magnitude to flux conversion
+
+        Parameters
+        --------------
+        mag : float
+          input mags
+        band : str
+           input band
+        zp : float, opt
+           zeropoints
+           Default : None
+
+        Returns
+        ---------
+        fluxes
+
         """
         if zp is None:
             zp = self.zero_points(band)
         return np.power(10., -0.4 * (mag-zp))
 
     def zero_points(self, band):
+        """Get zero points
+
+        Parameters
+        --------------
+        band : list(str)
+          list of bands
+
+        Returns
+        ---------
+        array of zp
+
+        """
         return np.asarray([self.zp[b] for b in band])
 
     def mag_to_flux_e_sec(self, mag, band, exptime):
-        """ mag to flux (in photoelec/sec)
+        """ Mag to flux (in photoelec/sec) conversion
+
+        Parameters
+        --------------
+        mag : float
+          input magnitudes
+        band : str
+          input bands
+        exptime : float
+          input exposure times
+
+        Returns
+        ----------
+        counts : float
+           number of ADU counts
+        e_per_sec : float
+           flux in photoelectron per sec.
+
         """
         if not hasattr(mag, '__iter__'):
             wavelen_min, wavelen_max, wavelen_step = self.atmosphere[band].getWavelenLimits(
@@ -246,6 +373,26 @@ class Telescope(Throughputs):
             return np.asarray([self.mag_to_flux_e_sec(m, b, expt) for m, b, expt in zip(mag, band, exptime)])
 
     def gamma(self, mag, band, exptime):
+        """gamma parameter estimation
+
+        cf eq(5) of the paper LSST : from science drivers to reference design and anticipated data products
+
+        with sigma_rand = 0.2 and m=m5
+
+        Parameters
+        --------------
+        mag : float
+          magnitudes
+        band : str
+          band
+        exptime : float
+          exposure time
+
+        Returns
+        ----------
+        gamma (float)
+
+        """
 
         if not hasattr(mag, '__iter__'):
             photParams = PhotometricParameters(nexp=exptime/15.)

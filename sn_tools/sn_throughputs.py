@@ -8,20 +8,32 @@ import numpy as np
 class Throughputs(object):
     """ class to handle instrument throughput
 
-    Input
-    ---------
-    set of parameters to
-    - locate and load instrument files:
-    through_dir: throughput dir
-    default: LSST_THROUGHPUTS_BASELINE
-    atmos_dir: dir of atmos files
-    default: THROUGHPUTS_DIR
-    telescope_files: list of throughput files
-    filterlist: list of filters to consider
-    wave_min, wave_max: min and max wavelength of throughput
-    - set the type of throughput to estimate:
-    atmos: =True if atmosphere to consider
-    aerosol: = True if aerosol to consider
+    Parameters
+    -------------
+    through_dir : str, opt
+       throughput directory
+       Default : LSST_THROUGHPUTS_BASELINE
+    atmos_dir : str, opt
+       directory of atmos files
+       Default : THROUGHPUTS_DIR
+    telescope_files : list(str),opt 
+       list of of throughput files
+       Default : ['detector.dat', 'lens1.dat','lens2.dat', 'lens3.dat','m1.dat', 'm2.dat', 'm3.dat']
+    filterlist: list(str), opt 
+       list of filters to consider
+       Default : 'ugrizy'
+    wave_min : float, opt
+        min wavelength for throughput
+        Default : 300
+    wave_max : float, opt
+        max wavelength for throughput
+        Default : 1150
+    atmos : bool, opt
+         to include atmosphere affects
+         Default : True
+    aerosol : bool, opt
+         to include aerosol effects
+         Default : True
 
     Returns
     ---------
@@ -50,7 +62,6 @@ class Throughputs(object):
                 params[par] = kwargs[par]
                 # params[par]=str(kwargs[par])
 
-        print('hhh', params, kwargs.keys())
         self.atmos = params['atmos']
         self.throughputsDir = os.getenv(params['through_dir'])
         if os.path.exists(os.path.join
@@ -111,6 +122,8 @@ class Throughputs(object):
         return self.lsst_atmos_aerosol
 
     def Load_System(self):
+        """ Load files required to estimate throughputs
+        """
 
         for f in self.filterlist:
             self.lsst_std[f] = Bandpass()
@@ -147,6 +160,12 @@ class Throughputs(object):
     def Load_Atmosphere(self, airmass=1.2):
         """ Load atmosphere files
         and convolve with transmissions
+
+        Parameters
+        --------------
+        airmass : float,opt
+          airmass value
+          Default : 1.2
         """
         self.airmass = airmass
         if self.airmass > 0.:
