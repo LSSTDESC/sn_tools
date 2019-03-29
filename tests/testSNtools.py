@@ -4,6 +4,9 @@ import unittest
 import lsst.utils.tests
 from sn_tools.sn_rate import SN_Rate
 from sn_tools.sn_utils import GenerateSample
+from sn_tools.sn_cadence_tools import ReferenceData, GenerateFakeObservations, TemplateData
+import os
+
 from numpy.testing import assert_almost_equal
 
 m5_ref = dict(zip('ugrizy', [23.60, 24.83, 24.38, 23.92, 23.35, 22.44]))
@@ -111,7 +114,7 @@ class TestSNRate(unittest.TestCase):
         params_ref = tt
         assert_almost_equal(params, params_ref, decimal=5)
 
-    def Observations(self):
+    def Observations(self, daymin=59000, cadence=3., season_length=140.):
         band = 'r'
         # Define fake data
         names = ['observationStartMJD', 'fieldRA', 'fieldDec',
@@ -122,9 +125,9 @@ class TestSNRate(unittest.TestCase):
         names += ['filter']
         types += ['O']
 
-        day0 = 59000
-        daylast = day0+140.
-        cadence = 3.
+        day0 = daymin
+        daylast = day0+season_length
+        cadence = cadence
         dayobs = np.arange(day0, daylast, cadence)
         npts = len(dayobs)
         data = np.zeros(npts, dtype=list(zip(names, types)))
@@ -132,9 +135,149 @@ class TestSNRate(unittest.TestCase):
         # data['night'] = np.floor(data['observationStartMJD']-day0)
         data['night'] = 10
         data['fiveSigmaDepth'] = m5_ref[band]
-        data['visitExposureTime'] = 15.
+        data['visitExposureTime'] = 30.
         data['numExposures'] = 2
         data['visitTime'] = 2.*15.
         data['filter'] = band
         data['season'] = 1.
         return data
+
+    def testReferenceData(self):
+        dirfiles = os.getenv('REF_FILES')
+
+        Li_files = [dirfiles+'/Li_SNCosmo_-2.0_0.2.npy']
+        Mag_files = [dirfiles+'/Mag_to_Flux_SNCosmo.npy']
+        band = 'r'
+        z = 0.3
+
+        refdata = ReferenceData(Li_files, Mag_files, band, z)
+
+        arr = np.array(
+            [('r', 25.6, 900.), ('r', 25.8, 1500.), ('r', 25.7, 1200.)])
+
+        names = ['m5', 'deltaT']
+        types = ['f8', 'f8']
+        data = np.array(
+            [(25.6, 10.), (25.8, -10.), (25.7, 28.)], dtype=list(zip(names, types)))
+
+        mag_ref = np.array([10.55691041, 8.785232, 9.61469456])
+
+        for val in refdata.mag_to_flux:
+            res = val(data['m5'])
+            assert(np.isclose(res, mag_ref).all())
+
+        flux_ref = np.array([152.08206561, 101.68561218, 36.14289588])
+        for val in refdata.fluxes:
+            res = val(data['deltaT'])
+            assert(np.isclose(res, flux_ref).all())
+
+    def testGenerateFakeObservations(self):
+
+        config = {}
+        config['Ra'] = 0.0  # Ra of the field
+        config['Dec'] = 0.0  # Dec of the field
+        config['seasons'] = [1.]  # seasons
+        config['season_length'] = 10.  # season_length (days)
+        config['bands'] = ['g', 'r', 'i', 'z', 'y']  # bands to consider
+        config['Cadence'] = [3., 3., 3., 3., 3.]  # Cadence[day] per band
+        config['m5'] = [23.27, 24.58, 24.22, 23.65,
+                        22.78, 22.00]  # 5-sigma depth values
+        config['Nvisits'] = [1, 1, 1, 1, 1]
+        config['Exposure_Time'] = [30., 30., 30., 30., 30.]
+        config['shift_days'] = 0.0069444  # in days']= 10./(24.*60.)
+        config['MJD_min'] = [-40.]
+
+        fake_obs = GenerateFakeObservations(config).Observations
+
+        dtype = [('observationStartMJD', '<f8'), ('fieldRA', '<f8'), ('fieldDec', '<f8'), ('filter', '<U1'),
+                 ('fiveSigmaDepth', '<f8'), ('numExposures', '<i8'), ('visitExposureTime', '<f8'), ('season', '<f8')]
+        ref_obs = np.array([(-40., 0., 0., 'g', 23.27, 1, 30., 1.),
+                            (-39.9930556, 0., 0., 'r', 24.58, 1, 30., 1.),
+                            (-39.9861112, 0., 0., 'i', 24.22, 1, 30., 1.),
+                            (-39.9791668, 0., 0., 'z', 23.65, 1, 30., 1.),
+                            (-39.9722224, 0., 0., 'y', 22.78, 1, 30., 1.),
+                            (-37., 0., 0., 'g', 23.27, 1, 30., 1.),
+                            (-36.9930556, 0., 0., 'r', 24.58, 1, 30., 1.),
+                            (-36.9861112, 0., 0., 'i', 24.22, 1, 30., 1.),
+                            (-36.9791668, 0., 0., 'z', 23.65, 1, 30., 1.),
+                            (-36.9722224, 0., 0., 'y', 22.78, 1, 30., 1.),
+                            (-34., 0., 0., 'g', 23.27, 1, 30., 1.),
+                            (-33.9930556, 0., 0., 'r', 24.58, 1, 30., 1.),
+                            (-33.9861112, 0., 0., 'i', 24.22, 1, 30., 1.),
+                            (-33.9791668, 0., 0., 'z', 23.65, 1, 30., 1.),
+                            (-33.9722224, 0., 0., 'y', 22.78, 1, 30., 1.),
+                            (-31., 0., 0., 'g', 23.27, 1, 30., 1.),
+                            (-30.9930556, 0., 0., 'r', 24.58, 1, 30., 1.),
+                            (-30.9861112, 0., 0., 'i', 24.22, 1, 30., 1.),
+                            (-30.9791668, 0., 0., 'z', 23.65, 1, 30., 1.),
+                            (-30.9722224, 0., 0., 'y', 22.78, 1, 30., 1.),
+                            (-28., 0., 0., 'g', 23.27, 1, 30., 1.),
+                            (-27.9930556, 0., 0., 'r', 24.58, 1, 30., 1.),
+                            (-27.9861112, 0., 0., 'i', 24.22, 1, 30., 1.),
+                            (-27.9791668, 0., 0., 'z', 23.65, 1, 30., 1.),
+                            (-27.9722224, 0., 0., 'y', 22.78, 1, 30., 1.)], dtype=dtype)
+
+        for name in ref_obs.dtype.names:
+            if name != 'filter':
+                assert(np.isclose(fake_obs[name], ref_obs[name]).all())
+            else:
+                assert((fake_obs[name] == ref_obs[name]).all())
+
+    def testTemplateData(self):
+        # refname = 'LC_Ref_-2.0_0.2.hdf5'
+        refname = 'LC_-2.0_0.2.hdf5'
+        band = 'r'
+        z = 0.3
+        min_rf_phase = -20
+        max_rf_phase = 60.
+
+        templdata = TemplateData('../{}'.format(refname), band)
+
+        daymin = 59000
+        season_length = 180.
+        obs = self.Observations(daymin=daymin, cadence=10,
+                                season_length=season_length)
+        T0 = daymin+season_length/2
+        params = np.array([(z, T0, min_rf_phase, max_rf_phase)],
+                          # (0.3, daymin+50, min_rf_phase, max_rf_phase)],
+                          dtype=[('z', 'f8'), ('daymax', 'f8'), ('min_rf_phase', 'f8'), ('max_rf_phase', 'f8')])
+        simulations = templdata.Simulation(obs['observationStartMJD'],
+                                           obs['fiveSigmaDepth'], obs['visitExposureTime'], params)
+
+        names = simulations.dtype.names
+        """
+        for name in names:
+            print(name, [simulations[name][i]
+                         for i in range(len(simulations[name]))])
+        """
+        refsimu = {}
+
+        refsimu['flux'] = [1.817312225268024e-08, 2.1814654556593405e-06, 4.541527969545595e-06, 3.260839109537984e-06, 1.5579757863909567e-06,
+                           6.85197962424031e-07, 3.4423028877421304e-07, 2.995864230923943e-07, 2.746116879273338e-07, 2.4609834005024835e-07]
+        refsimu['fluxerr'] = [2.383796072777225e-08, 2.529347401033142e-08, 2.6791666386123333e-08, 2.5989374273901374e-08, 2.4882630169041346e-08,
+                              2.4295882829527847e-08, 2.4062753049354736e-08, 2.403206598940246e-08, 2.4014882971536566e-08, 2.3995240144740985e-08]
+        refsimu['phase'] = [-15.384615384615383, -7.692307692307692, 0.0, 7.692307692307692, 15.384615384615383,
+                            23.076923076923077, 30.769230769230766, 38.46153846153846, 46.15384615384615, 53.84615384615385]
+        refsimu['snr_m5'] = [0.7623606087876372, 86.24617775985597, 169.51270981404375, 125.46816538066986,
+                             62.61298648120288, 28.20222534129445, 14.305523896960905, 12.466111870053304, 11.435062509062192, 10.25613157300222]
+        refsimu['mag'] = [28.25149175191791, 23.05319477188748, 22.257060639313785, 22.61674219439001, 23.418663863007797,
+                          24.31052546520192, 25.057942919325697, 25.208760302898412, 25.303268078319512, 25.42229391136379]
+        refsimu['magerr'] = [1.4241766852103601, 0.012588803735526176, 0.006405043055173781, 0.008653479561640282,
+                             0.01734043152667825, 0.03849824585183941, 0.07589629101166896, 0.08709501535649919, 0.09494799034965419, 0.10586215641150437]
+        refsimu['time'] = [59070.0, 59080.0, 59090.0, 59100.0,
+                           59110.0, 59120.0, 59130.0, 59140.0, 59150.0, 59160.0]
+        refsimu['band'] = ['LSST::r', 'LSST::r', 'LSST::r', 'LSST::r',
+                           'LSST::r', 'LSST::r', 'LSST::r', 'LSST::r', 'LSST::r', 'LSST::r']
+        refsimu['zp'] = [8.90006562228223, 8.90006562228223, 8.90006562228223, 8.90006562228223, 8.90006562228223,
+                         8.90006562228223, 8.90006562228223, 8.90006562228223, 8.90006562228223, 8.90006562228223]
+        refsimu['zpsys'] = ['ab', 'ab', 'ab', 'ab',
+                            'ab', 'ab', 'ab', 'ab', 'ab', 'ab']
+        refsimu['z'] = [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3]
+        refsimu['daymax'] = [59090.0, 59090.0, 59090.0, 59090.0,
+                             59090.0, 59090.0, 59090.0, 59090.0, 59090.0, 59090.0]
+
+        for name in names:
+            if name != 'band' and name != 'zpsys':
+                assert(np.isclose(simulations[name], refsimu[name]).all())
+            else:
+                assert((simulations[name] == refsimu[name]).all())

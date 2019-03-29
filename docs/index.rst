@@ -10,8 +10,9 @@ Welcome to sn_tools's documentation!
    :maxdepth: 3
    :caption: Contents:
 
-    sn_cadence_tools <api/sn_tools.sn_cadence_tools>
+    
     sn_rate <api/sn_tools.sn_rate>
+    sn_cadence_tools <api/sn_tools.sn_cadence_tools>
     sn_throughputs <api/sn_tools.sn_throughputs>
     sn_telescope <api/sn_tools.sn_telescope>
     sn_utils <api/sn_tools.sn_utils>
