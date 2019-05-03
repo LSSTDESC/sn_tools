@@ -335,21 +335,22 @@ class Make_Files_for_Cadence_Metric:
         self.simulator_name = simulator_name
 
         self.Prod_mag_to_flux()
-        self.Prod_(file_name)
+        if file_name != '':
+            self.Prod_(file_name)
 
     def Prod_mag_to_flux(self):
         """
         Mag to flux estimation
         Output file created: Mag_to_Flux_simulator.npy
         """
-        mag_range = (20., 28.0)
+        mag_range = (12., 28.0)
         m5 = np.linspace(mag_range[0], mag_range[1], 50)
         mag_to_flux_tot = None
         for band in 'grizy':
             mag_to_flux = np.array(m5, dtype=[('m5', 'f8')])
             exptime = [30.] * len(m5)
             b = [band] * len(m5)
-            f5 = self.telescope.mag_to_flux_e_sec(m5, b)
+            f5 = self.telescope.mag_to_flux_e_sec(m5, b, exptime)
             mag_to_flux = rf.append_fields(mag_to_flux, ['band', 'flux_e'], [
                 b, f5[:, [1]]], dtypes=['U256', 'f8'])
             if mag_to_flux_tot is None:
@@ -357,9 +358,11 @@ class Make_Files_for_Cadence_Metric:
             else:
                 mag_to_flux_tot = np.concatenate(
                     (mag_to_flux_tot, mag_to_flux))
-        # print(mag_to_flux_tot)
+        #print(mag_to_flux_tot)
         # print('done')
-        np.save('Mag_to_Flux_'+self.simulator_name +
+        #np.save('Mag_to_Flux_'+self.simulator_name +
+        #'.npy', np.copy(mag_to_flux_tot))
+        np.save('Mag_to_Flux_LSST_sim'+
                 '.npy', np.copy(mag_to_flux_tot))
 
     def Prod_(self, filename):

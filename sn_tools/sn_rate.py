@@ -271,7 +271,7 @@ class SN_Rate:
         zz, rate, err_rate, nsn, err_nsn = self.__call__(
             zmin=zmin, zmax=zmax, dz=dz, bins=bins,
             account_for_edges=account_for_edges,
-            duration_z=duration_z)
+            duration=duration,survey_area=survey_area)
 
         plt.errorbar(zz, np.cumsum(nsn), yerr=np.sqrt(np.cumsum(err_nsn**2)))
         plt.xlabel('z')
