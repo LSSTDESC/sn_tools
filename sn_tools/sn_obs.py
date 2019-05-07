@@ -43,7 +43,7 @@ def pixelate(data,nside,RaCol='Ra',DecCol='Dec'):
 
         return res
 
-def season(obs, mjdCol='observationStartMJD'):
+def season(obs, season_gap=80.,mjdCol='observationStartMJD'):
     
     obs.sort(order=mjdCol)
     
@@ -52,10 +52,11 @@ def season(obs, mjdCol='observationStartMJD'):
         obs = rf.append_fields([obs],'season',[1.])
         return obs
     diff = obs[mjdCol][1:]-obs[mjdCol][:-1]
-    flag = np.argwhere(diff>100.)
+    
+    flag = np.argwhere(diff>season_gap)
     if len(flag) > 0:
         seas = np.zeros((len(obs),))
-        flag = flag+1
+        flag += 1
         seas[0:flag[0][0]] = 1
         for iflag in range(len(flag)-1):
             seas[flag[iflag][0]:flag[iflag+1][0]]= iflag+2
