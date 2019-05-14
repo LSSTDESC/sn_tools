@@ -42,7 +42,7 @@ class GenerateSample:
                                H0=cosmo_parameters['H0'],
                                Om0=cosmo_parameters['Omega_m'])
 
-        self.x1_color = self.GetDist(self.params['x1_color']['rate'])
+        self.x1_color = self.getDist(self.params['x1_color']['rate'])
         self.mjdCol = mjdCol
         self.seasonCol = seasonCol
         self.filterCol = filterCol
@@ -92,7 +92,7 @@ class GenerateSample:
             daymax = np.max(sel_obs[self.mjdCol])
             duration = daymax-daymin
 
-            rp = self.GetParameters(daymin, daymax, duration)
+            rp = self.getParameters(daymin, daymax, duration)
             if len(rp) > 0:
                 r += rp
         print('Number of SN to simulate:', len(r))
@@ -101,13 +101,13 @@ class GenerateSample:
                      'epsilon_x0', 'epsilon_x1', 'epsilon_color',
                      'min_rf_phase', 'max_rf_phase']
             types = ['f8']*len(names)
-            params = np.zeros(len(r), dtype=list(zip(names, types)))
-            params = np.asarray(r)
+            #params = np.zeros(len(r), dtype=list(zip(names, types)))
+            params = np.asarray(r, dtype=list(zip(names, types)))
             return params
         else:
             return None
 
-    def GetParameters(self, daymin, daymax, duration):
+    def getParameters(self, daymin, daymax, duration):
         """ Get parameters
 
         Parameters
@@ -165,11 +165,11 @@ class GenerateSample:
                 weight_z = 1
             print('nsn', N_SN)
             for j in range(N_SN):
-                z = self.GetVal(self.params['z']['type'], zmin, zz, weight_z)
+                z = self.getVal(self.params['z']['type'], zmin, zz, weight_z)
                 zrange = 'low_z'
                 if z >= 0.1:
                     zrange = 'high_z'
-                x1_color = self.GetVal(self.params['x1_color']['type'],
+                x1_color = self.getVal(self.params['x1_color']['type'],
                                        self.params['x1_color']['min'],
                                        self.x1_color[zrange][['x1', 'color']],
                                        self.x1_color[zrange]['weight'])
@@ -180,7 +180,7 @@ class GenerateSample:
                     T0_values = np.arange(
                         daymin-(1.+z)*self.min_rf_phase, daymax-(1.+z)*self.max_rf_phase, 0.1)
                 dist_daymax = T0_values
-                T0 = self.GetVal(self.params['daymax']['type'],
+                T0 = self.getVal(self.params['daymax']['type'],
                                  -1., dist_daymax,
                                  [1./len(dist_daymax)]*len(dist_daymax))
                 r.append((z, x1_color[0], x1_color[1], T0, 0.,
@@ -236,7 +236,7 @@ class GenerateSample:
 
         return r
 
-    def GetVal(self, type, val, distrib, weight):
+    def getVal(self, type, val, distrib, weight):
         """ Get values of a given parameter
 
         Parameters
@@ -260,7 +260,7 @@ class GenerateSample:
         else:
             return val
 
-    def GetDist(self, rate):
+    def getDist(self, rate):
         """ get (x1,color) distributions
 
         Parameters
@@ -275,7 +275,8 @@ class GenerateSample:
         values (float) : recarray with X1,Color,weight_X1,weight_Color,weight 
         """
 
-        prefix = os.getenv('SN_UTILS_DIR')+'/input/Dist_X1_Color_'+rate+'_'
+        #prefix = os.getenv('SN_UTILS_DIR')+'/input/Dist_X1_Color_'+rate+'_'
+        prefix = '{}/Dist_X1_Color_{}'.format('reference_files', rate)
         suffix = '.txt'
         # names=['x1','c','weight_x1','weight_c','weight_tot']
         dtype = np.dtype([('x1', np.float), ('color', np.float),
@@ -283,11 +284,12 @@ class GenerateSample:
                           ('weight', np.float)])
         x1_color = {}
         for val in ['low_z', 'high_z']:
-            x1_color[val] = np.loadtxt(prefix+val+suffix, dtype=dtype)
+            x1_color[val] = np.loadtxt('{}_{}{}'.format(
+                prefix, val, suffix), dtype=dtype)
 
         return x1_color
 
-    def PlotParameters(self, gen_params):
+    def plotParameters(self, gen_params):
         """ Plot the generated parameters
         (z,x1,color,daymax)
 
@@ -334,11 +336,11 @@ class Make_Files_for_Cadence_Metric:
         self.telescope = telescope
         self.simulator_name = simulator_name
 
-        self.Prod_mag_to_flux()
+        self.prod_mag_to_flux()
         if file_name != '':
-            self.Prod_(file_name)
+            self.prod_(file_name)
 
-    def Prod_mag_to_flux(self):
+    def prod_mag_to_flux(self):
         """
         Mag to flux estimation
         Output file created: Mag_to_Flux_simulator.npy
@@ -358,14 +360,14 @@ class Make_Files_for_Cadence_Metric:
             else:
                 mag_to_flux_tot = np.concatenate(
                     (mag_to_flux_tot, mag_to_flux))
-        #print(mag_to_flux_tot)
+        # print(mag_to_flux_tot)
         # print('done')
-        #np.save('Mag_to_Flux_'+self.simulator_name +
-        #'.npy', np.copy(mag_to_flux_tot))
-        np.save('Mag_to_Flux_LSST_sim'+
+        # np.save('Mag_to_Flux_'+self.simulator_name +
+        # '.npy', np.copy(mag_to_flux_tot))
+        np.save('Mag_to_Flux_LSST_sim' +
                 '.npy', np.copy(mag_to_flux_tot))
 
-    def Prod_(self, filename):
+    def prod_(self, filename):
         """
         Reformat LC input files to numpy array
 
