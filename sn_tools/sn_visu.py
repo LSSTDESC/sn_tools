@@ -188,17 +188,17 @@ class CadenceMovie:
         obs.sort(order='observationStartMJD')
 
         # prepare frame
-        fig = plt.figure()
-        ax = fig.gca()
+        self.fig = plt.figure()
+        self.ax = self.fig.gca()
         adjr = 0.9
-        ax2 = None
+        self.ax2 = None
         if self.areaTime:
-            ax2 = self.fig.add_axes([0.75, 0.675, 0.20, 0.2])
+            self.ax2 = self.fig.add_axes([0.75, 0.675, 0.20, 0.2])
             adjr = 0.74
-        P1 = fig.add_subplot(1, 1, 1)
-        fig.subplots_adjust(right=adjr)
-        fig.canvas.draw()
-        self.customize(ax, ax2)
+        P1 = self.fig.add_subplot(1, 1, 1)
+        self.fig.subplots_adjust(right=adjr)
+        self.fig.canvas.draw()
+        self.customize()
 
         # Select observations
         idx = obs['night'] <= nights
@@ -216,11 +216,11 @@ class CadenceMovie:
             writer = anim.FFMpegWriter(fps=30, codec='hevc')
             Name_mp4 = title
             with writer.saving(fig, Name_mp4, 250):
-                self.loopObs(obs, fig, ax, ax2, writer=writer)
+                self.loopObs(obs, writer=writer)
         else:
-            self.loopObs(obs, fig, ax, ax2)
+            self.loopObs(obs)
 
-    def showObs(self, obs, nchanges, area, mjd0, fig, ax, ax2):
+    def showObs(self, obs, nchanges, area, mjd0):
         """ Display observation (RA, Dec) as time (MJD) evolves.
 
         Parameters
@@ -240,20 +240,20 @@ class CadenceMovie:
         mjd = obs['observationStartMJD']
         night = obs['night']
 
-        fig.suptitle(
+        self.fig.suptitle(
             'night {} - MJD {} \n filter changes: {}'.format(night, np.round(mjd, 3), nchanges))
 
         # LSST focal plane corresponding to this pointing
         pointing = LSSTPointing(obs['fieldRA'], obs['fieldDec'])
         p = PolygonPatch(
             pointing, facecolor=self.colors[obs['filter']], edgecolor=self.colors[obs['filter']])
-        ax.add_patch(p)
+        self.ax.add_patch(p)
 
         # area observed versus time
         if self.areaTime:
-            ax2.plot([24.*(mjd-mjd0)], [area], 'b.')
+            self.ax2.plot([24.*(mjd-mjd0)], [area], 'b.')
 
-    def loopObs(self, obs, fig, ax, ax2, writer=None):
+    def loopObs(self, obs, writer=None):
         """Loop on observations
 
         Parameters
@@ -279,29 +279,21 @@ class CadenceMovie:
                         self.polylist.append(LSSTPointing(
                             obs_disp[k]['fieldRA'], obs_disp[k]['fieldDec']))
                         self.showObs(obs_disp[k], nchanges,
-                                     area(self.polylist), mjd0, fig, ax, ax2)
+                                     area(self.polylist), mjd0)
                     else:
                         self.showObs(obs_disp[k], nchanges,
-                                     0., mjd0, fig, ax, ax2)
-                    fig.canvas.flush_events()
+                                     0., mjd0)
+                    self.fig.canvas.flush_events()
                     if writer:
-                        print('grabing frame', k)
                         writer.grab_frame()
             if self.saveFig:
                 plt.savefig('{}_night_{}.png'.format(self.dbName, night))
             # clear before next night
-            ax.clear()
-            if self.areaTime:
-                ax2.clear()
-            self.customize(ax, ax2)
-            self.polylist = []
-            """
             self.ax.clear()
             if self.areaTime:
                 self.ax2.clear()
             self.customize()
             self.polylist = []
-            """
 
     def plotParams(self):
         """Define general parameters for display
@@ -322,9 +314,8 @@ class CadenceMovie:
         # plt.style.use('dark_background')
         self.colors = dict(zip('ugrizy', ['b', 'c', 'g', 'y', 'r', 'm']))
 
-    def customize(self, ax, ax2):
+    def customize(self):
         """Define axis parameters for display
-        """
         """
         if self.areaTime:
             self.ax2.set_xlabel('Time [hour]', size=8)
@@ -338,19 +329,6 @@ class CadenceMovie:
         self.ax.set_ylabel('Dec [deg]')
         self.ax.set_xlim(0, 360.)
         self.ax.set_ylim(-90., 10.)
-        """
-        if self.areaTime:
-            ax2.set_xlabel('Time [hour]', size=8)
-            ax2.set_ylabel('area [deg2]', size=8)
-            ax2.xaxis.set_tick_params(labelsize=8)
-            ax2.yaxis.set_tick_params(labelsize=8)
-            ax2.yaxis.tick_right()
-            ax2.yaxis.set_label_position("right")
-
-        ax.set_xlabel('Ra [deg]')
-        ax.set_ylabel('Dec [deg]')
-        ax.set_xlim(0, 360.)
-        ax.set_ylim(-90., 10.)
 
         colorfilters = []
         for band in self.colors.keys():
