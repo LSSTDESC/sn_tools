@@ -103,7 +103,8 @@ class GenerateFakeObservations:
     def __init__(self, config,
                  mjdCol='observationStartMJD', RaCol='fieldRA',
                  DecCol='fieldDec', filterCol='filter', m5Col='fiveSigmaDepth',
-                 exptimeCol='visitExposureTime', nexpCol='numExposures', seasonCol='season'):
+                 exptimeCol='visitExposureTime', nexpCol='numExposures',
+                 seasonCol='season', seeingEffCol='seeingFwhmEff', seeingGeomCol='seeingFwhmGeom',):
 
         # config = yaml.load(open(config_filename))
         self.mjdCol = mjdCol
@@ -114,7 +115,8 @@ class GenerateFakeObservations:
         self.exptimeCol = exptimeCol
         self.seasonCol = seasonCol
         self.nexpCol = nexpCol
-
+        self.seeingEffCol = seeingEffCol
+        self.seeingGeomCol = seeingGeomCol
         # now make fake obs
         self.MakeFake(config)
 
@@ -142,7 +144,8 @@ class GenerateFakeObservations:
         Nvisits = dict(zip(bands, config['Nvisits']))
         Exposure_Time = dict(zip(bands, config['Exposure_Time']))
         inter_season_gap = 300.
-
+        seeingEff = dict(zip(bands, config['seeingEff']))
+        seeingGeom = dict(zip(bands, config['seeingGeom']))
         Ra = config['Ra']
         Dec = config['Dec']
         rtot = []
@@ -155,7 +158,7 @@ class GenerateFakeObservations:
             for i, band in enumerate(bands):
                 mjd = np.arange(mjd_min, mjd_max, cadence[band])
                 if mjd_max not in mjd:
-                    mjd = np.append(mjd,mjd_max)
+                    mjd = np.append(mjd, mjd_max)
                 mjd += shift_days[band]
                 m5_coadded = self.m5coadd(m5[band],
                                           Nvisits[band],
@@ -165,6 +168,8 @@ class GenerateFakeObservations:
                                          [Ra]*len(myarr), [Dec]*len(myarr), [band]*len(myarr)])
                 myarr = rf.append_fields(myarr, [self.m5Col, self.nexpCol, self.exptimeCol, self.seasonCol], [
                                          [m5_coadded]*len(myarr), [Nvisits[band]]*len(myarr), [Nvisits[band]*Exposure_Time[band]]*len(myarr), [season]*len(myarr)])
+                myarr = rf.append_fields(myarr, [self.seeingEffCol, self.seeingGeomCol], [
+                                         [seeingEff[band]]*len(myarr), [seeingGeom[band]]*len(myarr)])
                 rtot.append(myarr)
 
         res = np.copy(np.concatenate(rtot))

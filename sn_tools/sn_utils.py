@@ -35,8 +35,8 @@ class GenerateSample:
 
     """
 
-    def __init__(self, sn_parameters, cosmo_parameters, mjdCol='mjd', seasonCol='season', filterCol='filter', min_rf_phase=-15., max_rf_phase=30., area=9.6):
-
+    def __init__(self, sn_parameters, cosmo_parameters, mjdCol='mjd', seasonCol='season', filterCol='filter', min_rf_phase=-15., max_rf_phase=30., area=9.6, dirFiles='reference_files'):
+        self.dirFiles = dirFiles
         self.params = sn_parameters
         self.sn_rate = SN_Rate(rate=self.params['z']['rate'],
                                H0=cosmo_parameters['H0'],
@@ -276,7 +276,7 @@ class GenerateSample:
         """
 
         #prefix = os.getenv('SN_UTILS_DIR')+'/input/Dist_X1_Color_'+rate+'_'
-        prefix = '{}/Dist_X1_Color_{}'.format('reference_files', rate)
+        prefix = '{}/Dist_X1_Color_{}'.format(self.dirFiles, rate)
         suffix = '.txt'
         # names=['x1','c','weight_x1','weight_c','weight_tot']
         dtype = np.dtype([('x1', np.float), ('color', np.float),
