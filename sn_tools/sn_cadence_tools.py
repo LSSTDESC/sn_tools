@@ -118,9 +118,9 @@ class GenerateFakeObservations:
         self.seeingEffCol = seeingEffCol
         self.seeingGeomCol = seeingGeomCol
         # now make fake obs
-        self.MakeFake(config)
+        self.makeFake(config)
 
-    def MakeFake(self, config):
+    def makeFake(self, config):
         """ Generate Fake observations
 
         Parameters
@@ -163,6 +163,7 @@ class GenerateFakeObservations:
                 m5_coadded = self.m5coadd(m5[band],
                                           Nvisits[band],
                                           Exposure_Time[band])
+
                 myarr = np.array(mjd, dtype=[(self.mjdCol, 'f8')])
                 myarr = rf.append_fields(myarr, [self.RaCol, self.DecCol, self.filterCol], [
                                          [Ra]*len(myarr), [Dec]*len(myarr), [band]*len(myarr)])
