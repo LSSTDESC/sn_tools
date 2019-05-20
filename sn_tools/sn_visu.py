@@ -47,6 +47,8 @@ class SnapNight:
         obs = obs[idx]
 
         for night in range(np.min(obs['night']), np.max(obs['night'])):
+            #if night > np.min(obs['night']):
+            #    self.ax.clear()
             idx = obs['night'] == night
             obs_disp = obs[idx]
             self.frame()
@@ -74,10 +76,11 @@ class SnapNight:
             if self.realTime:
                 plt.draw()
                 plt.pause(1.)
+                if saveFig:
+                    plt.savefig('{}_night_{}.png'.format(self.dbName, night))
                 plt.close()
-            if saveFig:
-                plt.savefig('{}_night_{}.png'.format(self.dbName, night))
-            self.ax.clear()
+            
+            #self.ax.clear()
             if self.areaTime:
                 self.ax2.clear()
 
