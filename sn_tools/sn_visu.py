@@ -9,7 +9,28 @@ from shapely.ops import unary_union
 from sn_tools.sn_obs import LSSTPointing, renameFields
 import time
 import itertools
+import numpy.lib.recfunctions as rf
 
+def fieldType(obs, RaCol, DecCol):
+        
+    rDDF = []
+    for ra, dec in np.unique(obs[[RaCol, DecCol]]):
+        idx = np.abs(obs[RaCol]-ra) < 1.e-5
+        idx &= np.abs(obs[DecCol]-dec) < 1.e-5
+        sel = obs[idx]
+        if len(sel) >= 10:
+            rDDF.append((ra,dec))
+
+    nddf = len(rDDF)
+    rtype = np.array(['WFD']*len(obs))
+    if len(rDDF) > 0:
+        RaDecDDF = np.rec.fromrecords(rDDF, names=[RaCol, DecCol])
+        for (ra,dec) in RaDecDDF[[RaCol, DecCol]]:
+            idx = np.argwhere((np.abs(obs[RaCol]-ra)<1.e-5)&(np.abs(obs[DecCol]-dec)<1.e-5))
+            rtype[idx] = 'DD'
+            
+    obs = rf.append_fields(obs,'fieldType',rtype)
+    return obs
 
 def area(polylist):
     """Estimate area of a set of polygons (without overlaps)
@@ -45,26 +66,35 @@ class SnapNight:
         # Select observations
         idx = obs['night'] <= nights
         obs = obs[idx]
+        
 
         for night in range(np.min(obs['night']), np.max(obs['night'])):
             #if night > np.min(obs['night']):
             #    self.ax.clear()
             idx = obs['night'] == night
             obs_disp = obs[idx]
+            # get fieldtype(WFD or DDF)
+            obs_disp = fieldType(obs_disp,'fieldRA','fieldDec')
             self.frame()
             mjd0 = np.min(obs_disp['observationStartMJD'])
             polylist = []
             polyarea = []
             mjds = obs_disp['observationStartMJD']-mjd0
             nchanges = len(list(itertools.groupby(obs_disp['filter'])))-1
+            iwfd = obs_disp['fieldType'] == 'WFD'
+            nchanges_noddf = len(list(itertools.groupby(obs_disp[iwfd]['filter'])))-1
             self.fig.suptitle(
-                'night {} - filter changes: {}'.format(night, nchanges))
+                'night {} - filter changes: {}/{}'.format(night, nchanges_noddf,nchanges))
 
             # area observed versus time
             for val in obs_disp:
                 pointing = LSSTPointing(val['fieldRA'], val['fieldDec'])
-                p = PolygonPatch(
-                    pointing, facecolor=self.colors[val['filter']], edgecolor=self.colors[val['filter']])
+                if val['fieldType'] == 'WFD':
+                    p = PolygonPatch(
+                        pointing, facecolor=self.colors[val['filter']], edgecolor=self.colors[val['filter']])
+                else:
+                    p = PolygonPatch(
+                        pointing, facecolor='k', edgecolor='k') 
                 self.ax.add_patch(p)
                 # area observed versus time
                 if self.areaTime:
@@ -137,6 +167,8 @@ class SnapNight:
         for band in self.colors.keys():
             colorfilters.append(mpatches.Patch(
                 color=self.colors[band], label='{}'.format(band)))
+        colorfilters.append(mpatches.Patch(
+                color='k', label='ddf'))
         plt.legend(handles=colorfilters, loc='upper left',
                    bbox_to_anchor=(1., 0.5))
 
@@ -223,7 +255,7 @@ class CadenceMovie:
         else:
             self.loopObs(obs)
 
-    def showObs(self, obs, nchanges, area, mjd0):
+    def showObs(self, obs, nchanges, nchanges_noddf, area, mjd0):
         """ Display observation (RA, Dec) as time (MJD) evolves.
 
         Parameters
@@ -244,12 +276,16 @@ class CadenceMovie:
         night = obs['night']
 
         self.fig.suptitle(
-            'night {} - MJD {} \n filter changes: {}'.format(night, np.round(mjd, 3), nchanges))
+            'night {} - MJD {} \n filter changes: {}/{}'.format(night, np.round(mjd, 3), nchanges_noddf,nchanges))
 
         # LSST focal plane corresponding to this pointing
         pointing = LSSTPointing(obs['fieldRA'], obs['fieldDec'])
-        p = PolygonPatch(
-            pointing, facecolor=self.colors[obs['filter']], edgecolor=self.colors[obs['filter']])
+        if obs['fieldType'] == 'WFD':
+            p = PolygonPatch(
+                pointing, facecolor=self.colors[obs['filter']], edgecolor=self.colors[obs['filter']])
+        else:
+            p = PolygonPatch(
+                pointing, facecolor='k', edgecolor='k') 
         self.ax.add_patch(p)
 
         # area observed versus time
@@ -270,21 +306,25 @@ class CadenceMovie:
 
         for night in range(np.min(obs['night']), np.max(obs['night'])):
             idx = obs['night'] == night
-            obs_disp = obs[idx]
+            obs_disp = obs[idx] 
+            # get fieldtype(WFD or DDF)
+            obs_disp = fieldType(obs_disp,'fieldRA','fieldDec')
             mjd0 = np.min(obs_disp['observationStartMJD'])
             if len(obs_disp) > 0:
                 for k in range(len(obs_disp)):
                     # number of filter changes up to now
                     sel = obs_disp[:k]
                     nchanges = len(list(itertools.groupby(sel['filter'])))-1
+                    ifw = sel['fieldType'] == 'WFD'
+                    nchanges_noddf = len(list(itertools.groupby(sel[ifw]['filter'])))-1
                     # show observations
                     if self.areaTime:
                         self.polylist.append(LSSTPointing(
                             obs_disp[k]['fieldRA'], obs_disp[k]['fieldDec']))
-                        self.showObs(obs_disp[k], nchanges,
+                        self.showObs(obs_disp[k], nchanges,nchanges_noddf,
                                      area(self.polylist), mjd0)
                     else:
-                        self.showObs(obs_disp[k], nchanges,
+                        self.showObs(obs_disp[k], nchanges,nchanges_noddf,
                                      0., mjd0)
                     self.fig.canvas.flush_events()
                     if writer:
@@ -337,5 +377,7 @@ class CadenceMovie:
         for band in self.colors.keys():
             colorfilters.append(mpatches.Patch(
                 color=self.colors[band], label='{}'.format(band)))
+        colorfilters.append(mpatches.Patch(
+                color='k', label='ddf'))
         plt.legend(handles=colorfilters, loc='upper left',
                    bbox_to_anchor=(1., 0.5))
