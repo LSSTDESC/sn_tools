@@ -150,19 +150,21 @@ class GenerateSample:
         epsilon = 1.e-8
         if self.params['z']['type'] == 'random':
             # get sn rate for this z range
-            print(zmin, zmax, duration, self.area)
+            #print(zmin, zmax, duration, self.area)
             zz, rate, err_rate, nsn, err_nsn = self.sn_rate(
                 zmin=zmin, zmax=zmax,
                 duration=duration,
                 survey_area=self.area,
-                account_for_edges=True)
+                account_for_edges=True,dz=0.001)
             # get number of supernovae
-
             N_SN = int(np.cumsum(nsn)[-1])
+            if np.cumsum(nsn)[-1] <0.5:
+                return r
             weight_z = np.cumsum(nsn)/np.sum(np.cumsum(nsn))
+            
             if N_SN < 1:
                 N_SN = 1
-                weight_z = 1
+                #weight_z = 1
             print('nsn', N_SN)
             for j in range(N_SN):
                 z = self.getVal(self.params['z']['type'], zmin, zz, weight_z)
@@ -180,6 +182,9 @@ class GenerateSample:
                     T0_values = np.arange(
                         daymin-(1.+z)*self.min_rf_phase, daymax-(1.+z)*self.max_rf_phase, 0.1)
                 dist_daymax = T0_values
+                #print('daymax',dist_daymax,type(dist_daymax))
+                if dist_daymax.size == 0:
+                    continue
                 T0 = self.getVal(self.params['daymax']['type'],
                                  -1., dist_daymax,
                                  [1./len(dist_daymax)]*len(dist_daymax))
