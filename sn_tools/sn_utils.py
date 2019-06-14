@@ -209,18 +209,9 @@ class GenerateSample:
                         daymin-(1.+z)*self.min_rf_phase, daymax-(1.+z)*self.max_rf_phase, daystep)
                 if self.params['daymax']['type'] == 'unique':
                     T0_values = [daymin+20.*(1.+z)]
-                # print('phases', z, daymin, daymax, (daymax-daymin)/(1.+z))
-                # print('T0s', T0_values)
                 for T0 in T0_values:
                     r.append((z, x1_color[0], x1_color[1], T0, 0.,
                               0., 0., self.min_rf_phase, self.max_rf_phase))
-                    if self.params['differential_flux']:
-                        rstart = [z, x1_color[0], x1_color[1], T0, 0.,
-                                  0., 0., self.min_rf_phase, self.max_rf_phase]
-                        for kdiff in [4, -4, 5, -5, 6, -6]:
-                            rstartc = list(rstart)
-                            rstartc[np.abs(kdiff)] = epsilon*np.sign(kdiff)
-                            r.append(tuple(rstartc))
 
         if self.params['z']['type'] == 'unique':
             daystep = self.params['daymax']['step']
@@ -233,15 +224,17 @@ class GenerateSample:
             for T0 in T0_values:
                 r.append((z, x1_color[0], x1_color[1], T0, 0.,
                           0., 0., self.min_rf_phase, self.max_rf_phase))
-                if self.params['differential_flux']:
-                    if self.params['differential_flux']:
-                        rstart = [z, x1_color[0], x1_color[1], T0, 0.,
-                                  0., 0., self.min_rf_phase, self.max_rf_phase]
-                        for kdiff in [4, -4, 5, -5, 6, -6]:
-                            rstartc = list(rstart)
-                            rstartc[np.abs(kdiff)] = epsilon*np.sign(kdiff)
-                            r.append(tuple(rstartc))
+        rdiff = []        
+        if self.params['differential_flux']:
+            for rstart in r:
+                for kdiff in [4, -4, 5, -5, 6, -6]:
+                    rstartc = list(rstart)
+                    rstartc[np.abs(kdiff)] = epsilon*np.sign(kdiff)
+                    rdiff.append(tuple(rstartc))
+        if rdiff:
+            r +=rdiff
 
+        
         return r
 
     def getVal(self, type, val, distrib, weight):
