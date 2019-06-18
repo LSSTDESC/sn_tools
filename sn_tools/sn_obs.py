@@ -7,6 +7,8 @@ import shapely.vectorized
 from astropy_healpix import HEALPix
 from astropy import units as u
 from descartes.patch import PolygonPatch
+from astropy.coordinates import SkyCoord
+from dustmaps.sfd import SFDQuery
 
 def renameFields(tab):
 
@@ -37,9 +39,13 @@ def pixelate(data,nside,RaCol='Ra',DecCol='Dec'):
         healpixs = hp.vec2pix(nside, table[:, 0], table[:, 1], table[:, 2], nest=True)
         coord = hp.pix2ang(nside, healpixs, nest=True, lonlat=True)
 
+        coords = SkyCoord(coord[0], coord[1], unit='deg')
+        sfd = SFDQuery()
+        ebv = sfd(coords)
         res = rf.append_fields(res, 'healpixID', healpixs)
         res = rf.append_fields(res, 'pixRa', coord[0])
         res = rf.append_fields(res, 'pixDec', coord[1])
+        res = rf.append_fields(res, 'ebv', ebv)
 
         return res
 
