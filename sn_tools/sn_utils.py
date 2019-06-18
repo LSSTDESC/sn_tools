@@ -2,11 +2,13 @@ import numpy as np
 from sn_tools.sn_rate import SN_Rate
 import os
 import numpy.lib.recfunctions as rf
-from astropy.table import Table
+from astropy.table import Table, vstack, Column
 from sn_tools.sn_throughputs import Throughputs
 from scipy import interpolate, integrate
 from lsst.sims.photUtils import Sed, PhotometricParameters,Bandpass, Sed
 import sncosmo
+import h5py
+from scipy.interpolate import InterpolatedUnivariateSpline as Spline1d
 
 class GenerateSample:
     """ Generates a sample of parameters for simulation
@@ -99,6 +101,7 @@ class GenerateSample:
             if len(rp) > 0:
                 r += rp
         print('Number of SN to simulate:', len(r))
+        #print(r)
         if len(r) > 0:
             names = ['z', 'x1', 'color', 'daymax',
                      'epsilon_x0', 'epsilon_x1', 'epsilon_color',
@@ -106,6 +109,7 @@ class GenerateSample:
             types = ['f8']*len(names)
             #params = np.zeros(len(r), dtype=list(zip(names, types)))
             params = np.asarray(r, dtype=list(zip(names, types)))
+            #print(params)
             return params
         else:
             return None
@@ -699,3 +703,503 @@ class X0_norm:
         sourcewavelen = np.array(sourcewavelen)
         sourcefnu = np.array(sourcefnu)
         return sourcewavelen, sourcefnu
+
+
+class DiffFlux:
+    def __init__(self,metaFile,dirFiles, outDir):
+        """ Class to estimate flux derivatives wrt SN parameters (x0,x1,color)
+
+        Parameters
+        ----------
+        metaFile: str
+         name of the metadata file (Simu_*)
+        dirFile: str
+         directory where the files are located
+        outDir: std
+         output directory for the results
+
+        """
+        
+        #check whether outputdir is ready
+        if not os.path.isdir(outDir):
+            os.makedirs(outDir)
+
+        # SN parameters
+        self.snParams = ['x0','x1','color']
+
+        # id of the production 
+        id_prod = '_'.join(metaFile.split('/')[-1].split('.')[0].split('_')[1:])
+
+        # get metadata
+        metaTable = self.metaData(metaFile)
+        print(metaTable.dtype,len(metaTable))
+
+        # get corresponding LC file
+        self.lcFile = h5py.File('{}/LC_{}.hdf5'.format(dirFiles,id_prod), 'r')
+
+        # Two output files, one for metadata and the other for LC with deriv. fluxes
+        self.summaryOut ='{}/Simu_{}.hdf5'.format(outDir,id_prod) 
+        self.lcOut = '{}/LC_{}.hdf5'.format(outDir,id_prod)
+
+        # Remove outputs if already exist
+        if os.path.exists(self.summaryOut):
+            os.remove(self.summaryOut)
+        if os.path.exists(self.lcOut):
+            os.remove(self.lcOut)
+
+        # Make groups of lcs
+        groups = metaTable.group_by(['z','x1','color','daymax'])
+
+        #self.procMulti(groups[:81],8)
+        self.procSimple(groups)
+
+    def procSimple(self,groups):
+        """ Process (astropy) groups
+
+        Parameters
+        ----------
+        groups: astropy table groups
+         each group is composed by a list of SN light curves
+
+        """
+
+
+        # This is for output metadata
+        metaTot = []
+        names = []
+
+        # Loop on the groups
+        for ii, gr in enumerate(groups.groups):
+            
+            # get differential fluxes
+            lsdiff = self.diffFlux(gr)
+
+            # Store the metadata
+            metaTot.append(tuple([lsdiff.meta[key] for key in lsdiff.meta.keys()]))
+            names = [key for key in lsdiff.meta.keys()]
+
+            # Save the lightcurves
+            lsdiff.write(self.lcOut,'lc_{}'.format(lsdiff.meta['index_hdf5']),compression=True,append=True)
+           
+        # Save the metadata as an astropy table (hdf5)
+        res = np.rec.fromrecords(metaTot,names=names)
+        Table(res).write(self.summaryOut,'summary',compression=True)
+
+    """
+    def procMulti(self,groups, nproc):
+
+        result_queue = multiprocessing.Queue()
+        ngr = len(groups)
+        delta = int(ngr/nproc)
+        batch = range(0, ngr, delta)
+        if ngr not in batch:
+            batch = np.append(batch, ngr)
+
+        print(batch)
+        for j in range(len(batch)-1):
+            ida = batch[j]
+            idb = batch[j+1]
+            p = multiprocessing.Process(name='Subprocess-'+str(j), target=self.procGroups, args=(
+                groups[ida:idb],j, result_queue))
+            p.start()
+
+        resultdict = {}
+        for i in range(len(batch)-1):
+            resultdict.update(result_queue.get())
+
+        for p in multiprocessing.active_children():
+            p.join()
+
+        r = []
+        names = []
+        for key,vals in resultdict.items():
+            r += vals[0]
+            names = vals[1]
+            for lc in vals[3]:
+                lc.write(self.lcOut,'lc_{}'.format(lc.meta['index_hdf5']),compression=True,append=True)
+            
+        res = np.rec.fromrecords(r,names=names)
+        Table(res).write(self.summaryOut,'summary',compression=True)
+
+
+    def procGroups(self,group, j=0, output_q=None):
+        
+        metaTot = []
+        names = []
+        lclist = []
+        for gr in group.groups:
+            #print(len(gr),gr[['z','x1','color','daymax','epsilon_x0','epsilon_x1','epsilon_color']])
+            #print(gr.dtype)
+            lsdiff = self.diffFlux(gr)
+            metaTot.append(tuple([lsdiff.meta[key] for key in lsdiff.meta.keys()]))
+            names = lsdiff.keys()
+            lclist.append(lsdiff)
+
+        if output_q is not None:
+            return ({j: (metaTot,names,lclist)})
+        else:
+            return (metaTot,names,lclist)
+    """
+    def metaData(self, metaFile):
+        """ Get metadata
+        
+        Parameters
+        ----------
+
+        metaFile: str
+         filename of the metadata
+
+        Returns
+        -------
+        tabres : astropy Table
+         astropy table with metadata
+
+        """
+
+        # open metadata file
+        fMeta = h5py.File(metaFile, 'r')
+
+        # loop on the keys, stack output
+        tabres = Table()
+        for i, key in enumerate(fMeta.keys()):
+            tabres = vstack([tabres, Table.read(fMeta, path=key)])
+        
+        return tabres
+
+    def diffFlux(self,tab):
+        """ Evaluate flux derivatives wrt SN parameters (x0, x1, color)
+        using df/dp = (f(p+h)-f(p-h))/2h
+        
+        Parameters
+        ----------
+        tab: astropy Table
+         table of metadata
+
+        Returns
+        -------
+        lcnom : astropy Table
+         light curve with three additional columns:
+         dx0 = dflux/dx0
+         dx1 = dflux/dx1
+         dcolor = dflux/dcolor
+
+        """
+
+        lcnom = Table.read(self.lcFile, path='lc_{}'.format(tab['id_hdf5'][0]))
+        for i,par in enumerate(self.snParams):
+            ja = 2*i+1
+            jb = ja+1
+            lca = Table.read(self.lcFile, path='lc_{}'.format(tab['id_hdf5'][ja]))
+            lcb = Table.read(self.lcFile, path='lc_{}'.format(tab['id_hdf5'][jb]))
+            epsilon = lca.meta['epsilon_{}'.format(par)]
+            diff = (lca['flux']-lcb['flux'])/(2.*epsilon)
+            lcnom.add_column(Column(diff, name='d{}'.format(par)))
+        
+        return lcnom
+
+
+class MbCov:
+    def __init__(self, salt2Dir, paramNames=dict(zip(['x0','x1','color'],['x0','x1','color']))):
+        """ Class to estimate covariance matrix with mb
+
+        Parameters
+        ----------
+        salt2Dir : str
+         director where SALT2 reference files are to be found
+
+        """
+                                                 
+        self.load(salt2Dir)
+        self.paramNames = paramNames
+        self.transNames = dict(zip(['t0','x0','x1','c'],['t0','x0','x1','color']))
+        
+    def load(self, salt2Dir):
+
+        #from F. Mondon 2017/10/20
+        # wavelength limits for salt2 model
+        wl_min_sal = 3000
+        wl_max_sal = 7000
+    
+        #interpolation of TB and Trest
+        #filt2 = np.genfromtxt('{}/snfit_data/Instruments/SNLS3-Landolt-model/sb-shifted.dat'.format(salt2Dir))
+        filt2 = np.genfromtxt('{}/Instruments/SNLS3-Landolt-model/sb-shifted.dat'.format(salt2Dir))
+        filt2=np.genfromtxt('{}/Instruments/Landolt/sb_-41A.dat'.format(salt2Dir))
+        wlen = filt2[:,0]
+        tran = filt2[:,1]
+        self.splB = Spline1d(wlen, tran, k=1,ext = 1)
+
+        #interpolation of ref spectrum
+        #data = np.genfromtxt(thedir+'/snfit_data/MagSys/bd_17d4708_stisnic_002.ascii')
+        data = np.genfromtxt('{}/MagSys/bd_17d4708_stisnic_002.ascii'.format(salt2Dir))
+        dispersion = data[:,0]
+        flux_density = data[:,1]
+        self.splref = Spline1d(dispersion, flux_density, k=1,ext = 1)
+
+  
+        #interpolation of the spectrum model
+        template_0 = np.genfromtxt('{}/snfit_data/salt2-4/salt2_template_0.dat'.format(salt2Dir))    
+        template_1 = np.genfromtxt('{}/snfit_data/salt2-4/salt2_template_1.dat'.format(salt2Dir))
+        
+        wlM0 = []
+        M0 = []
+        for i in range(len(template_0[:,0])):
+            if template_0[:,0][i] == 0.0:
+                wlM0.append(template_0[:,1][i]) 
+                M0.append(template_0[:,2][i])
+        self.splM0 = Spline1d(wlM0, M0, k=1,ext = 1)
+
+        wlM1 = []
+        M1 = []
+        for i in range(len(template_1[:,0])):
+            if template_1[:,0][i] == 0.0:
+                wlM1.append(template_1[:,1][i]) 
+                M1.append(template_1[:,2][i])
+        self.splM1 = Spline1d(wlM1, M1, k=1,ext = 1)
+
+        #computation of the integral
+        dt = 100000
+        self.xs = np.linspace(float(wl_min_sal), float(wl_max_sal), dt)
+        self.dxs = (float(wl_max_sal-wl_min_sal)/(dt-1))
+
+
+    def mB(self,params):
+        """ Estimate mB for supernovae
+
+        Parameters
+        ----------
+        params: dict
+         dict of parameters: x0, x1, color 
+
+        Returns
+        -------
+        mb : float
+         mb value
+
+        """
+       
+
+        #    I1=np.sum((splM0(xs)*10**-12+res.parameters[3]*splM1(xs)*10**-12)*(10**(-0.4*salt2source.colorlaw(xs)*res.parameters[4]))*xs*splB(xs)*dxs)
+        I1 = np.sum((self.splM0(self.xs)*10**-12+params[self.paramNames['x1']]*self.splM1(self.xs)*10**-12)*(10**(-0.4*self.color_law_salt2(self.xs)*params[self.paramNames['color']]))*self.xs*self.splB(self.xs)*self.dxs)    
+        I2 = np.sum(self.splref(self.xs)*self.xs*self.splB(self.xs)*self.dxs)
+        #print(I1, I2,params['x1'],params['c'])   
+    
+        #computation of mb
+        mref = 9.907
+        mb = -2.5*np.log10(params[self.paramNames['x0']]*(I1/I2))+mref
+        
+        return mb
+    """
+    def calcInteg(self, bandpass, signal,wavelen):
+        
+        
+        
+        fa = interpolate.interp1d(bandpass.wavelen,bandpass.sb)
+        fb = interpolate.interp1d(wavelen,signal)
+        
+        min_wave=np.max([np.min(bandpass.wavelen),np.min(wavelen)])
+        max_wave=np.min([np.max(bandpass.wavelen),np.max(wavelen)])
+        
+        #print 'before integrand',min_wave,max_wave
+        
+        wavelength_integration_step=5
+        waves=np.arange(min_wave,max_wave,wavelength_integration_step)
+        
+        integrand=fa(waves) *fb(waves) 
+        #print 'rr',len(f2(wavelen)),len(wavelen),len(integrand)
+        
+        range_inf=min_wave
+        range_sup=max_wave
+        n_steps = int((range_sup-range_inf) / wavelength_integration_step)
+        
+
+        x = np.core.function_base.linspace(range_inf, range_sup, n_steps)
+        #print len(waves),len(x)
+        return integrate.simps(integrand,x=waves)
+
+    def Get_Mag(self,filename,name,band):
+        
+        sfile=open(filename,'rb')
+        spectrum_file='unknown'
+        for line in sfile.readlines():
+            if 'SPECTRUM' in line:
+                spectrum_file=line.split(' ')[1].strip()
+            if name in line and band in line:
+                return float(line.split(' ')[2]),spectrum_file
+
+        sfile.close()
+    """
+    def color_law_salt2(self,wl):
+        """ Color law for SALT2
+
+        """
+        B_wl = 4302.57
+        V_wl = 5428.55
+        l = (wl-B_wl)/(V_wl-B_wl)
+        l_lo = (2800.-B_wl)/(V_wl-B_wl)
+        l_hi = (7000.-B_wl)/(V_wl-B_wl)
+        a = -0.504294
+        b = 0.787691
+        c = -0.461715
+        d = 0.0815619
+        cst = 1-(a+b+c+d)
+        cl = []
+        for i in range (len(l)):
+            if l[i] > l_hi:
+                cl.append(-(cst*l_hi+l_hi**2*a+l_hi**3*b+l_hi**4*c+l_hi**5*d+(cst+2*l_hi*a+3*l_hi**2*b+4*l_hi**3*c+5*l_hi**4*d)*(l[i]-l_hi)))
+            if l[i] < l_lo:
+                cl.append(-(cst*l_lo+l_lo**2*a+l_lo**3*b+l_lo**4*c+l_lo**5*d+(cst+2*l_lo*a+3*l_lo**2*b+4*l_lo**3*c+5*l_lo**4*d)*(l[i]-l_lo))) 
+            if l[i]>= l_lo and l[i]<= l_hi:
+                cl.append(-(cst*l[i]+l[i]**2*a+l[i]**3*b+l[i]**4*c+l[i]**5*d)) 
+        return np.array(cl)
+
+    def mbCovar(self,params,covar,vparam_names):
+        """ mb covariance matrix wrt fit parameters
+
+        Parameters
+        ----------
+        params: dict
+         parameter values
+        covar: matrix
+         covariance matrix of the parameters
+        vparam_names: list
+         names of the parameters
+
+        Returns
+        -------
+        res: dict
+         final covariance dict
+
+        """
+
+
+
+        res={}
+        h_ref=1.e-8
+        Der=np.zeros(shape=(len(vparam_names),1))
+
+        #print params
+        par_var=params.copy()
+        ider=-1
+        for i,key in enumerate(vparam_names):
+            h=h_ref
+            if np.abs(par_var[key]) < 1.e-5:
+                h=1.e-10
+
+            par_var[key]+=h
+            ider+=1
+            #print(par_var,params)
+            Der[ider]=(self.mB(par_var)-self.mB(params))/h
+            #print 'there man',key,params[key],Der[ider]
+            par_var[key]-=h
+
+        Prod=np.dot(covar,Der)
+
+        for i,key in enumerate(vparam_names):
+            res['Cov_{}mb'.format(self.transNames[key])]=Prod[i,0]
+            """
+            if key != 'c':
+                res['Cov_'+key.upper()+'mb']=Prod[i,0]
+            else:
+               res['Cov_Colormb']=Prod[i,0] 
+            """
+        res['Cov_mbmb']=np.asscalar(np.dot(Der.T,Prod))
+        res['mb_recalc']=self.mB(par_var)
+
+        return res
+        
+    """
+    def mbDeriv(self,params,vparam_names):
+        
+        res={}
+        h=1.e-6
+        #Der=np.zeros(shape=(len(vparam_names),1))
+        Der={}
+
+        #print params
+        par_var=params.copy()
+        ider=-1
+        for i,key in enumerate(vparam_names):
+            par_var[key]+=h
+            ider+=1
+            Der[key]=(self.mB(par_var)-self.mB(params))/h
+            par_var[key]-=h
+
+        return Der
+    """
+
+    def test(self):
+        """ Test function
+
+        To test whether this class is usable or not
+
+
+        """
+
+        
+        """
+        Salt2Model
+        BEGIN_OF_FITPARAMS Salt2Model
+        DayMax 53690.0336018 0.105513809169 
+        Redshift 0.1178 0 F 
+        Color -0.0664131339433 0.0234330339301 
+        X0 0.00030732251016 8.89813428854e-06 
+        X1 -0.0208012409076 0.160846457522 
+        CovColorColor 0.00054910707917 -1 
+        CovColorDayMax 0.00040528682468 -1 
+        CovColorX0 -1.68238293879e-07 -1 
+        CovColorX1 0.00114702847231 -1 
+        CovDayMaxDayMax 0.0111331639253 -1 
+        CovDayMaxX0 -2.94345317778e-07 -1 
+        CovDayMaxX1 0.0131008809199 -1 
+        CovX0X0 7.91767938168e-11 -1 
+        CovX0X1 -7.23852420336e-07 -1 
+        CovX1X1 0.0258715828973 
+        """
+
+        salt2_res={}
+        salt2_res['DayMax']=53690.0336018
+        salt2_res['Color']=-0.0664131339433
+        salt2_res['X0']=0.00030732251016
+        salt2_res['X1']=-0.0208012409076
+        salt2_res['CovColorColor']=0.00054910707917
+        salt2_res['CovColorDayMax']=0.00040528682468
+        salt2_res['CovColorX0']=-1.68238293879e-07
+        salt2_res['CovColorX1']=0.00114702847231
+        salt2_res['CovDayMaxDayMax']=0.0111331639253
+        salt2_res['CovDayMaxX0']=-2.94345317778e-07
+        salt2_res['CovDayMaxX1']=0.0131008809199
+        salt2_res['CovX0X0']=7.91767938168e-11
+        salt2_res['CovX0X1']=-7.23852420336e-07
+        salt2_res['CovX1X1']=0.0258715828973 
+        #salt2_res['']=
+        vparam_names=['t0','c','x0','x1']
+        covar=np.zeros(shape=(len(vparam_names),len(vparam_names)))
+
+        covar[0,1]=salt2_res['CovColorDayMax']
+        covar[0,2]=salt2_res['CovDayMaxX0']
+        covar[0,3]=salt2_res['CovDayMaxX1']
+        
+        covar[1,2]=salt2_res['CovColorX0']
+        covar[1,3]=salt2_res['CovColorX1']
+        
+        covar[2,3]=salt2_res['CovX0X1']
+        
+        covar=covar+covar.T
+
+        covar[0,0]=salt2_res['CovDayMaxDayMax']
+        covar[1,1]=salt2_res['CovColorColor']
+        covar[2,2]=salt2_res['CovX0X0']
+        covar[3,3]=salt2_res['CovX1X1']
+
+        
+        #print covar
+        
+        params={}
+        params['t0']=salt2_res['DayMax']
+        params['c']=salt2_res['Color']
+        params['x0']=salt2_res['X0']
+        params['x1']=salt2_res['X1']
+
+        cov = self.mbCovar(params,covar,vparam_names)
+        
+        print(cov)
