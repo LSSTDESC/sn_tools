@@ -9,7 +9,7 @@ from lsst.sims.photUtils import Sed, PhotometricParameters, Bandpass, Sed
 import sncosmo
 import h5py
 from scipy.interpolate import InterpolatedUnivariateSpline as Spline1d
-
+from scipy.interpolate import griddata
 
 class GenerateSample:
     """ Generates a sample of parameters for simulation
@@ -903,7 +903,7 @@ class DiffFlux:
 
 
 class MbCov:
-    def __init__(self, salt2Dir, paramNames=dict(zip(['x0', 'x1', 'color'], ['x0', 'x1', 'color']))):
+    def __init__(self, salt2Dir, paramNames=dict(zip(['x0', 'x1', 'color'], ['x0', 'x1', 'color'])),interp=True):
         """ Class to estimate covariance matrix with mb
 
         Parameters
@@ -918,6 +918,17 @@ class MbCov:
         # self.transNames = dict(
         #    zip(['t0', 'x0', 'x1', 'c'], ['t0', 'x0', 'x1', 'color']))
         self.transNames = dict(map(reversed, paramNames.items()))
+        self.interp = interp
+        if self.interp:
+            # check whether outputdir is ready
+            self.ratName = '{}/RatInt_for_mb.npy'.format(salt2Dir)
+            if not os.path.exists(self.ratName):
+                print('You would like to use the fast calculation for mB')
+                print('But you need a file that does not exist')
+                print('Will create it for you (it will take ~25 min)')
+                self.genRat_int()
+                print('The file has been generated.')
+            self.ratio_Int = np.load(self.ratName)
 
     def load(self, salt2Dir):
 
@@ -971,7 +982,90 @@ class MbCov:
         self.xs = np.linspace(float(wl_min_sal), float(wl_max_sal), dt)
         self.dxs = (float(wl_max_sal-wl_min_sal)/(dt-1))
 
+        self.I2 = np.sum(self.splref(self.xs)*self.xs*self.splB(self.xs)*self.dxs)
+
+    def genRat_int(self):
+        
+        x1 = np.arange(-3.0,3.0,0.1)
+        color = np.arange(-0.3,0.3,0.01)
+        x1_all = np.repeat(x1,len(color))
+        color_all = np.tile(color,len(x1))
+
+        r = []
+        mref = 9.907
+        for (x1v,colorv) in zip(x1_all, color_all):
+            r.append((x1v,colorv,self.ratInt(x1v,colorv),mref))
+
+        tab= np.rec.fromrecords(r, names=['x1','color','ratioInt','mref'])
+
+        np.save(self.ratName,tab)
+        
+
+    def ratInt(self,x1,color):
+        """ Estimate a ratio of two sums requested to estimated mb
+
+        Parameters
+        ----------
+        x1: float
+         x1 of the supernova
+        color: float
+         color of the supernova
+
+        Returns
+        -------
+        float
+         ratio value
+
+        """
+        I1 = np.sum((self.splM0(self.xs)*10**-12+x1*self.splM1(self.xs)*10**-12)*(
+            10**(-0.4*self.color_law_salt2(self.xs)*color))*self.xs*self.splB(self.xs)*self.dxs)
+        
+        return I1/self.I2
+   
+    def mB_interp(self, x0, x1, color):
+        """ Estimate mB for supernovae
+
+        Parameters
+        ----------
+        params: dict
+         dict of parameters: x0, x1, color 
+
+        Returns
+        -------
+        mb : float
+         mb value
+
+        """
+
+        rat = griddata((self.ratio_Int['x1'],self.ratio_Int['color']),self.ratio_Int['ratioInt'],(x1,color),method='cubic')
+        mb = -2.5*np.log10(x0*rat)+np.mean(self.ratio_Int['mref'])
+
+        return mb
+
     def mB(self, params):
+        """ Estimate mB for supernovae
+
+        Parameters
+        ----------
+        params: dict
+         dict of parameters: x0, x1, color 
+
+        Returns
+        -------
+        mb : float
+         mb value
+
+        """
+
+
+        rat = self.ratInt(params[self.paramNames['x1']],params[self.paramNames['color']])
+        # computation of mb
+        mref = 9.907
+        mb = -2.5*np.log10(params[self.paramNames['x0']]*rat)+mref
+
+        return mb
+
+    def mB_old(self, params):
         """ Estimate mB for supernovae
 
         Parameters
@@ -1087,7 +1181,7 @@ class MbCov:
         h_ref = 1.e-8
         Der = np.zeros(shape=(len(vparam_names), 1))
 
-        # print params
+       
         par_var = params.copy()
         ider = -1
         for i, key in enumerate(vparam_names):
@@ -1097,9 +1191,8 @@ class MbCov:
 
             par_var[key] += h
             ider += 1
-            # print(par_var,params)
             Der[ider] = (self.mB(par_var)-self.mB(params))/h
-            # print 'there man',key,params[key],Der[ider]
+            
             par_var[key] -= h
 
         Prod = np.dot(covar, Der)
@@ -1115,8 +1208,68 @@ class MbCov:
         res['Cov_mbmb'] = np.asscalar(np.dot(Der.T, Prod))
         res['mb_recalc'] = self.mB(par_var)
 
+        print(res)
         return res
 
+    def mbCovar_int(self, params, covar, vparam_names):
+        """ mb covariance matrix wrt fit parameters
+            uses mb_int (griddata from template of mb)
+
+        Parameters
+        ----------
+        params: dict
+         parameter values
+        covar: matrix
+         covariance matrix of the parameters
+        vparam_names: list
+         names of the parameters
+
+        Returns
+        -------
+        res: dict
+         final covariance dict
+
+        """
+
+        res = {}
+        h_ref = 1.e-8
+        Der = np.zeros(shape=(len(vparam_names), 1))
+        
+        rt = []
+        r = []
+        for i, key in enumerate(vparam_names):
+            r.append(params[key])
+        r.append(0.0)
+        rt.append(tuple(r))
+
+        for i, key in enumerate(vparam_names):
+            rot = list(rt[0])
+            h = h_ref
+            if np.abs(rot[i])<1.e-5:
+                h = 1.e-10
+            rot[i]+=h
+            rot[-1]=h
+            rt.append(tuple(rot))
+
+        tabDiff = np.rec.fromrecords(rt,names=vparam_names+['h'])
+        mbVals = self.mB_interp(tabDiff[self.paramNames['x0']],tabDiff[self.paramNames['x1']],tabDiff[self.paramNames['color']])
+        tabDiff = rf.append_fields(tabDiff,'mB',mbVals)
+
+        ider = -1
+        for i,key in enumerate(vparam_names):
+            ider += 1
+            Der[ider] = (tabDiff['mB'][i+1]-tabDiff['mB'][0])/tabDiff['h'][i+1]
+            
+
+        Prod = np.dot(covar, Der)
+
+        for i, key in enumerate(vparam_names):
+            res['Cov_{}mb'.format(self.transNames[key])] = Prod[i, 0]
+          
+        res['Cov_mbmb'] = np.asscalar(np.dot(Der.T, Prod))
+        res['mb_recalc'] = self.mB_interp(params[self.paramNames['x0']],params[self.paramNames['x1']],params[self.paramNames['color']]) 
+        
+        return res
     """
     def mbDeriv(self,params,vparam_names):
         
@@ -1170,6 +1323,8 @@ class MbCov:
         salt2_res['Color'] = -0.0664131339433
         salt2_res['X0'] = 0.00030732251016
         salt2_res['X1'] = -0.0208012409076
+        salt2_res['Color'] = 0.0
+        salt2_res['X1'] = 0.0
         salt2_res['CovColorColor'] = 0.00054910707917
         salt2_res['CovColorDayMax'] = 0.00040528682468
         salt2_res['CovColorX0'] = -1.68238293879e-07
@@ -1210,5 +1365,7 @@ class MbCov:
         params[self.paramNames['x1']] = salt2_res['X1']
 
         cov = self.mbCovar(params, covar, vparam_names)
-
         print(cov)
+        if self.interp:
+            cov_int = self.mbCovar_int(params, covar, vparam_names)
+            print(cov_int)
