@@ -5,10 +5,11 @@ import numpy.lib.recfunctions as rf
 from astropy.table import Table, vstack, Column
 from sn_tools.sn_throughputs import Throughputs
 from scipy import interpolate, integrate
-from lsst.sims.photUtils import Sed, PhotometricParameters,Bandpass, Sed
+from lsst.sims.photUtils import Sed, PhotometricParameters, Bandpass, Sed
 import sncosmo
 import h5py
 from scipy.interpolate import InterpolatedUnivariateSpline as Spline1d
+
 
 class GenerateSample:
     """ Generates a sample of parameters for simulation
@@ -101,7 +102,7 @@ class GenerateSample:
             if len(rp) > 0:
                 r += rp
         print('Number of SN to simulate:', len(r))
-        #print(r)
+        # print(r)
         if len(r) > 0:
             names = ['z', 'x1', 'color', 'daymax',
                      'epsilon_x0', 'epsilon_x1', 'epsilon_color',
@@ -109,7 +110,7 @@ class GenerateSample:
             types = ['f8']*len(names)
             #params = np.zeros(len(r), dtype=list(zip(names, types)))
             params = np.asarray(r, dtype=list(zip(names, types)))
-            #print(params)
+            # print(params)
             return params
         else:
             return None
@@ -162,13 +163,13 @@ class GenerateSample:
                 zmin=zmin, zmax=zmax,
                 duration=duration,
                 survey_area=self.area,
-                account_for_edges=True,dz=0.001)
+                account_for_edges=True, dz=0.001)
             # get number of supernovae
             N_SN = int(np.cumsum(nsn)[-1])
-            if np.cumsum(nsn)[-1] <0.5:
+            if np.cumsum(nsn)[-1] < 0.5:
                 return r
             weight_z = np.cumsum(nsn)/np.sum(np.cumsum(nsn))
-            
+
             if N_SN < 1:
                 N_SN = 1
                 #weight_z = 1
@@ -189,7 +190,7 @@ class GenerateSample:
                     T0_values = np.arange(
                         daymin-(1.+z)*self.min_rf_phase, daymax-(1.+z)*self.max_rf_phase, 0.1)
                 dist_daymax = T0_values
-                #print('daymax',dist_daymax,type(dist_daymax))
+                # print('daymax',dist_daymax,type(dist_daymax))
                 if dist_daymax.size == 0:
                     continue
                 T0 = self.getVal(self.params['daymax']['type'],
@@ -228,7 +229,7 @@ class GenerateSample:
             for T0 in T0_values:
                 r.append((z, x1_color[0], x1_color[1], T0, 0.,
                           0., 0., self.min_rf_phase, self.max_rf_phase))
-        rdiff = []        
+        rdiff = []
         if self.params['differential_flux']:
             for rstart in r:
                 for kdiff in [4, -4, 5, -5, 6, -6]:
@@ -236,9 +237,8 @@ class GenerateSample:
                     rstartc[np.abs(kdiff)] = epsilon*np.sign(kdiff)
                     rdiff.append(tuple(rstartc))
         if rdiff:
-            r +=rdiff
+            r += rdiff
 
-        
         return r
 
     def getVal(self, type, val, distrib, weight):
@@ -431,6 +431,7 @@ class Make_Files_for_Cadence_Metric:
         np.save('Li_'+self.simulator_name+'_'+str(x1) +
                 '_'+str(color)+'.npy', np.copy(restot))
 
+
 class X0_norm:
     """ X0 estimations
          to be used as input for SN input params
@@ -458,7 +459,8 @@ class X0_norm:
          flux_10pc: float, flux at 10pc
          x0_norm: float, x0 value
     """
-    def __init__(self, salt2Dir='SALT2_Files',model='salt2-extended', version='1.0', absmag= -19.0906,outfile='reference_files/X0_norm.npy'):
+
+    def __init__(self, salt2Dir='SALT2_Files', model='salt2-extended', version='1.0', absmag=-19.0906, outfile='reference_files/X0_norm.npy'):
 
         self.salt2Dir = salt2Dir
         self.model = model
@@ -479,19 +481,18 @@ class X0_norm:
 
         self.wave = np.arange(wave_min, wave_max, 1.)
 
-        #estimate flux at 10pc
+        # estimate flux at 10pc
         self.flux_10pc()
         source = sncosmo.get_source(self.model, version=self.version)
         self.SN = sncosmo.Model(source=source)
         r = []
-        for x1 in np.arange(-3.,3.,0.01):
-            for color in np.arange(-0.3,0.3,0.01):
-                r.append((x1,color,self.flux_at_10pc,self.X0_norm(x1,color)))
-        tab = np.rec.fromrecords(r,names=['x1','color','flux_10pc','x0_norm'])
+        for x1 in np.arange(-3., 3., 0.01):
+            for color in np.arange(-0.3, 0.3, 0.01):
+                r.append((x1, color, self.flux_at_10pc, self.X0_norm(x1, color)))
+        tab = np.rec.fromrecords(
+            r, names=['x1', 'color', 'flux_10pc', 'x0_norm'])
 
-        np.save(outfile,tab)
-                
-
+        np.save(outfile, tab)
 
     def flux_10pc(self):
         """ Extimate flux at 10pc
@@ -513,13 +514,13 @@ class X0_norm:
         os.environ[name] = thedir+'/Instruments/Landolt'
 
         self.trans_standard = Throughputs(through_dir='STANDARD',
-                                     telescope_files=[],
-                                     filter_files=['sb_-41A.dat'],
-                                     atmos=False,
-                                     aerosol=False,
-                                     filterlist=('A'),
-                                     wave_min=3559,
-                                     wave_max=5559)
+                                          telescope_files=[],
+                                          filter_files=['sb_-41A.dat'],
+                                          atmos=False,
+                                          aerosol=False,
+                                          filterlist=('A'),
+                                          wave_min=3559,
+                                          wave_max=5559)
 
         mag, spectrum_file = self.getMag(
             thedir+'/MagSys/VegaBD17-2008-11-28.dat',
@@ -542,8 +543,7 @@ class X0_norm:
         zp = 2.5*np.log10(flux)+mag
         self.flux_at_10pc = np.power(10., -0.4 * (self.absmag-zp))
 
-
-    def X0_norm(self,x1,color):
+    def X0_norm(self, x1, color):
         """ Extimate X0 from flux at 10pc
         using Vega spectrum
 
@@ -561,7 +561,6 @@ class X0_norm:
           x0 from flux at 10pc
         """
 
-        
         self.SN.set(z=0.)
         self.SN.set(t0=0)
         self.SN.set(c=color)
@@ -583,7 +582,7 @@ class X0_norm:
         # e_per_sec = sed.calcADU(bandpass=self.transmission.lsst_atmos[filtre], photParams=photParams)
         e_per_sec /= expTime/photParams.gain*photParams.effarea
 
-        return self.flux_at_10pc * 1.E-4 / e_per_sec    
+        return self.flux_at_10pc * 1.E-4 / e_per_sec
 
     def getMag(self, filename, name, band):
         """ Get magnitude in filename
@@ -706,7 +705,7 @@ class X0_norm:
 
 
 class DiffFlux:
-    def __init__(self,metaFile,dirFiles, outDir):
+    def __init__(self, metaFile, dirFiles, outDir):
         """ Class to estimate flux derivatives wrt SN parameters (x0,x1,color)
 
         Parameters
@@ -719,27 +718,28 @@ class DiffFlux:
          output directory for the results
 
         """
-        
-        #check whether outputdir is ready
+
+        # check whether outputdir is ready
         if not os.path.isdir(outDir):
             os.makedirs(outDir)
 
         # SN parameters
-        self.snParams = ['x0','x1','color']
+        self.snParams = ['x0', 'x1', 'color']
 
-        # id of the production 
-        id_prod = '_'.join(metaFile.split('/')[-1].split('.')[0].split('_')[1:])
+        # id of the production
+        id_prod = '_'.join(metaFile.split(
+            '/')[-1].split('.')[0].split('_')[1:])
 
         # get metadata
         metaTable = self.metaData(metaFile)
-        print(metaTable.dtype,len(metaTable))
+        print(metaTable.dtype, len(metaTable))
 
         # get corresponding LC file
-        self.lcFile = h5py.File('{}/LC_{}.hdf5'.format(dirFiles,id_prod), 'r')
+        self.lcFile = h5py.File('{}/LC_{}.hdf5'.format(dirFiles, id_prod), 'r')
 
         # Two output files, one for metadata and the other for LC with deriv. fluxes
-        self.summaryOut ='{}/Simu_{}.hdf5'.format(outDir,id_prod) 
-        self.lcOut = '{}/LC_{}.hdf5'.format(outDir,id_prod)
+        self.summaryOut = '{}/Simu_{}.hdf5'.format(outDir, id_prod)
+        self.lcOut = '{}/LC_{}.hdf5'.format(outDir, id_prod)
 
         # Remove outputs if already exist
         if os.path.exists(self.summaryOut):
@@ -748,12 +748,12 @@ class DiffFlux:
             os.remove(self.lcOut)
 
         # Make groups of lcs
-        groups = metaTable.group_by(['z','x1','color','daymax'])
+        groups = metaTable.group_by(['z', 'x1', 'color', 'daymax'])
 
-        #self.procMulti(groups[:81],8)
+        # self.procMulti(groups[:81],8)
         self.procSimple(groups)
 
-    def procSimple(self,groups):
+    def procSimple(self, groups):
         """ Process (astropy) groups
 
         Parameters
@@ -763,27 +763,28 @@ class DiffFlux:
 
         """
 
-
         # This is for output metadata
         metaTot = []
         names = []
 
         # Loop on the groups
         for ii, gr in enumerate(groups.groups):
-            
+
             # get differential fluxes
             lsdiff = self.diffFlux(gr)
 
             # Store the metadata
-            metaTot.append(tuple([lsdiff.meta[key] for key in lsdiff.meta.keys()]))
+            metaTot.append(tuple([lsdiff.meta[key]
+                                  for key in lsdiff.meta.keys()]))
             names = [key for key in lsdiff.meta.keys()]
 
             # Save the lightcurves
-            lsdiff.write(self.lcOut,'lc_{}'.format(lsdiff.meta['index_hdf5']),compression=True,append=True)
-           
+            lsdiff.write(self.lcOut, 'lc_{}'.format(
+                lsdiff.meta['index_hdf5']), compression=True, append=True)
+
         # Save the metadata as an astropy table (hdf5)
-        res = np.rec.fromrecords(metaTot,names=names)
-        Table(res).write(self.summaryOut,'summary',compression=True)
+        res = np.rec.fromrecords(metaTot, names=names)
+        Table(res).write(self.summaryOut, 'summary', compression=True)
 
     """
     def procMulti(self,groups, nproc):
@@ -840,9 +841,10 @@ class DiffFlux:
         else:
             return (metaTot,names,lclist)
     """
+
     def metaData(self, metaFile):
         """ Get metadata
-        
+
         Parameters
         ----------
 
@@ -863,13 +865,13 @@ class DiffFlux:
         tabres = Table()
         for i, key in enumerate(fMeta.keys()):
             tabres = vstack([tabres, Table.read(fMeta, path=key)])
-        
+
         return tabres
 
-    def diffFlux(self,tab):
+    def diffFlux(self, tab):
         """ Evaluate flux derivatives wrt SN parameters (x0, x1, color)
         using df/dp = (f(p+h)-f(p-h))/2h
-        
+
         Parameters
         ----------
         tab: astropy Table
@@ -886,20 +888,22 @@ class DiffFlux:
         """
 
         lcnom = Table.read(self.lcFile, path='lc_{}'.format(tab['id_hdf5'][0]))
-        for i,par in enumerate(self.snParams):
+        for i, par in enumerate(self.snParams):
             ja = 2*i+1
             jb = ja+1
-            lca = Table.read(self.lcFile, path='lc_{}'.format(tab['id_hdf5'][ja]))
-            lcb = Table.read(self.lcFile, path='lc_{}'.format(tab['id_hdf5'][jb]))
+            lca = Table.read(
+                self.lcFile, path='lc_{}'.format(tab['id_hdf5'][ja]))
+            lcb = Table.read(
+                self.lcFile, path='lc_{}'.format(tab['id_hdf5'][jb]))
             epsilon = lca.meta['epsilon_{}'.format(par)]
             diff = (lca['flux']-lcb['flux'])/(2.*epsilon)
             lcnom.add_column(Column(diff, name='d{}'.format(par)))
-        
+
         return lcnom
 
 
 class MbCov:
-    def __init__(self, salt2Dir, paramNames=dict(zip(['x0','x1','color'],['x0','x1','color']))):
+    def __init__(self, salt2Dir, paramNames=dict(zip(['x0', 'x1', 'color'], ['x0', 'x1', 'color']))):
         """ Class to estimate covariance matrix with mb
 
         Parameters
@@ -908,61 +912,66 @@ class MbCov:
          director where SALT2 reference files are to be found
 
         """
-                                                 
+
         self.load(salt2Dir)
         self.paramNames = paramNames
-        self.transNames = dict(zip(['t0','x0','x1','c'],['t0','x0','x1','color']))
-        
+        # self.transNames = dict(
+        #    zip(['t0', 'x0', 'x1', 'c'], ['t0', 'x0', 'x1', 'color']))
+        self.transNames = dict(map(reversed, paramNames.items()))
+
     def load(self, salt2Dir):
 
-        #from F. Mondon 2017/10/20
+        # from F. Mondon 2017/10/20
         # wavelength limits for salt2 model
         wl_min_sal = 3000
         wl_max_sal = 7000
-    
-        #interpolation of TB and Trest
+
+        # interpolation of TB and Trest
         #filt2 = np.genfromtxt('{}/snfit_data/Instruments/SNLS3-Landolt-model/sb-shifted.dat'.format(salt2Dir))
-        filt2 = np.genfromtxt('{}/Instruments/SNLS3-Landolt-model/sb-shifted.dat'.format(salt2Dir))
-        filt2=np.genfromtxt('{}/Instruments/Landolt/sb_-41A.dat'.format(salt2Dir))
-        wlen = filt2[:,0]
-        tran = filt2[:,1]
-        self.splB = Spline1d(wlen, tran, k=1,ext = 1)
+        filt2 = np.genfromtxt(
+            '{}/Instruments/SNLS3-Landolt-model/sb-shifted.dat'.format(salt2Dir))
+        filt2 = np.genfromtxt(
+            '{}/Instruments/Landolt/sb_-41A.dat'.format(salt2Dir))
+        wlen = filt2[:, 0]
+        tran = filt2[:, 1]
+        self.splB = Spline1d(wlen, tran, k=1, ext=1)
 
-        #interpolation of ref spectrum
+        # interpolation of ref spectrum
         #data = np.genfromtxt(thedir+'/snfit_data/MagSys/bd_17d4708_stisnic_002.ascii')
-        data = np.genfromtxt('{}/MagSys/bd_17d4708_stisnic_002.ascii'.format(salt2Dir))
-        dispersion = data[:,0]
-        flux_density = data[:,1]
-        self.splref = Spline1d(dispersion, flux_density, k=1,ext = 1)
+        data = np.genfromtxt(
+            '{}/MagSys/bd_17d4708_stisnic_002.ascii'.format(salt2Dir))
+        dispersion = data[:, 0]
+        flux_density = data[:, 1]
+        self.splref = Spline1d(dispersion, flux_density, k=1, ext=1)
 
-  
-        #interpolation of the spectrum model
-        template_0 = np.genfromtxt('{}/snfit_data/salt2-4/salt2_template_0.dat'.format(salt2Dir))    
-        template_1 = np.genfromtxt('{}/snfit_data/salt2-4/salt2_template_1.dat'.format(salt2Dir))
-        
+        # interpolation of the spectrum model
+        template_0 = np.genfromtxt(
+            '{}/snfit_data/salt2-4/salt2_template_0.dat'.format(salt2Dir))
+        template_1 = np.genfromtxt(
+            '{}/snfit_data/salt2-4/salt2_template_1.dat'.format(salt2Dir))
+
         wlM0 = []
         M0 = []
-        for i in range(len(template_0[:,0])):
-            if template_0[:,0][i] == 0.0:
-                wlM0.append(template_0[:,1][i]) 
-                M0.append(template_0[:,2][i])
-        self.splM0 = Spline1d(wlM0, M0, k=1,ext = 1)
+        for i in range(len(template_0[:, 0])):
+            if template_0[:, 0][i] == 0.0:
+                wlM0.append(template_0[:, 1][i])
+                M0.append(template_0[:, 2][i])
+        self.splM0 = Spline1d(wlM0, M0, k=1, ext=1)
 
         wlM1 = []
         M1 = []
-        for i in range(len(template_1[:,0])):
-            if template_1[:,0][i] == 0.0:
-                wlM1.append(template_1[:,1][i]) 
-                M1.append(template_1[:,2][i])
-        self.splM1 = Spline1d(wlM1, M1, k=1,ext = 1)
+        for i in range(len(template_1[:, 0])):
+            if template_1[:, 0][i] == 0.0:
+                wlM1.append(template_1[:, 1][i])
+                M1.append(template_1[:, 2][i])
+        self.splM1 = Spline1d(wlM1, M1, k=1, ext=1)
 
-        #computation of the integral
+        # computation of the integral
         dt = 100000
         self.xs = np.linspace(float(wl_min_sal), float(wl_max_sal), dt)
         self.dxs = (float(wl_max_sal-wl_min_sal)/(dt-1))
 
-
-    def mB(self,params):
+    def mB(self, params):
         """ Estimate mB for supernovae
 
         Parameters
@@ -976,17 +985,17 @@ class MbCov:
          mb value
 
         """
-       
 
         #    I1=np.sum((splM0(xs)*10**-12+res.parameters[3]*splM1(xs)*10**-12)*(10**(-0.4*salt2source.colorlaw(xs)*res.parameters[4]))*xs*splB(xs)*dxs)
-        I1 = np.sum((self.splM0(self.xs)*10**-12+params[self.paramNames['x1']]*self.splM1(self.xs)*10**-12)*(10**(-0.4*self.color_law_salt2(self.xs)*params[self.paramNames['color']]))*self.xs*self.splB(self.xs)*self.dxs)    
+        I1 = np.sum((self.splM0(self.xs)*10**-12+params[self.paramNames['x1']]*self.splM1(self.xs)*10**-12)*(
+            10**(-0.4*self.color_law_salt2(self.xs)*params[self.paramNames['color']]))*self.xs*self.splB(self.xs)*self.dxs)
         I2 = np.sum(self.splref(self.xs)*self.xs*self.splB(self.xs)*self.dxs)
-        #print(I1, I2,params['x1'],params['c'])   
-    
-        #computation of mb
+        #print(I1, I2,params['x1'],params['c'])
+
+        # computation of mb
         mref = 9.907
         mb = -2.5*np.log10(params[self.paramNames['x0']]*(I1/I2))+mref
-        
+
         return mb
     """
     def calcInteg(self, bandpass, signal,wavelen):
@@ -1028,7 +1037,8 @@ class MbCov:
 
         sfile.close()
     """
-    def color_law_salt2(self,wl):
+
+    def color_law_salt2(self, wl):
         """ Color law for SALT2
 
         """
@@ -1043,16 +1053,18 @@ class MbCov:
         d = 0.0815619
         cst = 1-(a+b+c+d)
         cl = []
-        for i in range (len(l)):
+        for i in range(len(l)):
             if l[i] > l_hi:
-                cl.append(-(cst*l_hi+l_hi**2*a+l_hi**3*b+l_hi**4*c+l_hi**5*d+(cst+2*l_hi*a+3*l_hi**2*b+4*l_hi**3*c+5*l_hi**4*d)*(l[i]-l_hi)))
+                cl.append(-(cst*l_hi+l_hi**2*a+l_hi**3*b+l_hi**4*c+l_hi**5*d +
+                            (cst+2*l_hi*a+3*l_hi**2*b+4*l_hi**3*c+5*l_hi**4*d)*(l[i]-l_hi)))
             if l[i] < l_lo:
-                cl.append(-(cst*l_lo+l_lo**2*a+l_lo**3*b+l_lo**4*c+l_lo**5*d+(cst+2*l_lo*a+3*l_lo**2*b+4*l_lo**3*c+5*l_lo**4*d)*(l[i]-l_lo))) 
-            if l[i]>= l_lo and l[i]<= l_hi:
-                cl.append(-(cst*l[i]+l[i]**2*a+l[i]**3*b+l[i]**4*c+l[i]**5*d)) 
+                cl.append(-(cst*l_lo+l_lo**2*a+l_lo**3*b+l_lo**4*c+l_lo**5*d +
+                            (cst+2*l_lo*a+3*l_lo**2*b+4*l_lo**3*c+5*l_lo**4*d)*(l[i]-l_lo)))
+            if l[i] >= l_lo and l[i] <= l_hi:
+                cl.append(-(cst*l[i]+l[i]**2*a+l[i]**3*b+l[i]**4*c+l[i]**5*d))
         return np.array(cl)
 
-    def mbCovar(self,params,covar,vparam_names):
+    def mbCovar(self, params, covar, vparam_names):
         """ mb covariance matrix wrt fit parameters
 
         Parameters
@@ -1071,42 +1083,40 @@ class MbCov:
 
         """
 
+        res = {}
+        h_ref = 1.e-8
+        Der = np.zeros(shape=(len(vparam_names), 1))
 
-
-        res={}
-        h_ref=1.e-8
-        Der=np.zeros(shape=(len(vparam_names),1))
-
-        #print params
-        par_var=params.copy()
-        ider=-1
-        for i,key in enumerate(vparam_names):
-            h=h_ref
+        # print params
+        par_var = params.copy()
+        ider = -1
+        for i, key in enumerate(vparam_names):
+            h = h_ref
             if np.abs(par_var[key]) < 1.e-5:
-                h=1.e-10
+                h = 1.e-10
 
-            par_var[key]+=h
-            ider+=1
-            #print(par_var,params)
-            Der[ider]=(self.mB(par_var)-self.mB(params))/h
-            #print 'there man',key,params[key],Der[ider]
-            par_var[key]-=h
+            par_var[key] += h
+            ider += 1
+            # print(par_var,params)
+            Der[ider] = (self.mB(par_var)-self.mB(params))/h
+            # print 'there man',key,params[key],Der[ider]
+            par_var[key] -= h
 
-        Prod=np.dot(covar,Der)
+        Prod = np.dot(covar, Der)
 
-        for i,key in enumerate(vparam_names):
-            res['Cov_{}mb'.format(self.transNames[key])]=Prod[i,0]
+        for i, key in enumerate(vparam_names):
+            res['Cov_{}mb'.format(self.transNames[key])] = Prod[i, 0]
             """
             if key != 'c':
                 res['Cov_'+key.upper()+'mb']=Prod[i,0]
             else:
                res['Cov_Colormb']=Prod[i,0] 
             """
-        res['Cov_mbmb']=np.asscalar(np.dot(Der.T,Prod))
-        res['mb_recalc']=self.mB(par_var)
+        res['Cov_mbmb'] = np.asscalar(np.dot(Der.T, Prod))
+        res['mb_recalc'] = self.mB(par_var)
 
         return res
-        
+
     """
     def mbDeriv(self,params,vparam_names):
         
@@ -1135,7 +1145,6 @@ class MbCov:
 
         """
 
-        
         """
         Salt2Model
         BEGIN_OF_FITPARAMS Salt2Model
@@ -1156,50 +1165,50 @@ class MbCov:
         CovX1X1 0.0258715828973 
         """
 
-        salt2_res={}
-        salt2_res['DayMax']=53690.0336018
-        salt2_res['Color']=-0.0664131339433
-        salt2_res['X0']=0.00030732251016
-        salt2_res['X1']=-0.0208012409076
-        salt2_res['CovColorColor']=0.00054910707917
-        salt2_res['CovColorDayMax']=0.00040528682468
-        salt2_res['CovColorX0']=-1.68238293879e-07
-        salt2_res['CovColorX1']=0.00114702847231
-        salt2_res['CovDayMaxDayMax']=0.0111331639253
-        salt2_res['CovDayMaxX0']=-2.94345317778e-07
-        salt2_res['CovDayMaxX1']=0.0131008809199
-        salt2_res['CovX0X0']=7.91767938168e-11
-        salt2_res['CovX0X1']=-7.23852420336e-07
-        salt2_res['CovX1X1']=0.0258715828973 
-        #salt2_res['']=
-        vparam_names=['t0','c','x0','x1']
-        covar=np.zeros(shape=(len(vparam_names),len(vparam_names)))
+        salt2_res = {}
+        salt2_res['DayMax'] = 53690.0336018
+        salt2_res['Color'] = -0.0664131339433
+        salt2_res['X0'] = 0.00030732251016
+        salt2_res['X1'] = -0.0208012409076
+        salt2_res['CovColorColor'] = 0.00054910707917
+        salt2_res['CovColorDayMax'] = 0.00040528682468
+        salt2_res['CovColorX0'] = -1.68238293879e-07
+        salt2_res['CovColorX1'] = 0.00114702847231
+        salt2_res['CovDayMaxDayMax'] = 0.0111331639253
+        salt2_res['CovDayMaxX0'] = -2.94345317778e-07
+        salt2_res['CovDayMaxX1'] = 0.0131008809199
+        salt2_res['CovX0X0'] = 7.91767938168e-11
+        salt2_res['CovX0X1'] = -7.23852420336e-07
+        salt2_res['CovX1X1'] = 0.0258715828973
+        # salt2_res['']=
+        vparam_names = [self.paramNames['t0'], self.paramNames['color'],
+                        self.paramNames['x0'], self.paramNames['x1']]
+        covar = np.zeros(shape=(len(vparam_names), len(vparam_names)))
 
-        covar[0,1]=salt2_res['CovColorDayMax']
-        covar[0,2]=salt2_res['CovDayMaxX0']
-        covar[0,3]=salt2_res['CovDayMaxX1']
-        
-        covar[1,2]=salt2_res['CovColorX0']
-        covar[1,3]=salt2_res['CovColorX1']
-        
-        covar[2,3]=salt2_res['CovX0X1']
-        
-        covar=covar+covar.T
+        covar[0, 1] = salt2_res['CovColorDayMax']
+        covar[0, 2] = salt2_res['CovDayMaxX0']
+        covar[0, 3] = salt2_res['CovDayMaxX1']
 
-        covar[0,0]=salt2_res['CovDayMaxDayMax']
-        covar[1,1]=salt2_res['CovColorColor']
-        covar[2,2]=salt2_res['CovX0X0']
-        covar[3,3]=salt2_res['CovX1X1']
+        covar[1, 2] = salt2_res['CovColorX0']
+        covar[1, 3] = salt2_res['CovColorX1']
 
-        
-        #print covar
-        
-        params={}
-        params['t0']=salt2_res['DayMax']
-        params['c']=salt2_res['Color']
-        params['x0']=salt2_res['X0']
-        params['x1']=salt2_res['X1']
+        covar[2, 3] = salt2_res['CovX0X1']
 
-        cov = self.mbCovar(params,covar,vparam_names)
-        
+        covar = covar+covar.T
+
+        covar[0, 0] = salt2_res['CovDayMaxDayMax']
+        covar[1, 1] = salt2_res['CovColorColor']
+        covar[2, 2] = salt2_res['CovX0X0']
+        covar[3, 3] = salt2_res['CovX1X1']
+
+        # print covar
+
+        params = {}
+        params[self.paramNames['t0']] = salt2_res['DayMax']
+        params[self.paramNames['color']] = salt2_res['Color']
+        params[self.paramNames['x0']] = salt2_res['X0']
+        params[self.paramNames['x1']] = salt2_res['X1']
+
+        cov = self.mbCovar(params, covar, vparam_names)
+
         print(cov)
