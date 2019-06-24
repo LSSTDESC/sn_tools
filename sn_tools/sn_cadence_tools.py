@@ -176,6 +176,8 @@ class GenerateFakeObservations:
         res = np.copy(np.concatenate(rtot))
         res.sort(order=self.mjdCol)
 
+        res = rf.append_fields(res,'observationId',np.random.randint(10*len(res),size=len(res)))
+
         self.Observations = res
 
     def m5coadd(self, m5, Nvisits, Tvisit):
