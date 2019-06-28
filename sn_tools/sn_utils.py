@@ -10,6 +10,7 @@ import sncosmo
 import h5py
 from scipy.interpolate import InterpolatedUnivariateSpline as Spline1d
 from scipy.interpolate import griddata
+from sn_tools.sn_telescope import Telescope
 
 class GenerateSample:
     """ Generates a sample of parameters for simulation
@@ -705,13 +706,13 @@ class X0_norm:
 
 
 class DiffFlux:
-    def __init__(self, metaFile, dirFiles, outDir):
+    def __init__(self, id_prod, dirFiles, outDir):
         """ Class to estimate flux derivatives wrt SN parameters (x0,x1,color)
 
         Parameters
         ----------
-        metaFile: str
-         name of the metadata file (Simu_*)
+        id_prod: str
+         production id
         dirFile: str
          directory where the files are located
         outDir: std
@@ -726,11 +727,13 @@ class DiffFlux:
         # SN parameters
         self.snParams = ['x0', 'x1', 'color']
 
+        """
         # id of the production
         id_prod = '_'.join(metaFile.split(
             '/')[-1].split('.')[0].split('_')[1:])
-
+        """
         # get metadata
+        metaFile='{}/Simu_{}.hdf5'.format(dirFiles,id_prod)
         metaTable = self.metaData(metaFile)
         print(metaTable.dtype, len(metaTable))
 
@@ -887,14 +890,21 @@ class DiffFlux:
 
         """
 
-        lcnom = Table.read(self.lcFile, path='lc_{}'.format(tab['id_hdf5'][0]))
+        idx = True
+        for par in self.snParams:
+            idx &= (tab['epsilon_{}'.format(par)] < 1.e-10)&(tab['epsilon_{}'.format(par)] >=0.)
+        
+        # Get the "nominal" LC with epsilon_snpar == 0.
+        lcnom = Table.read(self.lcFile, path='lc_{}'.format(tab['id_hdf5'][idx].data[0]))
+       
+
         for i, par in enumerate(self.snParams):
-            ja = 2*i+1
-            jb = ja+1
+            ida = tab['epsilon_{}'.format(par)] > 1.e-9
+            idb = tab['epsilon_{}'.format(par)] < 0.
             lca = Table.read(
-                self.lcFile, path='lc_{}'.format(tab['id_hdf5'][ja]))
+                self.lcFile, path='lc_{}'.format(tab['id_hdf5'][ida].data[0]))
             lcb = Table.read(
-                self.lcFile, path='lc_{}'.format(tab['id_hdf5'][jb]))
+                self.lcFile, path='lc_{}'.format(tab['id_hdf5'][idb].data[0]))
             epsilon = lca.meta['epsilon_{}'.format(par)]
             diff = (lca['flux']-lcb['flux'])/(2.*epsilon)
             lcnom.add_column(Column(diff, name='d{}'.format(par)))
@@ -1369,3 +1379,132 @@ class MbCov:
         if self.interp:
             cov_int = self.mbCovar_int(params, covar, vparam_names)
             print(cov_int)
+
+class GetReference:
+
+    def __init__(self, filename,tel_par):
+
+        #self.fi = filename
+        lc_ref_tot = self.Read_Ref(filename)
+
+        # telescope requested
+        telescope = Telescope(name=tel_par['name'],
+                              throughput_dir=tel_par['throughput_dir'],
+                              atmos_dir=tel_par['atmos_dir'],
+                              atmos=tel_par['atmos'],
+                              aerosol=tel_par['aerosol'],
+                              airmass=tel_par['airmass'])
+
+
+        # Load references needed for the following
+        self.lc_ref = {}
+        self.gamma_ref = {}
+        self.m5_ref = {}
+        self.mag_to_flux_e_sec = {}
+
+        bands = np.unique(lc_ref_tot['band'])
+        mag_range = np.arange(10., 38., 0.1)
+        
+        for band in bands:
+            idx = lc_ref_tot['band'] == band
+            lc_sel = lc_ref_tot[idx]
+           
+            self.lc_ref[band] = lc_sel
+            self.gamma_ref[band] = lc_sel['gamma'][0]
+            self.m5_ref[band] = np.unique(lc_sel['m5'])[0]
+            fluxes_e_sec = telescope.mag_to_flux_e_sec(
+                mag_range, [band]*len(mag_range), [30]*len(mag_range))
+            self.mag_to_flux_e_sec[band] = interpolate.interp1d(
+                mag_range, fluxes_e_sec[:, 1], fill_value=0., bounds_error=False)
+
+
+    def Read_Ref(self, fi, j=-1, output_q=None):
+
+        tab_tot = Table()
+        """
+        keys=np.unique([int(z*100) for z in zvals])
+        print(keys)
+        """
+        f = h5py.File(fi, 'r')
+        keys = f.keys()
+        zvals = np.arange(0.01, 0.9, 0.01)
+        zvals_arr = np.array(zvals)
+
+        for kk in keys:
+
+            tab_b = Table.read(fi, path=kk)
+            # tab_tot=vstack([tab_tot,tab_b])
+
+            if tab_b is not None:
+                tab_tot = vstack([tab_tot, tab_b],metadata_conflicts='silent')
+                """
+                diff = tab_b['z']-zvals_arr[:, np.newaxis]
+                #flag = np.abs(diff)<1.e-3
+                flag_idx = np.where(np.abs(diff) < 1.e-3)
+                if len(flag_idx[1]) > 0:
+                    tab_tot = vstack([tab_tot, tab_b[flag_idx[1]]])
+                """
+
+            """
+            print(flag,flag_idx[1])
+            print('there man',tab_b[flag_idx[1]])
+            mtile = np.tile(tab_b['z'],(len(zvals),1))
+            #print('mtile',mtile*flag)
+                
+            masked_array = np.ma.array(mtile,mask=~flag)
+            
+            print('resu masked',masked_array,masked_array.shape)
+            print('hhh',masked_array[~masked_array.mask])
+            
+            
+        for val in zvals:
+            print('hello',tab_b[['band','z','time']],'and',val)
+            if np.abs(np.unique(tab_b['z'])-val)<0.01:
+            #print('loading ref',np.unique(tab_b['z']))
+            tab_tot=vstack([tab_tot,tab_b])
+            break
+            """
+        if output_q is not None:
+            output_q.put({j: tab_tot})
+        else:
+            return tab_tot
+
+    def Read_Multiproc(self, tab):
+
+        # distrib=np.unique(tab['z'])
+        nlc = len(tab)
+        print('ici pal', nlc)
+        # n_multi=8
+        if nlc >= 8:
+            n_multi = min(nlc, 8)
+            nvals = nlc/n_multi
+            batch = range(0, nlc, nvals)
+            batch = np.append(batch, nlc)
+        else:
+            batch = range(0, nlc)
+
+        # lc_ref_tot={}
+        #print('there pal',batch)
+        result_queue = multiprocessing.Queue()
+        for i in range(len(batch)-1):
+
+            ida = int(batch[i])
+            idb = int(batch[i+1])
+
+            p = multiprocessing.Process(
+                name='Subprocess_main-'+str(i), target=self.Read_Ref, args=(tab[ida:idb], i, result_queue))
+            p.start()
+
+        resultdict = {}
+        for j in range(len(batch)-1):
+            resultdict.update(result_queue.get())
+
+        for p in multiprocessing.active_children():
+            p.join()
+
+        tab_res = Table()
+        for j in range(len(batch)-1):
+            if resultdict[j] is not None:
+                tab_res = vstack([tab_res, resultdict[j]])
+
+        return tab_res
