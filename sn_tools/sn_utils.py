@@ -11,6 +11,8 @@ import h5py
 from scipy.interpolate import InterpolatedUnivariateSpline as Spline1d
 from scipy.interpolate import griddata
 from sn_tools.sn_telescope import Telescope
+import pandas as pd
+from scipy.interpolate import RegularGridInterpolator
 
 class GenerateSample:
     """ Generates a sample of parameters for simulation
@@ -186,7 +188,7 @@ class GenerateSample:
                                        self.x1_color[zrange]['weight'])
                 T0_values = []
                 if self.params['daymax']['type'] == 'unique':
-                    T0_values = [daymin+20.*(1.+z)]
+                    T0_values = [daymin+21.*(1.+z)]
                 if self.params['daymax']['type'] == 'random':
                     T0_values = np.arange(
                         daymin-(1.+z)*self.min_rf_phase, daymax-(1.+z)*self.max_rf_phase, 0.1)
@@ -214,7 +216,7 @@ class GenerateSample:
                     T0_values = np.arange(
                         daymin-(1.+z)*self.min_rf_phase, daymax-(1.+z)*self.max_rf_phase, daystep)
                 if self.params['daymax']['type'] == 'unique':
-                    T0_values = [daymin+20.*(1.+z)]
+                    T0_values = [daymin+21.*(1.+z)]
                 for T0 in T0_values:
                     r.append((z, x1_color[0], x1_color[1], T0, 0.,
                               0., 0., self.min_rf_phase, self.max_rf_phase))
@@ -1382,10 +1384,34 @@ class MbCov:
 
 class GetReference:
 
-    def __init__(self, filename,tel_par):
+    def __init__(self, filename,tel_par,param_Fisher=['x0', 'x1', 'color']):
+        """ Class to load reference data
+            used for the fast SN simulator
 
-        #self.fi = filename
-        lc_ref_tot = self.Read_Ref(filename)
+        Parameters
+        -----------
+        filename: str
+         name of the reference file to load
+        tel_par: dict
+         telescope parameters
+
+        """""
+        # Load the file : two cases
+        # a) the file is a set of astropy tables that have to be merged (vstack)
+        # b) the file is a (unique) panda dataframe
+        # if a) then b) is generated so as to speed up the loading for next uses.
+        if 'vstack' not in filename:
+            lc_ref_tot = self.Read_Ref(filename)
+            newFile = filename.replace('.hdf5','_vstack.hdf5')
+            r = lc_ref_tot.to_pandas().values.tolist()
+            lc_ref_tot.to_pandas().to_hdf(newFile, key='s')
+          
+        else:
+            f = h5py.File(filename, 'r')
+            keys = list(f.keys())
+            #lc_ref_tot = Table.read(filename, path=keys[0])
+            lc_ref_tot = Table.from_pandas(pd.read_hdf(filename))
+
 
         # telescope requested
         telescope = Telescope(name=tel_par['name'],
@@ -1402,23 +1428,103 @@ class GetReference:
         self.m5_ref = {}
         self.mag_to_flux_e_sec = {}
 
+        self.flux = {}
+        self.fluxerr = {}
+        self.param = {}
+
         bands = np.unique(lc_ref_tot['band'])
         mag_range = np.arange(10., 38., 0.1)
         
+        method = 'linear'
+        # for each band: load data to be used for interpolation 
         for band in bands:
             idx = lc_ref_tot['band'] == band
             lc_sel = lc_ref_tot[idx]
-           
-            self.lc_ref[band] = lc_sel
-            self.gamma_ref[band] = lc_sel['gamma'][0]
-            self.m5_ref[band] = np.unique(lc_sel['m5'])[0]
             fluxes_e_sec = telescope.mag_to_flux_e_sec(
                 mag_range, [band]*len(mag_range), [30]*len(mag_range))
             self.mag_to_flux_e_sec[band] = interpolate.interp1d(
                 mag_range, fluxes_e_sec[:, 1], fill_value=0., bounds_error=False)
 
 
+            # these reference data will be used for griddata interp.
+            self.lc_ref[band] = lc_sel
+            self.gamma_ref[band] = lc_sel['gamma'][0]
+            self.m5_ref[band] = np.unique(lc_sel['m5'])[0]
+
+            # Another interpolator, faster than griddata: regulargridinterpolator
+
+            zmin, zmax, zstep, nz = self.limVals(lc_sel,'z')
+            phamin, phamax, phastep, npha= self.limVals(lc_sel,'phase')
+            zv = np.linspace(zmin,zmax,nz)
+            phav = np.linspace(phamin,phamax,npha)
+
+            index = np.lexsort((lc_sel['z'],np.round(lc_sel['phase'],4)))
+            flux = np.reshape(lc_sel[index]['flux'],(npha,nz))
+            fluxerr = np.reshape(lc_sel[index]['fluxerr'],(npha,nz))
+            
+            
+            self.flux[band] = RegularGridInterpolator((phav,zv),flux,method=method,bounds_error=False,fill_value=0.)
+            self.fluxerr[band] = RegularGridInterpolator((phav,zv),fluxerr,method=method,bounds_error=False,fill_value=0.)
+            self.param[band] = {}
+            for par in param_Fisher:
+                valpar = np.reshape(lc_sel[index]['d{}'.format(par)],(npha,nz))
+                self.param[band][par] = RegularGridInterpolator((phav,zv),valpar,method=method,bounds_error=False,fill_value=0.)
+
+    def limVals(self,lc, field):
+        """ Get unique values of a field in  a table
+
+        Parameters
+        ----------
+        lc: Table
+         astropy Table (here probably a LC)
+        field: str
+         name of the field of interest
+
+        Returns
+        -------
+        vmin: float
+         min value of the field
+        vmax: float
+         max value of the field
+        vstep: float
+         step value for this field (median)
+        nvals: int
+         number of unique values
+         
+
+
+
+        """
+        
+
+        lc.sort(field)
+        vals = np.unique(lc[field].data.round(decimals=4))
+        #print(vals)
+        vmin = np.min(vals)
+        vmax = np.max(vals)
+        vstep = np.median(vals[1:]-vals[:-1]) 
+    
+        return vmin,vmax,vstep,len(vals)
+
+
+
     def Read_Ref(self, fi, j=-1, output_q=None):
+        """" Load the reference file and
+        make a single astopy Table from a set of.
+
+        Parameters
+        ----------
+        fi: str,
+         name of the file to be loaded
+
+        Returns
+        -------
+        tab_tot: astropy table
+         single table = vstack of all the tables in fi.
+
+        """
+        
+
 
         tab_tot = Table()
         """
@@ -1433,8 +1539,7 @@ class GetReference:
         for kk in keys:
 
             tab_b = Table.read(fi, path=kk)
-            # tab_tot=vstack([tab_tot,tab_b])
-
+            
             if tab_b is not None:
                 tab_tot = vstack([tab_tot, tab_b],metadata_conflicts='silent')
                 """

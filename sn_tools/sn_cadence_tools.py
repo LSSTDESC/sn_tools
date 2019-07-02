@@ -156,9 +156,9 @@ class GenerateFakeObservations:
             mjd_max = mjd_min+config['season_length']
 
             for i, band in enumerate(bands):
-                mjd = np.arange(mjd_min, mjd_max, cadence[band])
-                if mjd_max not in mjd:
-                    mjd = np.append(mjd, mjd_max)
+                mjd = np.arange(mjd_min, mjd_max+cadence[band],cadence[band])
+                #if mjd_max not in mjd:
+                #    mjd = np.append(mjd, mjd_max)
                 mjd += shift_days[band]
                 m5_coadded = self.m5coadd(m5[band],
                                           Nvisits[band],
