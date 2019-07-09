@@ -162,6 +162,8 @@ class GenerateSample:
         if self.params['z']['type'] == 'random':
             # get sn rate for this z range
             #print(zmin, zmax, duration, self.area)
+            if zmin<1.e-6:
+                zmin = 0.01
             zz, rate, err_rate, nsn, err_nsn = self.sn_rate(
                 zmin=zmin, zmax=zmax,
                 duration=duration,
@@ -210,7 +212,8 @@ class GenerateSample:
             nz = int((zmax-zmin)/zstep)
             
             for z in np.linspace(zmin,zmax,nz+1):
-               
+                if z < 1.e-6:
+                    z = 0.01
                 if self.params['daymax']['type'] == 'uniform':
                     T0_min = daymin-(1.+z)*self.min_rf_phase
                     T0_max = daymax-(1.+z)*self.max_rf_phase
@@ -234,7 +237,7 @@ class GenerateSample:
                 nT0 = int((T0_max-T0_min)/daystep)
                 T0_values = np.linspace(T0_min,T0_max,nT0+1)
             if self.params['daymax']['type'] == 'unique':
-                T0_values = [daymin+20.*(1.+z)]
+                T0_values = [daymin+21.*(1.+z)]
             for T0 in T0_values:
                 r.append((z, x1_color[0], x1_color[1], T0, 0.,
                           0., 0., self.min_rf_phase, self.max_rf_phase))

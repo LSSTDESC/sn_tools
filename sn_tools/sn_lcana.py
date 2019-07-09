@@ -53,6 +53,7 @@ def sigma_x0_x1_color(lcList,params=['x0','x1','color']):
                     Fisher_Big[ia+3*iv][jb+3 *
                                         iv] = parts[ia, jb][iv]
 
+    Fisher_Big = Fisher_Big + np.triu(Fisher_Big,1).T
     Big_Diag = np.diag(np.linalg.inv(Fisher_Big))
 
     for ia, vala in enumerate(params):
@@ -60,7 +61,7 @@ def sigma_x0_x1_color(lcList,params=['x0','x1','color']):
         #print('test', ia, indices, vala,
         #      np.take(Big_Diag, indices))
         restab.add_column(
-            Column(np.sqrt(np.take(Big_Diag, indices)), name='sigma_'+vala))
+            Column(np.take(Big_Diag, indices), name='Cov_{}{}'.format(vala,vala)))
     print(restab)
     return restab
 
