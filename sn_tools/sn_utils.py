@@ -113,7 +113,6 @@ class GenerateSample:
             types = ['f8']*len(names)
             #params = np.zeros(len(r), dtype=list(zip(names, types)))
             params = np.asarray(r, dtype=list(zip(names, types)))
-            # print(params)
             return params
         else:
             return None
@@ -157,6 +156,7 @@ class GenerateSample:
         # get z range
         zmin = self.params['z']['min']
         zmax = self.params['z']['max']
+        print('zmin max',zmin,zmax)
         r = []
         epsilon = 1.e-8
         if self.params['z']['type'] == 'random':
@@ -207,16 +207,19 @@ class GenerateSample:
             daystep = self.params['daymax']['step']
             x1_color = self.params['x1_color']['min']
 
-            if zmin == 0.01:
-                zmin = 0.
-            for z in np.arange(zmin, zmax+zstep, zstep):
-                if z == 0.:
-                    z = 0.01
+            nz = int((zmax-zmin)/zstep)
+            
+            for z in np.linspace(zmin,zmax,nz+1):
+               
                 if self.params['daymax']['type'] == 'uniform':
-                    T0_values = np.arange(
-                        daymin-(1.+z)*self.min_rf_phase, daymax-(1.+z)*self.max_rf_phase, daystep)
+                    T0_min = daymin-(1.+z)*self.min_rf_phase
+                    T0_max = daymax-(1.+z)*self.max_rf_phase
+                    nT0 = int((T0_max-T0_min)/daystep)
+                    T0_values = np.linspace(T0_min,T0_max,nT0+1)
+                    
                 if self.params['daymax']['type'] == 'unique':
                     T0_values = [daymin+21.*(1.+z)]
+
                 for T0 in T0_values:
                     r.append((z, x1_color[0], x1_color[1], T0, 0.,
                               0., 0., self.min_rf_phase, self.max_rf_phase))
@@ -226,7 +229,10 @@ class GenerateSample:
             x1_color = self.params['x1_color']['min']
             z = self.params['z']['min']
             if self.params['daymax']['type'] == 'uniform':
-                T0_values = np.arange(daymin, daymax, daystep)
+                T0_min = daymin-(1.+z)*self.min_rf_phase
+                T0_max = daymax-(1.+z)*self.max_rf_phase
+                nT0 = int((T0_max-T0_min)/daystep)
+                T0_values = np.linspace(T0_min,T0_max,nT0+1)
             if self.params['daymax']['type'] == 'unique':
                 T0_values = [daymin+20.*(1.+z)]
             for T0 in T0_values:
@@ -242,6 +248,8 @@ class GenerateSample:
         if rdiff:
             r += rdiff
 
+        #print(r[:20])
+        #print(test)
         return r
 
     def getVal(self, type, val, distrib, weight):

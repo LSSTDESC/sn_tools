@@ -83,7 +83,7 @@ def sigma_x0_x1_color_loop(lcList,params=['x0','x1','color']):
                 dictres[key] = []
             dictres[key].append(val)
 
-        print(lc[['band','pixRa','pixDec','z','phase','flux','fluxerr','F_x0x0','F_x0x1','F_x0color','F_x1x1','F_x1color','F_colorcolor']])
+        print(lc[['band','phase','flux','fluxerr','F_x0x0','F_x1x1','F_colorcolor','snr_m5']])
         parts = np.zeros((3, 3))
         for ia, vala in enumerate(params):
             for jb, valb in enumerate(params):
