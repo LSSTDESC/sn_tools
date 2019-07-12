@@ -9,10 +9,11 @@ from lsst.sims.photUtils import Sed, PhotometricParameters, Bandpass, Sed
 import sncosmo
 import h5py
 from scipy.interpolate import InterpolatedUnivariateSpline as Spline1d
-from scipy.interpolate import griddata
+from scipy.interpolate import griddata,interp2d
 from sn_tools.sn_telescope import Telescope
 import pandas as pd
 from scipy.interpolate import RegularGridInterpolator
+import multiprocessing
 
 class GenerateSample:
     """ Generates a sample of parameters for simulation
@@ -1436,6 +1437,7 @@ class GetReference:
         # Load references needed for the following
         self.lc_ref = {}
         self.gamma_ref = {}
+        self.gamma = {}
         self.m5_ref = {}
         self.mag_to_flux_e_sec = {}
 
@@ -1444,8 +1446,11 @@ class GetReference:
         self.param = {}
 
         bands = np.unique(lc_ref_tot['band'])
-        mag_range = np.arange(10., 38., 0.1)
-        
+        mag_range = np.arange(10., 38., 0.01)
+        exptimes = np.linspace(15.,30.,2)
+
+        gammArray = self.loopGamma(bands, mag_range, exptimes,telescope)
+
         method = 'linear'
         # for each band: load data to be used for interpolation 
         for band in bands:
@@ -1464,6 +1469,7 @@ class GetReference:
 
             # Another interpolator, faster than griddata: regulargridinterpolator
 
+            # Fluxes and errors
             zmin, zmax, zstep, nz = self.limVals(lc_sel,'z')
             phamin, phamax, phastep, npha= self.limVals(lc_sel,'phase')
             zv = np.linspace(zmin,zmax,nz)
@@ -1476,10 +1482,66 @@ class GetReference:
             
             self.flux[band] = RegularGridInterpolator((phav,zv),flux,method=method,bounds_error=False,fill_value=0.)
             self.fluxerr[band] = RegularGridInterpolator((phav,zv),fluxerr,method=method,bounds_error=False,fill_value=0.)
+            # Flux derivatives
             self.param[band] = {}
             for par in param_Fisher:
                 valpar = np.reshape(lc_sel[index]['d{}'.format(par)],(npha,nz))
                 self.param[band][par] = RegularGridInterpolator((phav,zv),valpar,method=method,bounds_error=False,fill_value=0.)
+
+            # gamma estimator
+           
+            idx = gammArray['band'] == band
+            rec = Table(gammArray[idx])
+
+            magmin, magmax, magstep, nmag = self.limVals(rec,'mag')
+            expmin, expmax, expstep, nexp = self.limVals(rec,'exptime')
+            mag = np.linspace(magmin,magmax,nmag)
+            exp = np.linspace(expmin,expmax,nexp)
+
+            index = np.lexsort((np.round(rec['exptime'],4),rec['mag']))
+            gammab = np.reshape(rec[index]['gamma'],(nmag,nexp))
+            self.gamma[band] = RegularGridInterpolator((mag,exp),gammab,method=method,bounds_error=False,fill_value=0.)
+
+    def calcGamma(self,band, mag_range,exptimes,telescope, j=-1, output_q=None):
+        gamm = []
+        for mag in mag_range:
+            for exptime in exptimes:
+                gamm.append((band,mag,exptime,telescope.gamma(mag,band,exptime)))
+
+        rec = Table(rows=gamm, names=['band','mag','exptime','gamma'])
+
+        
+        if output_q is not None:
+            output_q.put({j: rec})
+        else:
+            return rec
+
+    def loopGamma(self,bands,mag_range,exptimes, telescope):
+
+        result_queue = multiprocessing.Queue()
+        for i,band in enumerate(bands):
+            p = multiprocessing.Process(
+                name='Subprocess-'+str(i), target=self.calcGamma, args=(band, mag_range,exptimes,telescope,i,result_queue))
+            p.start()
+            
+
+        resultdict = {}
+        for j in range(len(bands)):
+            resultdict.update(result_queue.get())
+
+        for p in multiprocessing.active_children():
+            p.join()
+
+        restot = None
+        for j in range(len(bands)):
+            if restot is None:
+                restot = resultdict[j]
+            else:
+                restot = np.concatenate((restot,resultdict[j]))
+                
+        return restot
+
+
 
     def limVals(self,lc, field):
         """ Get unique values of a field in  a table

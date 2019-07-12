@@ -2,30 +2,58 @@ import numpy as np
 import time
 from astropy.table import Table, Column, vstack
 import pprint
+import multiprocessing
 
-def sigma_x0_x1_color(lcList,params=['x0','x1','color']):
+def sigma_x0_x1_color_multi(lc,params=['x0','x1','color'],nproc=1):
     
     # stack all lc and start filling output table
     
-    dictres = {}
-    lc = Table()
-    for lcl in lcList:
-        lc = vstack([lc,lcl],metadata_conflicts='silent')
-        #print(lc.meta)
-        for key, val in lc.meta.items():
-            if key not in dictres.keys():
-                dictres[key] = []
-            dictres[key].append(val)
-            
-    #print(dictres)
-    restab = Table()
-    for key in dictres.keys():
-        restab.add_column(Column(dictres[key], name=key))
+    index = np.lexsort((lc['daymax'],lc['z']))
+    lc = lc[index]
+    #print(lc.dtype)
 
-    daymax = np.unique(lc['daymax'])
-    diff = lc['daymax']-daymax[:, np.newaxis]
+    restab = Table()
+    zu = np.unique(lc['z'])
+    zmin = np.min(zu)
+    zmax = np.max(zu)
+   
+    batch = list(np.linspace(zmin,zmax,nproc))
+    #if nz not in batch:
+    #    np.append(batch,nz)
+
+    print(batch,len(batch))
+
+    result_queue = multiprocessing.Queue()
+
+    for j in range(nproc-1):
+        print(j,j+1)
+        idx = (lc['z']>=batch[j])&(lc['z']<batch[j+1])
+        p = multiprocessing.Process(name='Subprocess-'+str(
+                    j), target=fromFisher, args=(lc[idx],params, j, result_queue))
+        p.start()
+
+    resultdict = {}
+    for j in range(nproc-1):
+        resultdict.update(result_queue.get())
+
+    for p in multiprocessing.active_children():
+        p.join()
+
+    for j in range(nproc-1):
+        restab = vstack([restab,resultdict[j]])
+    
+    return restab
+
+def fromFisher(lc,params, j=-1, output_q=None):
+
+    restab = Table(np.unique(lc[['x1','color','season','pixRa','pixDec','z','daymax']]))
+          
+    valu = np.unique(lc['z','daymax'])
+    diff = lc['daymax']-valu['daymax'][:, np.newaxis]
     flag = np.abs(diff) < 1.e-5
-    resu = np.ma.array(np.tile(lc, (len(daymax), 1)), mask=~flag)
+    diffb = lc['z']-valu['z'][:, np.newaxis]
+    flag &= np.abs(diffb) < 1.e-5
+    resu = np.ma.array(np.tile(lc, (len(valu), 1)), mask=~flag)
     parts = {}
     time_refa = time.time()
     for ia, vala in enumerate(params):
@@ -62,8 +90,12 @@ def sigma_x0_x1_color(lcList,params=['x0','x1','color']):
         #      np.take(Big_Diag, indices))
         restab.add_column(
             Column(np.take(Big_Diag, indices), name='Cov_{}{}'.format(vala,vala)))
-    print(restab)
-    return restab
+    print('resultat',restab)
+    #return restab
+    if output_q is not None:
+        output_q.put({j: restab})
+    else:
+        return restab
 
 def sigma_x0_x1_color_loop(lcList,params=['x0','x1','color']):
     
