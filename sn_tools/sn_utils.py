@@ -219,6 +219,9 @@ class GenerateSample:
                     T0_min = daymin-(1.+z)*self.min_rf_phase
                     T0_max = daymax-(1.+z)*self.max_rf_phase
                     nT0 = int((T0_max-T0_min)/daystep)
+                    widthWindow = T0_max-T0_min
+                    if widthWindow < 1.:
+                        break
                     T0_values = np.linspace(T0_min,T0_max,nT0+1)
                     
                 if self.params['daymax']['type'] == 'unique':
