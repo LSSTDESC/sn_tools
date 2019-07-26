@@ -218,6 +218,8 @@ class GenerateSample:
                 if self.params['daymax']['type'] == 'uniform':
                     T0_min = daymin-(1.+z)*self.min_rf_phase
                     T0_max = daymax-(1.+z)*self.max_rf_phase
+                    T0_min = daymin
+                    T0_max = daymax
                     nT0 = int((T0_max-T0_min)/daystep)
                     widthWindow = T0_max-T0_min
                     if widthWindow < 1.:
@@ -1415,17 +1417,18 @@ class GetReference:
         # a) the file is a set of astropy tables that have to be merged (vstack)
         # b) the file is a (unique) panda dataframe
         # if a) then b) is generated so as to speed up the loading for next uses.
+        """
         if 'vstack' not in filename:
             lc_ref_tot = self.Read_Ref(filename)
             newFile = filename.replace('.hdf5','_vstack.hdf5')
             r = lc_ref_tot.to_pandas().values.tolist()
             lc_ref_tot.to_pandas().to_hdf(newFile, key='s')
-          
-        else:
-            f = h5py.File(filename, 'r')
-            keys = list(f.keys())
-            #lc_ref_tot = Table.read(filename, path=keys[0])
-            lc_ref_tot = Table.from_pandas(pd.read_hdf(filename))
+        """  
+        
+        f = h5py.File(filename, 'r')
+        keys = list(f.keys())
+        #lc_ref_tot = Table.read(filename, path=keys[0])
+        lc_ref_tot = Table.from_pandas(pd.read_hdf(filename))
 
 
         # telescope requested
@@ -1458,7 +1461,12 @@ class GetReference:
         # for each band: load data to be used for interpolation 
         for band in bands:
             idx = lc_ref_tot['band'] == band
-            lc_sel = lc_ref_tot[idx]
+            lc_sel = Table(lc_ref_tot[idx])
+            
+            lc_sel['z'] = lc_sel['z'].data.round(decimals=4)
+            #lc_sel['phase'] = lc_sel['phase'].data.round(decimals=4)
+
+            
             fluxes_e_sec = telescope.mag_to_flux_e_sec(
                 mag_range, [band]*len(mag_range), [30]*len(mag_range))
             self.mag_to_flux_e_sec[band] = interpolate.interp1d(
@@ -1475,10 +1483,18 @@ class GetReference:
             # Fluxes and errors
             zmin, zmax, zstep, nz = self.limVals(lc_sel,'z')
             phamin, phamax, phastep, npha= self.limVals(lc_sel,'phase')
+
+            #print(zmin,zmax,zstep,nz,phamin, phamax, phastep, npha)
             zv = np.linspace(zmin,zmax,nz)
             phav = np.linspace(phamin,phamax,npha)
 
-            index = np.lexsort((lc_sel['z'],np.round(lc_sel['phase'],4)))
+            """
+            for z in np.unique(lc_sel['z']):
+                io = np.abs(lc_sel['z']-z)<1.e-5
+                print(z,len(lc_sel[io]))
+            """
+
+            index = np.lexsort((lc_sel['z'],lc_sel['phase']))
             flux = np.reshape(lc_sel[index]['flux'],(npha,nz))
             fluxerr = np.reshape(lc_sel[index]['fluxerr'],(npha,nz))
             
