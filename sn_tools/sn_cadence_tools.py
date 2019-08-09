@@ -7,7 +7,6 @@ from astropy.table import Table, Column, vstack
 from scipy.interpolate import griddata, interpn, CloughTocher2DInterpolator, LinearNDInterpolator
 from sn_tools.sn_telescope import Telescope
 
-
 class ReferenceData:
     """
     class to handle light curve of SN
@@ -686,3 +685,7 @@ class TemplateData_x1color(object):
 
         return flux
 """
+
+    
+
+
