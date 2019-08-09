@@ -32,7 +32,7 @@ class SN_Rate:
        Default : 20.
     """
 
-    def __init__(self, rate='Ripoche', H0=70, Om0=0.25,
+    def __init__(self, rate='Perrett', H0=70, Om0=0.25,
                  min_rf_phase=-15., max_rf_phase=30.):
 
         self.astropy_cosmo = FlatLambdaCDM(H0=H0, Om0=Om0)
