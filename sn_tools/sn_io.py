@@ -1,5 +1,6 @@
 import h5py
 from astropy.table import Table
+import numpy as np
 
 def geth5Data(name,thedir):
     
@@ -20,3 +21,17 @@ def getFile(theDir, theName):
     theFile = h5py.File('{}/{}'.format(theDir,theName), 'r')
 
     return theFile
+
+def selectIndiv(tab, field, refval):
+
+    idx = np.abs(tab[field]-refval)<1.e-5
+
+    return idx
+
+def select(tab, names, val):
+
+    idx = True
+    for name in names:
+        idx &= selectIndiv(tab,name,val[name])
+    
+    return tab[idx]
