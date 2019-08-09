@@ -14,6 +14,7 @@ from sn_tools.sn_telescope import Telescope
 import pandas as pd
 from scipy.interpolate import RegularGridInterpolator
 import multiprocessing
+import pprint
 
 class GenerateSample:
     """ Generates a sample of parameters for simulation
@@ -110,7 +111,7 @@ class GenerateSample:
         if len(r) > 0:
             names = ['z', 'x1', 'color', 'daymax',
                      'epsilon_x0', 'epsilon_x1', 'epsilon_color',
-                     'min_rf_phase', 'max_rf_phase']
+                     'epsilon_daymax','min_rf_phase', 'max_rf_phase']
             types = ['f8']*len(names)
             #params = np.zeros(len(r), dtype=list(zip(names, types)))
             params = np.asarray(r, dtype=list(zip(names, types)))
@@ -147,6 +148,8 @@ class GenerateSample:
           epsilon for x1 parameter
         epsilon_color, float
           epsilon for color parameter
+        epsilon_daymax, float
+          epsilon for daymax(T0) parameter
         min_rf_phase, float
           min rest-frame phase for LC points
         max_rf_phase, float
@@ -203,7 +206,7 @@ class GenerateSample:
                                  -1., dist_daymax,
                                  [1./len(dist_daymax)]*len(dist_daymax))
                 r.append((z, x1_color[0], x1_color[1], T0, 0.,
-                          0., 0., self.min_rf_phase, self.max_rf_phase))
+                          0., 0.,0., self.min_rf_phase, self.max_rf_phase))
 
         if self.params['z']['type'] == 'uniform':
             zstep = self.params['z']['step']
@@ -224,14 +227,14 @@ class GenerateSample:
                     widthWindow = T0_max-T0_min
                     if widthWindow < 1.:
                         break
-                    T0_values = np.linspace(T0_min,T0_max,nT0+1)
-                    
+                    #T0_values = np.linspace(T0_min,T0_max,nT0+1)
+                    T0_values = np.arange(T0_min,T0_max,daystep)
                 if self.params['daymax']['type'] == 'unique':
                     T0_values = [daymin+21.*(1.+z)]
 
                 for T0 in T0_values:
                     r.append((z, x1_color[0], x1_color[1], T0, 0.,
-                              0., 0., self.min_rf_phase, self.max_rf_phase))
+                              0., 0., 0., self.min_rf_phase, self.max_rf_phase))
 
         if self.params['z']['type'] == 'unique':
             daystep = self.params['daymax']['step']
@@ -246,11 +249,11 @@ class GenerateSample:
                 T0_values = [daymin+21.*(1.+z)]
             for T0 in T0_values:
                 r.append((z, x1_color[0], x1_color[1], T0, 0.,
-                          0., 0., self.min_rf_phase, self.max_rf_phase))
+                          0., 0., 0.,self.min_rf_phase, self.max_rf_phase))
         rdiff = []
         if self.params['differential_flux']:
             for rstart in r:
-                for kdiff in [4, -4, 5, -5, 6, -6]:
+                for kdiff in [4, -4, 5, -5, 6, -6, 7,-7]:
                     rstartc = list(rstart)
                     rstartc[np.abs(kdiff)] = epsilon*np.sign(kdiff)
                     rdiff.append(tuple(rstartc))
@@ -1401,34 +1404,29 @@ class MbCov:
 
 class GetReference:
 
-    def __init__(self, filename,tel_par,param_Fisher=['x0', 'x1', 'color']):
+    def __init__(self, lcName,gammaName,tel_par,param_Fisher=['x0', 'x1', 'color','daymax']):
         """ Class to load reference data
             used for the fast SN simulator
 
         Parameters
         -----------
-        filename: str
-         name of the reference file to load
+        lcName: str
+         name of the reference file to load (lc)
+        gammaName: str
+         name of the reference file to load (gamma)
         tel_par: dict
          telescope parameters
 
         """""
-        # Load the file : two cases
-        # a) the file is a set of astropy tables that have to be merged (vstack)
-        # b) the file is a (unique) panda dataframe
-        # if a) then b) is generated so as to speed up the loading for next uses.
-        """
-        if 'vstack' not in filename:
-            lc_ref_tot = self.Read_Ref(filename)
-            newFile = filename.replace('.hdf5','_vstack.hdf5')
-            r = lc_ref_tot.to_pandas().values.tolist()
-            lc_ref_tot.to_pandas().to_hdf(newFile, key='s')
-        """  
+        # Load the file - lc reference
         
-        f = h5py.File(filename, 'r')
+        f = h5py.File(lcName, 'r')
         keys = list(f.keys())
         #lc_ref_tot = Table.read(filename, path=keys[0])
-        lc_ref_tot = Table.from_pandas(pd.read_hdf(filename))
+        lc_ref_tot = Table.from_pandas(pd.read_hdf(lcName))
+
+        idx = lc_ref_tot['z']>0.005
+        lc_ref_tot = np.copy(lc_ref_tot[idx])
 
 
         # telescope requested
@@ -1439,6 +1437,14 @@ class GetReference:
                               aerosol=tel_par['aerosol'],
                               airmass=tel_par['airmass'])
 
+        # Load the file - gamma values
+        if not os.path.exists(gammaName):
+            print('gamma file {} does not exist')
+            print('will generate it - few minutes')
+            Gamma('ugrizy',telescope,gammaName)
+            print('end of gamma estimation')
+
+        fgamma = h5py.File(gammaName, 'r')
 
         # Load references needed for the following
         self.lc_ref = {}
@@ -1453,18 +1459,20 @@ class GetReference:
 
         bands = np.unique(lc_ref_tot['band'])
         mag_range = np.arange(10., 38., 0.01)
-        exptimes = np.linspace(15.,30.,2)
+        #exptimes = np.linspace(15.,30.,2)
+        #exptimes = [15.,30.,60.,100.]
 
-        gammArray = self.loopGamma(bands, mag_range, exptimes,telescope)
+        #gammArray = self.loopGamma(bands, mag_range, exptimes,telescope)
 
         method = 'linear'
+
         # for each band: load data to be used for interpolation 
         for band in bands:
             idx = lc_ref_tot['band'] == band
             lc_sel = Table(lc_ref_tot[idx])
             
             lc_sel['z'] = lc_sel['z'].data.round(decimals=4)
-            #lc_sel['phase'] = lc_sel['phase'].data.round(decimals=4)
+            lc_sel['phase'] = lc_sel['phase'].data.round(decimals=4)
 
             
             fluxes_e_sec = telescope.mag_to_flux_e_sec(
@@ -1488,11 +1496,6 @@ class GetReference:
             zv = np.linspace(zmin,zmax,nz)
             phav = np.linspace(phamin,phamax,npha)
 
-            """
-            for z in np.unique(lc_sel['z']):
-                io = np.abs(lc_sel['z']-z)<1.e-5
-                print(z,len(lc_sel[io]))
-            """
 
             index = np.lexsort((lc_sel['z'],lc_sel['phase']))
             flux = np.reshape(lc_sel[index]['flux'],(npha,nz))
@@ -1501,6 +1504,8 @@ class GetReference:
             
             self.flux[band] = RegularGridInterpolator((phav,zv),flux,method=method,bounds_error=False,fill_value=0.)
             self.fluxerr[band] = RegularGridInterpolator((phav,zv),fluxerr,method=method,bounds_error=False,fill_value=0.)
+
+
             # Flux derivatives
             self.param[band] = {}
             for par in param_Fisher:
@@ -1509,57 +1514,22 @@ class GetReference:
 
             # gamma estimator
            
-            idx = gammArray['band'] == band
-            rec = Table(gammArray[idx])
+            rec = Table.read(gammaName,path='gamma_{}'.format(band))
+
+            rec['mag'] = rec['mag'].data.round(decimals=4)
+            rec['exptime'] = rec['exptime'].data.round(decimals=4)
+
 
             magmin, magmax, magstep, nmag = self.limVals(rec,'mag')
             expmin, expmax, expstep, nexp = self.limVals(rec,'exptime')
             mag = np.linspace(magmin,magmax,nmag)
             exp = np.linspace(expmin,expmax,nexp)
 
+            
+
             index = np.lexsort((np.round(rec['exptime'],4),rec['mag']))
             gammab = np.reshape(rec[index]['gamma'],(nmag,nexp))
             self.gamma[band] = RegularGridInterpolator((mag,exp),gammab,method=method,bounds_error=False,fill_value=0.)
-
-    def calcGamma(self,band, mag_range,exptimes,telescope, j=-1, output_q=None):
-        gamm = []
-        for mag in mag_range:
-            for exptime in exptimes:
-                gamm.append((band,mag,exptime,telescope.gamma(mag,band,exptime)))
-
-        rec = Table(rows=gamm, names=['band','mag','exptime','gamma'])
-
-        
-        if output_q is not None:
-            output_q.put({j: rec})
-        else:
-            return rec
-
-    def loopGamma(self,bands,mag_range,exptimes, telescope):
-
-        result_queue = multiprocessing.Queue()
-        for i,band in enumerate(bands):
-            p = multiprocessing.Process(
-                name='Subprocess-'+str(i), target=self.calcGamma, args=(band, mag_range,exptimes,telescope,i,result_queue))
-            p.start()
-            
-
-        resultdict = {}
-        for j in range(len(bands)):
-            resultdict.update(result_queue.get())
-
-        for p in multiprocessing.active_children():
-            p.join()
-
-        restot = None
-        for j in range(len(bands)):
-            if restot is None:
-                restot = resultdict[j]
-            else:
-                restot = np.concatenate((restot,resultdict[j]))
-                
-        return restot
-
 
 
     def limVals(self,lc, field):
@@ -1705,3 +1675,146 @@ class GetReference:
                 tab_res = vstack([tab_res, resultdict[j]])
 
         return tab_res
+
+class Gamma:
+    def __init__(self,bands,telescope, fileout):
+        """ class to estimate gamma parameters
+            depending on mag and exposure time
+
+        Parameters
+        -----------
+        bands: str
+         bands to process
+        telescope: Telescope
+         telescope used to estimate gamma
+        fileout: str
+         output file name (extension: hdf5)
+
+        Returns
+        --------
+        None
+
+        Output
+        ------
+        output fileout is generated.
+        hdf5 format with the keys:
+        gamma_band1
+        gamma_band2
+        ........
+        for each key: astropy table for band b
+        with the following fields:
+        band (str): band name
+        mag (float): mag
+        exptime (float): exposure time
+        gamma (float): gamma estimation
+        
+
+        """
+        # mag range to consider
+        mag_range = np.arange(10., 35., 0.05)
+
+        # exptimes to consider
+        exptimes = np.arange(1.,900.,1.)
+
+        # gamma estimation
+        tab = self.loopGamma(bands,mag_range,exptimes, telescope)
+
+        #dump the result in a hdf5 file
+
+        for band in bands:
+            idx = tab['band']==band
+            sel = Table(tab[idx])
+            sel.write(fileout,path='gamma_{}'.format(band),
+                      append=True,compression=True)
+
+
+
+    def loopGamma(self,bands,mag_range,exptimes, telescope):
+        """ Gamma parameter estimation - loop on bands
+
+        Parameters
+        -----------
+        bands: str
+         bands to process
+        mag_range: list(float)
+         mag values to estimate gamma
+        exptimes: list(float)
+         exposure times to estimate gamma
+        telescope: Telescope
+         telescope used to estimate gamma
+        j: int
+         tagger for multiprocessing (default: -1)
+        output_q: multiprocessing.Queue()
+         queue for multiprocessing (default: None)
+
+        Returns
+        --------
+        astropy table with the following fields:
+        band (str): band name
+        mag (float): mag
+        exptime (float): exposure time
+        gamma (float): gamma estimation
+
+        """
+        result_queue = multiprocessing.Queue()
+        for i,band in enumerate(bands):
+            p = multiprocessing.Process(
+                name='Subprocess-'+str(i), target=self.calcGamma, args=(band, mag_range,exptimes,telescope,i,result_queue))
+            p.start()
+            
+
+        resultdict = {}
+        for j in range(len(bands)):
+            resultdict.update(result_queue.get())
+
+        for p in multiprocessing.active_children():
+            p.join()
+
+        restot = Table()
+        for j in range(len(bands)):
+            restot = vstack([restot,resultdict[j]])
+                
+        return restot
+
+
+    def calcGamma(self,band, mag_range,exptimes,telescope, j=-1, output_q=None):
+        """ Gamma parameter estimation
+
+        Parameters
+        -----------
+        band: str
+         band to process
+        mag_range: list(float)
+         mag values to estimate gamma
+        exptimes: list(float)
+         exposure times to estimate gamma
+        telescope: Telescope
+         telescope used to estimate gamma
+        j: int
+         tagger for multiprocessing (default: -1)
+        output_q: multiprocessing.Queue()
+         queue for multiprocessing (default: None)
+
+        Returns
+        --------
+        astropy table with the following fields:
+        band (str): band name
+        mag (float): mag
+        exptime (float): exposure time
+        gamma (float): gamma estimation
+        
+
+        """
+
+        gamm = []
+        for mag in mag_range:
+            for exptime in exptimes:
+                gamm.append((band,mag,exptime,telescope.gamma(mag,band,exptime)))
+
+        rec = Table(rows=gamm, names=['band','mag','exptime','gamma'])
+    
+        if output_q is not None:
+            output_q.put({j: rec})
+        else:
+            return rec
+
