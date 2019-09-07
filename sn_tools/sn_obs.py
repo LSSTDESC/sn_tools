@@ -9,6 +9,26 @@ from astropy import units as u
 from descartes.patch import PolygonPatch
 from astropy.coordinates import SkyCoord
 from dustmaps.sfd import SFDQuery
+from matplotlib.patches import Polygon
+from shapely.geometry import Point
+import pandas as pd
+import time
+
+def proj_gnomonic(lamb,phi,lamb0,phi1):
+
+    cosc = np.sin(phi1)*np.sin(phi)
+    cosc += np.cos(phi1)*np.cos(phi)*np.cos(lamb-lamb0)
+
+    x = np.cos(phi)*np.sin(lamb-lamb0)
+    x /= cosc
+
+    y = np.cos(phi1)*np.sin(phi)
+    y -= np.sin(phi1)*np.cos(phi)*np.cos(lamb-lamb0)
+
+    y /=cosc
+
+    return x,y
+
 
 def renameFields(tab):
 
@@ -74,11 +94,30 @@ def season(obs, season_gap=80.,mjdCol='observationStartMJD'):
 
 def LSSTPointing(xc, yc, angle_rot = 0., fov=9.6):
 
+    """
     arr = [[3, 0], [12, 0], [12, 1], [13, 1], [13, 2], [14, 2], [14, 3], [15, 3],
            [15, 12], [14, 12], [14, 13], [13, 13], [
                13, 14], [12, 14], [12, 15],
            [3, 15], [3, 14], [2, 14], [2, 13], [1, 13], [1, 12], [0, 12],
            [0, 3], [1, 3], [1, 2], [2, 2], [2, 1], [3, 1]]
+    """
+    # this is a quarter of LSST FP (with corner rafts)
+    arr = [[0.0,7.5],[4.5,7.5],[4.5,6.5],[5.5,6.5],[5.5,5.5],[6.5,5.5],[6.5,4.5],[7.5,4.5],[7.5,0.0]]
+
+    # this is a quarter of LSST FP (without corner rafts)
+    arr = [[0.0,7.5],[4.5,7.5],[4.5,4.5],[7.5,4.5],[7.5,0.0]]
+
+    # symmetry I: y -> -y
+    arrcp = list(arr)
+    for val in arr[::-1]:
+        if val[1] > 0.:
+            arrcp.append([val[0],-val[1]])
+
+    # symmetri II: x -> -x
+    arr=list(arrcp)
+    for val in arrcp[::-1]:
+        if val[0] > 0.:
+            arr.append([-val[0],val[1]])
 
     poly_orig = geometry.Polygon(arr)
     reduced_poly = affinity.scale(poly_orig, xfact=np.sqrt(
@@ -90,8 +129,210 @@ def LSSTPointing(xc, yc, angle_rot = 0., fov=9.6):
                               xoff=xc-reduced_poly.centroid.x, 
                               yoff=yc-reduced_poly.centroid.y)
 
-
 class ObsPixel:
+    
+    def __init__(self, nside, data, RaCol='Ra', DecCol='Dec'):
+        self.nside = nside
+        self.data = data
+        self.RaCol = RaCol
+        self.DecCol = DecCol
+        #self.hppix = HEALPix(nside=self.nside, order='nested')
+
+    def matchFast(self,pixel,ax=None):
+
+        time_ref = time.time()
+        data = self.pointingsAreaFast(pixel['pixRa'],pixel['pixDec'],3.)
+
+        if ax is not None:
+            val = np.unique(np.unique(data[[self.RaCol,self.DecCol]]))
+
+            ax.plot(val[self.RaCol],val[self.DecCol],'ko')
+            
+
+        print('pointing',time.time()-time_ref)
+        if data is None:
+            return None
+
+        dataset = pd.DataFrame(np.copy(data))
+        if ax is not None:
+            ax.plot(pixel['pixRa'],pixel['pixDec'],'r*')
+            ax.plot(dataset[self.RaCol],dataset[self.DecCol],'bo')
+        #for (pRa,pDec) in np.unique(dataset[[self.RaCol,self.DecCol]]):
+        groups = dataset.groupby([self.RaCol,self.DecCol])
+
+        time_ref = time.time()
+        print('ngroups',len(groups))
+        seldata = None
+        for name, group in groups:
+            pRa = np.mean(group[self.RaCol])
+            pDec = np.mean(group[self.DecCol])
+            
+            # convert data position in rad
+            pRa_rad = np.deg2rad(pRa)
+            pDec_rad = np.deg2rad(pDec)
+            
+            # gnomonic projection of pixels
+            x,y = proj_gnomonic(pRa_rad,pDec_rad,np.deg2rad(pixel['pixRa']),np.deg2rad(pixel['pixDec']))
+        
+        
+            x = np.rad2deg(x)+pRa
+            y = np.rad2deg(y)+pDec
+        
+            if ax is not None:
+                ax.plot(x,y,'ks')
+            #points inside the focal planes
+            fp = LSSTPointing(pRa,pDec,0.)
+            idf = shapely.vectorized.contains(fp,x,y)
+            #print(idf)
+            if ax is not None:
+                pf = PolygonPatch(fp, facecolor=(0,0,0,0), edgecolor='red')
+                ax.add_patch(pf)
+            if idf:
+                grp = group.copy()
+                for val in ['healpixID','pixRa','pixDec']:
+                    grp.loc[:,val] = np.copy(pixel[val])
+                
+                if seldata is None:
+                    seldata = np.copy(grp.to_records())
+                else:
+                    seldata = np.concatenate((seldata,np.copy(grp.to_records())))
+        print('datasel',time.time()-time_ref)
+        return seldata
+
+
+       
+    def matchFast_around(self,pixel,ax=None):
+
+        # get pixels around
+        healpixID_around = self.hppix.cone_search_lonlat(pixel['pixRa'] * u.deg, pixel['pixDec']* u.deg, radius=3*u.deg)
+
+        # convert to (Ra,Dec)
+        coordpix= hp.pix2ang(self.nside,healpixID_around, nest=True, lonlat=True)
+        pixelsRa, pixelsDec = coordpix[0], coordpix[1]
+
+        ax.plot(pixelsRa,pixelsDec,'rs')
+        # get the center of the pixels map
+
+        center_Ra = np.mean(pixelsRa)
+        center_Dec = np.mean(pixelsDec)
+
+        # get the data around this center
+        print('center',center_Ra,center_Dec,pixel['pixRa'],pixel['pixDec'])
+        
+        dataset = self.pointingsAreaFast(pixel['pixRa'],pixel['pixDec'],3.)
+        if dataset is None:
+            return None
+
+        # for each data set
+        # check which pixel is inside the focal plane
+        # after gnomonic projection
+        
+        
+        for (pRa,pDec) in np.unique(dataset[[self.RaCol,self.DecCol]]):
+
+            # convert data position in rad
+            pRa_rad = np.deg2rad(pRa)
+            pDec_rad = np.deg2rad(pDec)
+            
+            # gnomonic projection of pixels
+            x,y = proj_gnomonic(pRa_rad,pDec_rad,np.deg2rad(pixelsRa),np.deg2rad(pixelsDec))
+
+            
+            x = np.rad2deg(x)+pRa
+            y = np.rad2deg(y)+pDec
+
+            ax.plot(x,y,'ks')
+            # points inside the focal plane
+            fp = LSSTPointing(pRa,pDec,0.)
+            idf = shapely.vectorized.contains(fp,x,y)
+            print('matching',pixel['healpixID'],healpixID_around[idf])
+            if ax is not None:
+                pf = PolygonPatch(fp, facecolor=(0,0,0,0), edgecolor='red')
+                ax.add_patch(pf)
+
+        
+
+    def pointingsAreaFast(self, pixRA, pixDec, width):
+
+
+        # Warning here
+        # Ra is in [0,360.]
+        # Special care near 0 and 360...
+
+        Ramin = pixRA-width
+        Ramax = pixRA+width
+        Decmin = pixDec-width
+        Decmax = pixDec+width
+
+        areas = []
+        #print('there man',Ramin,Ramax,Decmin,Decmax)
+        if Ramin < 0:
+            areas.append([0.,Ramax,Decmin,Decmax])
+            areas.append([Ramin+360.,0.,Decmin,Decmax])
+        else:
+            if Ramax > 360.:
+                areas.append([0.,Ramax-360.,Decmin,Decmax])
+                areas.append([Ramin,0.,Decmin,Decmax]) 
+            else:
+                areas.append([Ramin,Ramax,Decmin,Decmax])
+           
+        #print('areas',areas)
+
+        restot = None
+        for area in areas:
+            res = self.getInside(area,pixRA, pixDec)
+            if res is not None:
+                if restot is None:
+                    restot = res
+                else:
+                    #print(restot,res)
+                    restot = np.concatenate((restot,res))
+
+
+        #if restot is not None:
+        #print('data inside',len(restot))
+        return restot
+
+    def getInside(self,area,pixRA, pixDec):
+
+        #print('looking at',pixid,pixRA,pixDec,area)
+
+        Ramin = area[0]
+        Ramax = area[1]
+        Decmin = area[2]
+        Decmax = area[3]
+
+        #print('there man',Ramin,Ramax,Decmin,Decmax)
+        #print('mmmm',np.min(self.data[self.RaCol]),
+        #np.max(self.data[self.RaCol]),np.min(self.data[self.DecCol]),
+        #np.max(self.data[self.DecCol]))
+
+        if Ramax < 1.e-3:
+            idx = (self.data[self.RaCol]>= Ramin)
+            
+        else:
+            #print('booh')
+            idx = self.data[self.RaCol]>=Ramin
+            idx &= self.data[self.RaCol]<=Ramax
+
+        idx &= self.data[self.DecCol]>=Decmin
+        idx &= self.data[self.DecCol]<=Decmax
+        
+
+        res = np.copy(self.data[idx])
+        
+        if len(res) == 0:
+            return None
+        """
+        res = rf.append_fields(res,'healpixID',[pixid]*len(res))
+        res = rf.append_fields(res,'pixRa',[pixRA]*len(res))
+        res = rf.append_fields(res,'pixDec',[pixDec]*len(res))
+        """
+        return res
+
+
+
+class ObsPixel_old:
     def __init__(self, nside, data, scanzone=None, RaCol='Ra', DecCol='Dec'):
         self.nside = nside
         self.data = data
@@ -102,41 +343,159 @@ class ObsPixel:
         
         self.scanzone = scanzone
 
+    def matchQuery(self,healpixID):
+        
+        step = 1
+        lon, lat = self.hppix.boundaries_lonlat(healpixID,self.nside,step=step)
+        lon = lon.to(u.deg).value
+        lat = lat.to(u.deg).value
+        coordpix = hp.pix2ang(self.nside, healpixID, nest=True, lonlat=True)
+        pixRa, pixDec = coordpix[0], coordpix[1]
+        focalplanes = self.pointingsAreaFast(healpixID,pixRa,pixDec,3.)
+
+        for val in focalplanes:
+            lsstpoly = LSSTPointing(val[self.RaCol],val[self.DecCol])
+            xp = lsstpoly.exterior.coords.xy[0]
+            yp = lsstpoly.exterior.coords.xy[1]
+            print(hp.query_polygon(self.nside,[xp,yp,[0.0]*len(xp)]))
+
+        print(test)
+        return None
+
+
+
     def matchFast(self,healpixID,ax=None):
         
         step = 1
         lon, lat = self.hppix.boundaries_lonlat(healpixID, step=step)
         lon = lon.to(u.deg).value
         lat = lat.to(u.deg).value
+        
         coordpix = hp.pix2ang(self.nside, healpixID, nest=True, lonlat=True)
         pixRa, pixDec = coordpix[0], coordpix[1]
         vertices = np.vstack([lon.ravel(), lat.ravel()]).transpose()
         poly = geometry.Polygon(vertices)
-        focalplanes = self.pointingsAreaFast(healpixID,pixRa,pixDec,7.)
+        focalplanes = self.pointingsAreaFast(healpixID,pixRa,pixDec,3.)
+        print('pixel area',poly.area)
 
         #print(self.scanzone.centroid.x,self.scanzone.centroid.y)
         polyscan = affinity.translate(self.scanzone, xoff=pixRa-self.scanzone.centroid.x, yoff=pixDec-self.scanzone.centroid.y)
-        idf = shapely.vectorized.contains(polyscan,focalplanes[self.RaCol],focalplanes[self.DecCol])
+        # check wether this polyscan goes beyond 360. in Ra
+        ramax = np.max(polyscan.exterior.coords.xy[0])
 
+        polyscan_b = None
+        if ramax >= 360.:
+            decmin = np.min(polyscan.exterior.coords.xy[1])
+            decmax = np.max(polyscan.exterior.coords.xy[1])
+            arrb = [[360.,decmin],[380.,decmin],[380.,decmax],[360.,decmax],[360.,decmin]]
+            polyscan_b = geometry.Polygon(arrb)
+            polyscan_b = polyscan_b.intersection(polyscan)
+            polyscan_b = affinity.translate(polyscan_b, xoff=-360.01)
+
+        finalData = None
+        polylist = [polyscan]
+        if polyscan_b is not None:
+            polylist += [polyscan_b]
+        if focalplanes is not None:
+            for polyl in polylist:
+                idf = shapely.vectorized.contains(polyl,focalplanes[self.RaCol],focalplanes[self.DecCol])
+                if len(focalplanes[idf]) >0:
+                    if finalData is None:
+                        finalData = np.copy(focalplanes[idf])
+                    else:
+                        finalData = np.concatenate((finalData,focalplanes[idf]))
+
+
+        #print(finalData)
         # This is for display
         if ax is not None:
             po = PolygonPatch(polyscan, facecolor='#fffffe', edgecolor='blue')
             ax.add_patch(po)
-            p = PolygonPatch(poly, facecolor='#fffffe', edgecolor='red')
+            p = PolygonPatch(poly, facecolor=(0,0,0,0), edgecolor='red')
             ax.add_patch(p)
-            ax.plot(focalplanes[idf][self.RaCol],focalplanes[idf][self.DecCol],'g.')
+            if polyscan_b is not None:
+                p = PolygonPatch(polyscan_b, facecolor='#fffffe', edgecolor='red')
+                ax.add_patch(p)
+            if focalplanes is not None:
+                ax.plot(focalplanes[idf][self.RaCol],focalplanes[idf][self.DecCol],'gs')
+                ax.plot(focalplanes[self.RaCol],focalplanes[self.DecCol],'r*')
             ax.plot(polyscan.exterior.coords.xy[0],polyscan.exterior.coords.xy[1],'k.')
             ax.set_xlabel('Ra [deg]')
             ax.set_ylabel('Dec [deg]')
 
-        return focalplanes[idf]
+        return finalData
 
     def pointingsAreaFast(self, pixid, pixRA, pixDec, width):
 
-        idx = np.abs(self.data[self.RaCol]-pixRA) <= width
-        idx &= np.abs(self.data[self.DecCol]-pixDec) <= width
 
-        res = self.data[idx]
+        # Warning here
+        # Ra is in [0,360.]
+        # Special care near 0 and 360...
+
+        Ramin = pixRA-width
+        Ramax = pixRA+width
+        Decmin = pixDec-width
+        Decmax = pixDec+width
+
+        areas = []
+        #print('there man',Ramin,Ramax,Decmin,Decmax)
+        if Ramin < 0:
+            areas.append([0.,Ramax,Decmin,Decmax])
+            areas.append([Ramin+360.,0.,Decmin,Decmax])
+        else:
+            if Ramax > 360.:
+                areas.append([0.,Ramax-360.,Decmin,Decmax])
+                areas.append([Ramin,0.,Decmin,Decmax]) 
+            else:
+                areas.append([Ramin,Ramax,Decmin,Decmax])
+           
+        #print('areas',areas)
+
+        restot = None
+        for area in areas:
+            res = self.getInside(area, pixid,pixRA, pixDec)
+            if res is not None:
+                if restot is None:
+                    restot = res
+                else:
+                    #print(restot,res)
+                    restot = np.concatenate((restot,res))
+
+
+        #if restot is not None:
+        #print('data inside',len(restot))
+        return restot
+
+    def getInside(self,area,pixid,pixRA, pixDec):
+
+        #print('looking at',pixid,pixRA,pixDec,area)
+
+        Ramin = area[0]
+        Ramax = area[1]
+        Decmin = area[2]
+        Decmax = area[3]
+
+        #print('there man',Ramin,Ramax,Decmin,Decmax)
+        #print('mmmm',np.min(self.data[self.RaCol]),
+        #np.max(self.data[self.RaCol]),np.min(self.data[self.DecCol]),
+        #np.max(self.data[self.DecCol]))
+
+        if Ramax < 1.e-3:
+            idx = (self.data[self.RaCol]>= Ramin)
+            
+        else:
+            #print('booh')
+            idx = self.data[self.RaCol]>=Ramin
+            idx &= self.data[self.RaCol]<=Ramax
+
+        idx &= self.data[self.DecCol]>=Decmin
+        idx &= self.data[self.DecCol]<=Decmax
+        
+
+        res = np.copy(self.data[idx])
+        
+        if len(res) == 0:
+            return None
         res = rf.append_fields(res,'healpixID',[pixid]*len(res))
         res = rf.append_fields(res,'pixRa',[pixRA]*len(res))
         res = rf.append_fields(res,'pixDec',[pixDec]*len(res))
@@ -146,15 +505,194 @@ class ObsPixel:
     def __call__(self,healpixID,ax=None):
         return self.matchFast(healpixID,ax)
 
+class OverlapGnomonic:
+    def __init__(self, nside, dRa=0., dDec=0.):
+        
+        self.nside=nside
+        self.hppix = HEALPix(nside=nside, order='nested',frame='icrs')
+        self.dRa = dRa
+        self.dDec= dDec
+
+    def overlap_pixlist(self,pixelList, pointing,ax=None):
+
+        
+        pRa = pointing[0]
+        pDec = pointing[1]
+
+        pRa_rad = np.deg2rad(pointing[0])
+        pDec_rad = np.deg2rad(pointing[1])
+
+    
+        x,y = proj_gnomonic(pRa_rad,pDec_rad,np.deg2rad(pixelList['pixRa']),np.deg2rad(pixelList['pixDec']))
+        x = np.rad2deg(x)+pRa
+        y = np.rad2deg(y)+pDec
+
+        fp = LSSTPointing(pRa,pDec,0.)
+        idf = shapely.vectorized.contains(fp,x,y)
+        print(pixelList[idf])
+
+
+        for pixel in pixelList:
+            pixRa, pixDec, poly, polyb = self.polypix(pixel['healpixID'])
+            #gnomonic proj
+            pixRa_rad = np.deg2rad(pixRa)
+            pixDec_rad = np.deg2rad(pixDec)
+            x,y = proj_gnomonic(pRa_rad,pDec_rad,np.deg2rad(pixRa),np.deg2rad(pixDec))
+            #print('pixarea',poly.area,hp.nside2pixarea(self.nside,degrees=True))
+            if ax is not None:
+                p = PolygonPatch(poly, facecolor='#fffffe', edgecolor='black')
+                ax.add_patch(p)
+                #p = PolygonPatch(polyb, facecolor='#fffffe', edgecolor='black')
+                #ax.add_patch(polyb)
+                print(x,y)
+                p = Point(x,y)
+                ax.plot(np.rad2deg(x)+pRa,np.rad2deg(y)+pDec,'ks')
+
+        fp = LSSTPointing(pRa,pDec,0.)
+        #print('Pointing area',fp.area)
+        if ax is not None:
+            pf = PolygonPatch(fp, facecolor=(0,0,0,0), edgecolor='red')
+            ax.add_patch(pf)
+
+    def polypix(self, healpixID=10):
+
+
+        step = 1
+        lon, lat = self.hppix.boundaries_lonlat(healpixID,step=step)
+        lon = lon.to(u.deg).value
+        lat = lat.to(u.deg).value
+        
+        coordpix = hp.pix2ang(self.nside, healpixID, nest=True, lonlat=True)
+        pixRa, pixDec = coordpix[0], coordpix[1]
+        vertices = np.vstack([lon.ravel(), lat.ravel()]).transpose()
+        #verticesb = hp.boundaries(self.nside,healpixID,1,True)
+        
+        print(vertices,vertices[:,0])
+        minv = np.min(vertices[:,0])
+        maxv = np.max(vertices[:,0])
+
+        if maxv-minv > 100.:
+            for i in range(len(vertices)):
+                if vertices[i][0]>100.:
+                    vertices[i][0]-=360.
+        #print(verticesb)
+        poly = geometry.Polygon(vertices)
+        polyb = Polygon(vertices, closed=True, edgecolor='blue', facecolor='none')
+        print(self.nside,self.hppix.pixel_area,healpixID,poly.area)
+        return pixRa, pixDec, poly, polyb
+
+class GetOverlap:
+    def __init__(self, nside, dRa=0., dDec=0.):
+        
+        self.nside=nside
+        self.hppix = HEALPix(nside=nside, order='nested',frame='icrs')
+        self.dRa = dRa
+        self.dDec= dDec        
+
+
+    def polypix(self, healpixID=10):
+
+
+        step = 1
+        lon, lat = self.hppix.boundaries_lonlat(healpixID,step=step)
+        lon = lon.to(u.deg).value
+        lat = lat.to(u.deg).value
+        
+        coordpix = hp.pix2ang(self.nside, healpixID, nest=True, lonlat=True)
+        pixRa, pixDec = coordpix[0], coordpix[1]
+        vertices = np.vstack([lon.ravel(), lat.ravel()]).transpose()
+        #verticesb = hp.boundaries(self.nside,healpixID,1,True)
+        
+        print(vertices,vertices[:,0])
+        minv = np.min(vertices[:,0])
+        maxv = np.max(vertices[:,0])
+
+        if maxv-minv > 100.:
+            for i in range(len(vertices)):
+                if vertices[i][0]>100.:
+                    vertices[i][0]-=360.
+        #print(verticesb)
+        poly = geometry.Polygon(vertices)
+        polyb = Polygon(vertices, closed=True, edgecolor='blue', facecolor='none')
+        print(self.nside,self.hppix.pixel_area,healpixID,poly.area)
+        return pixRa, pixDec, poly, polyb
+
+    def overlap_pixlist(self,pixelList, pointing,ax=None):
+
+        
+        for healpixID in pixelList:
+            pixRa, pixDec, poly, polyb = self.polypix(healpixID)
+            #print('pixarea',poly.area,hp.nside2pixarea(self.nside,degrees=True))
+            if ax is not None:
+                p = PolygonPatch(poly, facecolor='#fffffe', edgecolor='black')
+                ax.add_patch(p)
+                #p = PolygonPatch(polyb, facecolor='#fffffe', edgecolor='black')
+                ax.add_patch(polyb)
+
+        
+        fp = LSSTPointing(pointing[0],pointing[1],0.)
+        #print('Pointing area',fp.area)
+        if ax is not None:
+            pf = PolygonPatch(fp, facecolor=(0,0,0,0), edgecolor='red')
+            ax.add_patch(pf)
+
+    def overlap(self,healpixID=100,pointingRa=None,pointingDec=None,ax=None):
+        
+        # get initial pixel
+        pixRa, pixDec, poly = self.polypix(healpixID)
+
+        if PointingRa is None:
+            fpRa = pixRa+self.dRa
+            fpDec = pixDec+self.dDec
+        else:
+            fpRa = pointingRa+self.dRa
+            fpDec = pointingDec+self.dDec
+
+        # define a focal plane centered on this pixel
+        fp = LSSTPointing(fpRa,fpDec,0.)
+
+        # get nearby pixels
+        healpixID_around = self.hppix.cone_search_lonlat(pixRa * u.deg, pixDec* u.deg, radius=3* u.deg)
+        coordpix = hp.pix2ang(self.nside, healpixID_around, nest=True, lonlat=True) 
+        #coords = SkyCoord(coordpix[0], coordpix[1], unit='deg')
+        #print(coordpix[0])
+        arr = np.array(healpixID_around,dtype=[('healpixID', 'i8')])
+        arr = rf.append_fields(arr, 'pixRa', coordpix[0])
+        arr = rf.append_fields(arr, 'pixDec', coordpix[1])
+
+        res = []
+        
+        for val in arr:
+            
+            pRa, pDec, poly = self.polypix(val['healpixID'])
+            pixArea = poly.area
+            print(pixArea)
+            xpoly = poly.exterior.coords.xy[0]
+            ypoly = poly.exterior.coords.xy[1]
+            if ax is not None:
+                p = PolygonPatch(poly, facecolor='#fffffe', edgecolor='black')
+                ax.add_patch(p)
+                pf = PolygonPatch(fp, facecolor='#fffffe', edgecolor='red')
+                ax.add_patch(pf)
+            overlap = poly.intersection(fp).area/pixArea
+            res.append((self.nside,val['healpixID'],val['pixRa'],val['pixDec'],overlap,fpRa,fpDec,val['pixRa']-fpRa,val['pixDec']-fpDec,pixArea))
+
+        
+        resrec = np.rec.fromrecords(res, names=['nside','healpixID','pixRa','pixDec','overlap','fpRa','fpDec','DRa','DDec','pixArea'])
+
+        return resrec
+
 
 class GetShape:
-    def __init__(self, nside):
+    def __init__(self, nside, overlap):
 
         self.nside=nside
         self.hppix = HEALPix(nside=nside, order='nested')
+        self.overlap = overlap
 
-    def shape(self,ax=None):
-        healpixID = 10
+
+    def shape(self,healpixID=10,ax=None):
+        
         step = 1
         lon, lat = self.hppix.boundaries_lonlat(healpixID, step=step)
         lon = lon.to(u.deg).value
@@ -185,9 +723,11 @@ class GetShape:
         ypoly = poly.exterior.coords.xy[1]
         pixRa =np.mean(xpoly)
         pixDec = np.mean(ypoly)
+        pixArea = poly.area
 
-        dRa = 3.
-        dDec = 3.
+        #print('allo',pixArea)
+        dRa = 5.
+        dDec = 5.
 
         RaVals = np.arange(pixRa-dRa,pixRa+dRa,0.1)
         DecVals = np.arange(pixDec-dDec,pixDec+dDec,0.1)
@@ -196,12 +736,15 @@ class GetShape:
             for Dec in DecVals:
                 fp = LSSTPointing(Ra,Dec,0.)
                 area = poly.intersection(fp).area/fp.area
-                if area > 0.:
+                area = poly.intersection(fp).area/pixArea
+                #print('alors',Ra,Dec,area)
+                if area >= self.overlap:
                     r.append((Ra,Dec,area))
 
         if len(r)>0.:
             shape = np.rec.fromrecords(r, names= ['x','y','area'])
-            idx = shape['area']>= 0.01
+            
+            idx = shape['area']>=0.
             sel = shape[idx]
 
             r = []
