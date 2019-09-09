@@ -193,13 +193,13 @@ class ProcessArea:
         self.RaCol = RaCol
         self.DecCol = DecCol
 
-    def process(self, data):
+    def process(self, data, metricList):
 
         # select data inside the area
         dataSel = dataInside(data, self.Ra, self.Dec, self.widthRa, self.widthDec,
                              RaCol=self.RaCol, DecCol=self.DecCol)
 
-        print(len(dataSel))
+        print(len(dataSel),dataSel.dtype,self.RaCol,self.DecCol)
 
         # mv to panda df
         dataset = pd.DataFrame(np.copy(dataSel))
@@ -226,6 +226,10 @@ class ProcessArea:
             lambda x: self.match(x, healpixIDs, pixRa, pixDec))
 
         # process pixels with data
+
+        resfi = {}
+        for metric in metricList:
+            resfi[metric.name] = None
         for healpixID in pd.unique(matched_pixels['healpixID']):
             ib = matched_pixels['healpixID'] == healpixID
             thematch = matched_pixels.loc[ib].copy()
@@ -234,7 +238,26 @@ class ProcessArea:
 
             dataPixel = pd.concat([groups.get_group(grname)
                                    for grname in grnames])
+
+
+            dataPixel.iloc[:,'healpixID'] = thematch['healpixID'][0]
+            dataPixel.iloc[:,'pixRa'] = thematch['pixRa'][0]
+            dataPixel.iloc[:,'pixDec'] = thematch['pixDec'][0]
+            
             print(len(thematch), len(dataPixel))
+
+            for metric in metricList:
+                 resdict[metric.name] = metric.run(season(dataPixel.to_records()))
+            for key in resfi.keys():
+                if resdict[key] is not None:
+                    if resfi[key] is None:
+                        resfi[key] = resdict[key]
+                    else:
+                        #print('vstack',key,resfi[key],resdict[key])
+                        #resfi[key] = np.vstack([resfi[key], resdict[key]])
+                        resfi[key] = np.concatenate((resfi[key], resdict[key]))
+
+        return resfi
 
     def match(self, grp, healpixIDs, pixRa, pixDec, ax=None):
 
@@ -243,8 +266,8 @@ class ProcessArea:
         pixDec_rad = np.deg2rad(pixDec)
 
         # convert data position in rad
-        pRa = np.median(grp['Ra'])
-        pDec = np.median(grp['Dec'])
+        pRa = np.median(grp[self.RaCol])
+        pDec = np.median(grp[self.DecCol])
         pRa_rad = np.deg2rad(pRa)
         pDec_rad = np.deg2rad(pDec)
 
@@ -275,10 +298,14 @@ class ProcessArea:
         matched_pixels.iloc[:, 'grname'] = grp.name
         """
 
-        matched_pixels = list(healpixIDs[idf])
-        names = [grp.name]*len(matched_pixels)
+        pixID_matched = list(healpixIDs[idf])
+        pixRa_matched = list(pixRa[idf])
+        pixDec_matched = list(pixDec[idf])
+        names = [grp.name]*len(pixID_matched)
         # return pd.Series([matched_pixels], ['healpixIDs'])
-        return pd.DataFrame({'healpixID': matched_pixels,
+        return pd.DataFrame({'healpixID': pixID_matched,
+                             'pixRa' : pixRa_matched,
+                             'pixDec' : pixDec_matched,
                              'groupName': names})
 
 
