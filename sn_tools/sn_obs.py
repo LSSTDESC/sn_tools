@@ -15,14 +15,14 @@ import pandas as pd
 import time
 
 
-def area(minRa, maxRa, minDec, maxDec):
+def area(minRa, maxRa, minDec, maxDec, ax=None):
 
     poly = [[minRa, minDec], [minRa, maxDec], [maxRa, maxDec], [maxRa, minDec]]
 
     return geometry.Polygon(poly)
 
 
-def dataInside(data, Ra, Dec, widthRa, widthDec, RaCol='fieldRa', DecCol='fieldDec'):
+def dataInside(data, Ra, Dec, widthRa, widthDec, RaCol='fieldRa', DecCol='fieldDec', ax=None):
 
     minRa = Ra-widthRa
     maxRa = Ra+widthRa
@@ -35,6 +35,7 @@ def dataInside(data, Ra, Dec, widthRa, widthDec, RaCol='fieldRa', DecCol='fieldD
     # special treatement near Ra~0
 
     areaList = []
+
     if maxRa >= 360.:
         # in that case two areas necessary
         areaList.append(area(minRa, 0.0, minDec, maxDec))
@@ -43,9 +44,16 @@ def dataInside(data, Ra, Dec, widthRa, widthDec, RaCol='fieldRa', DecCol='fieldD
         if minRa < 0.:
             # in that case two areas necessary
             areaList.append(area(minRa+360., 0.0, minDec, maxDec))
-            areaList.append(area(0.0, maxRa, minDec, maxDec))
+            areaList.append(area(-1.e-8, maxRa, minDec, maxDec))
         else:
             areaList.append(area(minRa, maxRa, minDec, maxDec))
+
+        if ax is not None:
+            for poly in areaList:
+                pf = PolygonPatch(poly, facecolor=(
+                    0, 0, 0, 0), edgecolor='red')
+                ax.add_patch(pf)
+            ax.plot(data['fieldRA'], data['fieldDec'], 'ko')
 
     # select data inside this area
     dataSel = None
@@ -84,7 +92,7 @@ def renameFields(tab):
     corresp = {}
 
     fillCorresp(tab, corresp, 'mjd', 'observationStartMJD')
-    fillCorresp(tab, corresp, 'Ra', 'fieldRa')
+    fillCorresp(tab, corresp, 'Ra', 'fieldRA')
     fillCorresp(tab, corresp, 'Dec', 'fieldDec')
     fillCorresp(tab, corresp, 'band', 'filter')
     fillCorresp(tab, corresp, 'exptime', 'visitExposureTime')
@@ -195,11 +203,16 @@ class ProcessArea:
 
     def process(self, data, metricList):
 
+        resfi = {}
         # select data inside the area
+
+        # import matplotlib.pylab as plt
+        # fig, ax = plt.subplots()
         dataSel = dataInside(data, self.Ra, self.Dec, self.widthRa, self.widthDec,
                              RaCol=self.RaCol, DecCol=self.DecCol)
+        # plt.show()
 
-        print(len(dataSel),dataSel.dtype,self.RaCol,self.DecCol)
+        print(len(dataSel), dataSel.dtype, self.RaCol, self.DecCol)
 
         # mv to panda df
         dataset = pd.DataFrame(np.copy(dataSel))
@@ -212,7 +225,7 @@ class ProcessArea:
                                self.Dec, nest=True, lonlat=True)
 
         # get nearby pixels
-        #print(Ra, Dec, np.deg2rad(Ra), np.deg2rad(Dec))
+        # print(Ra, Dec, np.deg2rad(Ra), np.deg2rad(Dec))
         vec = hp.pix2vec(self.nside, healpixID, nest=True)
         healpixIDs = hp.query_disc(
             self.nside, vec, np.deg2rad(self.widthRa), inclusive=False, nest=True)
@@ -227,10 +240,10 @@ class ProcessArea:
 
         # process pixels with data
 
-        resfi = {}
         for metric in metricList:
             resfi[metric.name] = None
-        for healpixID in pd.unique(matched_pixels['healpixID']):
+
+        for healpixID in matched_pixels['healpixID'].unique():
             ib = matched_pixels['healpixID'] == healpixID
             thematch = matched_pixels.loc[ib].copy()
 
@@ -239,22 +252,29 @@ class ProcessArea:
             dataPixel = pd.concat([groups.get_group(grname)
                                    for grname in grnames])
 
+            pixRa = thematch['pixRa'].unique()
+            pixDec = thematch['pixDec'].unique()
+            print('there', healpixID, pixRa, pixDec)
 
-            dataPixel.iloc[:,'healpixID'] = thematch['healpixID'][0]
-            dataPixel.iloc[:,'pixRa'] = thematch['pixRa'][0]
-            dataPixel.iloc[:,'pixDec'] = thematch['pixDec'][0]
-            
+            dataPixel.loc[:, 'healpixID'] = healpixID
+            dataPixel.loc[:, 'pixRa'] = pixRa[0]
+            dataPixel.loc[:, 'pixDec'] = pixDec[0]
+
             print(len(thematch), len(dataPixel))
 
+            resdict = {}
+            time_ref = time.time()
             for metric in metricList:
-                 resdict[metric.name] = metric.run(season(dataPixel.to_records()))
+                resdict[metric.name] = metric.run(
+                    season(dataPixel.to_records()))
+            print('Metrics run', time.time()-time_ref)
             for key in resfi.keys():
                 if resdict[key] is not None:
                     if resfi[key] is None:
                         resfi[key] = resdict[key]
                     else:
-                        #print('vstack',key,resfi[key],resdict[key])
-                        #resfi[key] = np.vstack([resfi[key], resdict[key]])
+                        # print('vstack',key,resfi[key],resdict[key])
+                        # resfi[key] = np.vstack([resfi[key], resdict[key]])
                         resfi[key] = np.concatenate((resfi[key], resdict[key]))
 
         return resfi
@@ -304,8 +324,8 @@ class ProcessArea:
         names = [grp.name]*len(pixID_matched)
         # return pd.Series([matched_pixels], ['healpixIDs'])
         return pd.DataFrame({'healpixID': pixID_matched,
-                             'pixRa' : pixRa_matched,
-                             'pixDec' : pixDec_matched,
+                             'pixRa': pixRa_matched,
+                             'pixDec': pixDec_matched,
                              'groupName': names})
 
 
@@ -364,7 +384,8 @@ class ObsPixel:
             idf = shapely.vectorized.contains(fp, x, y)
             # print(idf)
             if ax is not None:
-                pf = PolygonPatch(fp, facecolor=(0, 0, 0, 0), edgecolor='red')
+                pf = PolygonPatch(fp, facecolor=(
+                    0, 0, 0, 0), edgecolor='red')
                 ax.add_patch(pf)
             if idf:
                 grp = group.copy()
@@ -426,7 +447,8 @@ class ObsPixel:
             idf = shapely.vectorized.contains(fp, x, y)
             print('matching', pixel['healpixID'], healpixID_around[idf])
             if ax is not None:
-                pf = PolygonPatch(fp, facecolor=(0, 0, 0, 0), edgecolor='red')
+                pf = PolygonPatch(fp, facecolor=(
+                    0, 0, 0, 0), edgecolor='red')
                 ax.add_patch(pf)
 
     def pointingsAreaFast(self, pixRA, pixDec, width):
@@ -584,7 +606,8 @@ class ObsPixel_old:
         # print(finalData)
         # This is for display
         if ax is not None:
-            po = PolygonPatch(polyscan, facecolor='#fffffe', edgecolor='blue')
+            po = PolygonPatch(polyscan, facecolor='#fffffe',
+                              edgecolor='blue')
             ax.add_patch(po)
             p = PolygonPatch(poly, facecolor=(0, 0, 0, 0), edgecolor='red')
             ax.add_patch(p)
