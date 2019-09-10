@@ -70,7 +70,7 @@ def dataInside(data, Ra, Dec, widthRa, widthDec, RaCol='fieldRa', DecCol='fieldD
     return dataSel
 
 
-def proj_gnomonic(lamb, phi, lamb0, phi1):
+def proj_gnomonic_plane(lamb0, phi1, lamb, phi):
 
     cosc = np.sin(phi1)*np.sin(phi)
     cosc += np.cos(phi1)*np.cos(phi)*np.cos(lamb-lamb0)
@@ -84,6 +84,22 @@ def proj_gnomonic(lamb, phi, lamb0, phi1):
     y /= cosc
 
     return x, y
+
+
+def proj_gnomonic_sphere(lamb0, phi, x, y):
+
+    rho = (x**2+y**2)**0.5
+    c = np.arctan(rho)
+    print('c', rho, c, np.rad2deg(c))
+    lamb = x*np.sin(c)
+    lamb /= (rho*np.cos(phi)*np.cos(c)-y*np.sin(phi)*np.sin(c))
+    lamb = lamb0+np.arctan(lamb)
+
+    phi1 = np.cos(c)*np.sin(phi)
+    phi1 += (y*np.sin(c)*np.cos(phi))/rho
+    phi1 = np.arcsin(phi1)
+
+    return lamb, phi1
 
 
 def renameFields(tab):
@@ -153,7 +169,7 @@ def season(obs, season_gap=80., mjdCol='observationStartMJD'):
     return obs
 
 
-def LSSTPointing(xc, yc, angle_rot=0., fov=9.6):
+def LSSTPointing(xc, yc, angle_rot=0., area=None, maxbound=None):
     """
     arr = [[3, 0], [12, 0], [12, 1], [13, 1], [13, 2], [14, 2], [14, 3], [15, 3],
            [15, 12], [14, 12], [14, 13], [13, 13], [
@@ -167,7 +183,9 @@ def LSSTPointing(xc, yc, angle_rot=0., fov=9.6):
 
     # this is a quarter of LSST FP (without corner rafts)
     arr = [[0.0, 7.5], [4.5, 7.5], [4.5, 4.5], [7.5, 4.5], [7.5, 0.0]]
-
+    if maxbound is not None:
+        arr = [[0.0, maxbound], [maxbound*4.5/7.5, maxbound], [maxbound*4.5 /
+                                                               7.5, maxbound*4.5/7.5], [maxbound, maxbound*4.5/7.5], [maxbound, 0.0]]
     # symmetry I: y -> -y
     arrcp = list(arr)
     for val in arr[::-1]:
@@ -181,14 +199,15 @@ def LSSTPointing(xc, yc, angle_rot=0., fov=9.6):
             arr.append([-val[0], val[1]])
 
     poly_orig = geometry.Polygon(arr)
-    reduced_poly = affinity.scale(poly_orig, xfact=np.sqrt(
-        fov/poly_orig.area), yfact=np.sqrt(fov/poly_orig.area))
+    if area is not None:
+        poly_orig = affinity.scale(poly_orig, xfact=np.sqrt(
+            area/poly_orig.area), yfact=np.sqrt(area/poly_orig.area))
 
-    rotated_poly = affinity.rotate(reduced_poly, angle_rot)
+    rotated_poly = affinity.rotate(poly_orig, angle_rot)
 
     return affinity.translate(rotated_poly,
-                              xoff=xc-reduced_poly.centroid.x,
-                              yoff=yc-reduced_poly.centroid.y)
+                              xoff=xc-rotated_poly.centroid.x,
+                              yoff=yc-rotated_poly.centroid.y)
 
 
 class ProcessArea:
@@ -200,6 +219,18 @@ class ProcessArea:
         self.widthDec = widthDec
         self.RaCol = RaCol
         self.DecCol = DecCol
+
+        # get the LSST focal plane scale factor
+        # corresponding to a sphere radius equal to one
+        # (which is the default for gnomonic projections here
+
+        fov = 9.62*(np.pi/180.)**2  # LSST fov in sr
+        theta = 2.*np.arcsin(np.sqrt(fov/(4.*np.pi)))
+
+        # if theta >= np.pi/2.:
+        #    theta -= np.pi/2.
+        print('theta', theta, np.rad2deg(theta))
+        self.fpscale = np.tan(theta)
 
     def process(self, data, metricList):
 
@@ -238,6 +269,13 @@ class ProcessArea:
         matched_pixels = groups.apply(
             lambda x: self.match(x, healpixIDs, pixRa, pixDec))
 
+        """
+        import matplotlib.pylab as plt
+        for name, group in groups:
+            fig, ax = plt.subplots()
+            self.match(group, healpixIDs, pixRa, pixDec, ax=ax)
+            plt.show()
+        """
         # process pixels with data
 
         for metric in metricList:
@@ -291,21 +329,39 @@ class ProcessArea:
         pRa_rad = np.deg2rad(pRa)
         pDec_rad = np.deg2rad(pDec)
 
-        # gnomonic projection of pixels
-        x, y = proj_gnomonic(pRa_rad, pDec_rad, pixRa_rad, pixDec_rad)
+        # gnomonic projection of pixels on the focal plane
+        x, y = proj_gnomonic_plane(pRa_rad, pDec_rad, pixRa_rad, pixDec_rad)
 
+        #print(x, y)
+        # get LSST FP with the good scale
+        fpnew = LSSTPointing(0., 0., maxbound=self.fpscale)
+
+        # print(shapely.vectorized.contains(
+        #    fpnew, x, y), self.fpscale, fpnew.area)
+
+        idf = shapely.vectorized.contains(fpnew, x, y)
+
+        if ax is not None:
+            ax.plot(x, y, 'ks')
+            pf = PolygonPatch(fpnew, facecolor=(0, 0, 0, 0), edgecolor='red')
+            ax.add_patch(pf)
+
+        """
         x = np.rad2deg(x)+pRa
         y = np.rad2deg(y)+pDec
 
         if ax is not None:
             ax.plot(x, y, 'ks')
         # points inside the focal plane
-        fp = LSSTPointing(pRa, pDec, 0.)
+        fp = LSSTPointing(pRa, pDec, area=9.6)
         idf = shapely.vectorized.contains(fp, x, y)
-        # print(idf)
+        print(idf)
+
+        print(test)
         if ax is not None:
             pf = PolygonPatch(fp, facecolor=(0, 0, 0, 0), edgecolor='red')
             ax.add_patch(pf)
+        """
         """
         if idf:
             grp = group.copy()
@@ -322,6 +378,7 @@ class ProcessArea:
         pixRa_matched = list(pixRa[idf])
         pixDec_matched = list(pixDec[idf])
         names = [grp.name]*len(pixID_matched)
+        #names = ['test']*len(pixID_matched)
         # return pd.Series([matched_pixels], ['healpixIDs'])
         return pd.DataFrame({'healpixID': pixID_matched,
                              'pixRa': pixRa_matched,
@@ -370,8 +427,8 @@ class ObsPixel:
             pRa_rad = np.deg2rad(pRa)
             pDec_rad = np.deg2rad(pDec)
 
-            # gnomonic projection of pixels
-            x, y = proj_gnomonic(pRa_rad, pDec_rad, np.deg2rad(
+            # gnomonic projection of pixels on the focal plane
+            x, y = proj_gnomonic_plane(pRa_rad, pDec_rad, np.deg2rad(
                 pixel['pixRa']), np.deg2rad(pixel['pixDec']))
 
             x = np.rad2deg(x)+pRa
@@ -435,7 +492,7 @@ class ObsPixel:
             pDec_rad = np.deg2rad(pDec)
 
             # gnomonic projection of pixels
-            x, y = proj_gnomonic(pRa_rad, pDec_rad, np.deg2rad(
+            x, y = proj_gnomonic_plane(pRa_rad, pDec_rad, np.deg2rad(
                 pixelsRa), np.deg2rad(pixelsDec))
 
             x = np.rad2deg(x)+pRa
@@ -721,7 +778,7 @@ class OverlapGnomonic:
         pRa_rad = np.deg2rad(pointing[0])
         pDec_rad = np.deg2rad(pointing[1])
 
-        x, y = proj_gnomonic(pRa_rad, pDec_rad, np.deg2rad(
+        x, y = proj_gnomonic_plane(pRa_rad, pDec_rad, np.deg2rad(
             pixelList['pixRa']), np.deg2rad(pixelList['pixDec']))
         x = np.rad2deg(x)+pRa
         y = np.rad2deg(y)+pDec
@@ -735,7 +792,7 @@ class OverlapGnomonic:
             # gnomonic proj
             pixRa_rad = np.deg2rad(pixRa)
             pixDec_rad = np.deg2rad(pixDec)
-            x, y = proj_gnomonic(
+            x, y = proj_gnomonic_plane(
                 pRa_rad, pDec_rad, np.deg2rad(pixRa), np.deg2rad(pixDec))
             # print('pixarea',poly.area,hp.nside2pixarea(self.nside,degrees=True))
             if ax is not None:
@@ -878,7 +935,7 @@ class GetOverlap:
                         overlap, fpRa, fpDec, val['pixRa']-fpRa, val['pixDec']-fpDec, pixArea))
 
         resrec = np.rec.fromrecords(res, names=[
-                                    'nside', 'healpixID', 'pixRa', 'pixDec', 'overlap', 'fpRa', 'fpDec', 'DRa', 'DDec', 'pixArea'])
+            'nside', 'healpixID', 'pixRa', 'pixDec', 'overlap', 'fpRa', 'fpDec', 'DRa', 'DDec', 'pixArea'])
 
         return resrec
 
