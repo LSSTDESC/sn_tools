@@ -166,6 +166,7 @@ def season(obs, season_gap=80., mjdCol='observationStartMJD'):
         obs = rf.append_fields(obs, 'season', seas)
     else:
         obs = rf.append_fields(obs, 'season', [1.]*len(obs))
+
     return obs
 
 
