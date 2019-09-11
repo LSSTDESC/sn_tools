@@ -43,7 +43,7 @@ def dataInside(data, Ra, Dec, widthRa, widthDec, RaCol='fieldRa', DecCol='fieldD
     else:
         if minRa < 0.:
             # in that case two areas necessary
-            areaList.append(area(minRa+360., 0.0, minDec, maxDec))
+            areaList.append(area(minRa+360., 360., minDec, maxDec))
             areaList.append(area(-1.e-8, maxRa, minDec, maxDec))
         else:
             areaList.append(area(minRa, maxRa, minDec, maxDec))
@@ -53,7 +53,7 @@ def dataInside(data, Ra, Dec, widthRa, widthDec, RaCol='fieldRa', DecCol='fieldD
                 pf = PolygonPatch(poly, facecolor=(
                     0, 0, 0, 0), edgecolor='red')
                 ax.add_patch(pf)
-            ax.plot(data['fieldRA'], data['fieldDec'], 'ko')
+            ax.plot(data[RaCol], data[DecCol], 'ko')
 
     # select data inside this area
     dataSel = None
