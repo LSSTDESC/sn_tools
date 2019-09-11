@@ -304,7 +304,7 @@ class ProcessArea:
             time_ref = time.time()
             for metric in metricList:
                 resdict[metric.name] = metric.run(
-                    season(dataPixel.to_records()))
+                    season(dataPixel.to_records(index=False)))
             print('Metrics run', time.time()-time_ref)
             for key in resfi.keys():
                 if resdict[key] is not None:
@@ -332,7 +332,7 @@ class ProcessArea:
         # gnomonic projection of pixels on the focal plane
         x, y = proj_gnomonic_plane(pRa_rad, pDec_rad, pixRa_rad, pixDec_rad)
 
-        #print(x, y)
+        # print(x, y)
         # get LSST FP with the good scale
         fpnew = LSSTPointing(0., 0., maxbound=self.fpscale)
 
@@ -378,7 +378,7 @@ class ProcessArea:
         pixRa_matched = list(pixRa[idf])
         pixDec_matched = list(pixDec[idf])
         names = [grp.name]*len(pixID_matched)
-        #names = ['test']*len(pixID_matched)
+        # names = ['test']*len(pixID_matched)
         # return pd.Series([matched_pixels], ['healpixIDs'])
         return pd.DataFrame({'healpixID': pixID_matched,
                              'pixRa': pixRa_matched,
