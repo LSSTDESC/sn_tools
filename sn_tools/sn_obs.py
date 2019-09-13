@@ -312,7 +312,8 @@ class ProcessArea:
                     if resfi[key] is None:
                         resfi[key] = resdict[key]
                     else:
-                        # print('vstack',key,resfi[key],resdict[key])
+                        # print('vstack', key,
+                        #      resfi[key].dtype, resdict[key].dtype)
                         # resfi[key] = np.vstack([resfi[key], resdict[key]])
                         resfi[key] = np.concatenate((resfi[key], resdict[key]))
 

@@ -289,7 +289,7 @@ class LCfast:
         m5_obs = np.ma.array(
             np.tile(sel_obs[self.m5Col], (nvals, 1)), mask=~flag)
         healpixIds = np.ma.array(
-            np.tile(sel_obs['healpixID'], (nvals, 1)), mask=~flag)
+            np.tile(sel_obs['healpixID'].astype(int), (nvals, 1)), mask=~flag)
 
         pixRas = np.ma.array(
             np.tile(sel_obs['pixRa'], (nvals, 1)), mask=~flag)
