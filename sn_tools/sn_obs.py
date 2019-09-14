@@ -15,6 +15,42 @@ import pandas as pd
 import time
 
 
+def pavingSky(ramin, ramax, decmin, decmax, radius):
+    """ Function to perform a paving of the sky
+
+    Parameters
+    --------------
+    ramin: float
+      min ra of the region to pave
+    ramax: float
+      max ra of the region to pave
+    decmin: float
+      min dec of the region to pave
+    decmax: float
+      max dec of the region to pave
+    radius: float
+      distance reference for the paving; correspond to the radius of a regular hexagon
+
+
+    Returns
+    -----------
+    tab: record array of the center position (Ra,Dec) and the radius
+    """
+    ramin = radius*np.sqrt(3.)/2.
+    decstep = 1.5*radius
+    rastep = radius*np.sqrt(3.)
+    shift = radius*np.sqrt(3.)/2.
+    decrefs = np.arange(decmax, decmin, -decstep)
+    r = []
+    for i in range(len(decrefs)):
+        shift_i = shift*(i % 2)
+        for ra in list(np.arange(ramin-shift_i, ramax, rastep)):
+            r.append((ra, decrefs[i], radius))
+
+    res = np.rec.fromrecords(r, names=['Ra', 'Dec', 'radius'])
+    return res
+
+
 def area(minRa, maxRa, minDec, maxDec, ax=None):
 
     poly = [[minRa, minDec], [minRa, maxDec], [maxRa, maxDec], [maxRa, minDec]]
@@ -230,20 +266,26 @@ class ProcessArea:
 
         # if theta >= np.pi/2.:
         #    theta -= np.pi/2.
-        print('theta', theta, np.rad2deg(theta))
+        #print('theta', theta, np.rad2deg(theta))
         self.fpscale = np.tan(theta)
 
     def process(self, data, metricList):
 
         resfi = {}
+        for metric in metricList:
+            resfi[metric.name] = None
         # select data inside the area
 
         # import matplotlib.pylab as plt
         # fig, ax = plt.subplots()
-        dataSel = dataInside(data, self.Ra, self.Dec, self.widthRa, self.widthDec,
+        dataSel = dataInside(data, self.Ra, self.Dec, self.widthRa+1., self.widthDec+1.,
                              RaCol=self.RaCol, DecCol=self.DecCol)
         # plt.show()
 
+        #print(self.Ra, self.Dec, self.RaCol, self.DecCol)
+        if dataSel is None:
+            # no data found in this area
+            return resfi
         print(len(dataSel), dataSel.dtype, self.RaCol, self.DecCol)
 
         # mv to panda df
@@ -278,9 +320,6 @@ class ProcessArea:
             plt.show()
         """
         # process pixels with data
-
-        for metric in metricList:
-            resfi[metric.name] = None
 
         for healpixID in matched_pixels['healpixID'].unique():
             ib = matched_pixels['healpixID'] == healpixID
@@ -579,9 +618,9 @@ class ObsPixel:
         if len(res) == 0:
             return None
         """
-        res = rf.append_fields(res,'healpixID',[pixid]*len(res))
-        res = rf.append_fields(res,'pixRa',[pixRA]*len(res))
-        res = rf.append_fields(res,'pixDec',[pixDec]*len(res))
+        res = rf.append_fields(res, 'healpixID', [pixid]*len(res))
+        res = rf.append_fields(res, 'pixRa', [pixRA]*len(res))
+        res = rf.append_fields(res, 'pixDec', [pixDec]*len(res))
         """
         return res
 
