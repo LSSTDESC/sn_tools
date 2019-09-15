@@ -36,7 +36,7 @@ def pavingSky(ramin, ramax, decmin, decmax, radius):
     -----------
     tab: record array of the center position (Ra,Dec) and the radius
     """
-    ramin = radius*np.sqrt(3.)/2.
+    ramin = ramin+radius*np.sqrt(3.)/2.
     decstep = 1.5*radius
     rastep = radius*np.sqrt(3.)
     shift = radius*np.sqrt(3.)/2.
