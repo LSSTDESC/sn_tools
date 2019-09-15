@@ -445,7 +445,8 @@ class CalcSN:
 
 
 class CalcSN_df:
-    def __init__(self, lc_all, params=['x0', 'x1', 'daymax', 'color']):
+    def __init__(self, lc_all, N_bef=4, N_aft=10, snr_min=5, N_phase_min=1,
+                 N_phase_max=1, params=['x0', 'x1', 'daymax', 'color']):
 
         # select only fields involved in the calculation
         # this would save some memory
@@ -466,9 +467,12 @@ class CalcSN_df:
 
         # LC selection
 
-        lc.loc[:, 'N_aft'] = (np.sign(lc['phase']) == 1) & (lc['snr_m5'] >= 5.)
+        lc.loc[:, 'N_aft'] = (np.sign(lc['phase']) == 1) & (
+            lc['snr_m5'] >= snr_min)
         lc.loc[:, 'N_bef'] = (np.sign(lc['phase']) == -
-                              1) & (lc['snr_m5'] >= 5.)
+                              1) & (lc['snr_m5'] >= snr_min)
+        #lc.loc[:, 'N_aft'] = (np.sign(lc['phase']) == 1)
+        #lc.loc[:, 'N_bef'] = (np.sign(lc['phase']) == -1)
         #lc.loc[:,'N_phmin'] = (lc['phase']<=-5.)&(lc['snr_m5']>=5.)
         #lc.loc[:,'N_phmax'] = (lc['phase']>=20)&(lc['snr_m5']>=5.)
         lc.loc[:, 'N_phmin'] = (lc['phase'] <= -5.)
@@ -483,10 +487,10 @@ class CalcSN_df:
         sums = lc.groupby(['x1', 'color', 'season', 'healpixID',
                            'pixRa', 'pixDec', 'z', 'daymax'])[tosum].sum()
 
-        idx = sums['N_aft'] >= 10
-        idx &= sums['N_bef'] >= 5
-        idx &= sums['N_phmin'] >= 1
-        idx &= sums['N_phmax'] >= 1
+        idx = sums['N_aft'] >= N_aft
+        idx &= sums['N_bef'] >= N_bef
+        idx &= sums['N_phmin'] >= N_phase_min
+        idx &= sums['N_phmax'] >= N_phase_max
         #idx &= sums['F_colorcolor']>=1.e-8
 
         goodsn = sums.loc[idx]
