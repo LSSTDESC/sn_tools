@@ -13,7 +13,8 @@ from matplotlib.patches import Polygon
 from shapely.geometry import Point
 import pandas as pd
 import time
-
+import h5py
+from astropy.table import Table
 
 def pavingSky(ramin, ramax, decmin, decmax, radius):
     """ Function to perform a paving of the sky
@@ -248,14 +249,21 @@ def LSSTPointing(xc, yc, angle_rot=0., area=None, maxbound=None):
 
 
 class ProcessArea:
-    def __init__(self, nside, Ra, Dec, widthRa, widthDec, RaCol, DecCol):
+    def __init__(self, nside, RaCol, DecCol, num, outDir,dbName):
         self.nside = nside
+        """
         self.Ra = Ra
         self.Dec = Dec
         self.widthRa = widthRa
         self.widthDec = widthDec
+        """
         self.RaCol = RaCol
         self.DecCol = DecCol
+        self.num = num
+        self.outDir = outDir
+       
+
+        self.dbName = dbName
 
         # get the LSST focal plane scale factor
         # corresponding to a sphere radius equal to one
@@ -269,7 +277,7 @@ class ProcessArea:
         #print('theta', theta, np.rad2deg(theta))
         self.fpscale = np.tan(theta)
 
-    def process(self, data, metricList):
+    def __call__(self, data, metricList, Ra, Dec, widthRa, widthDec,ipoint):
 
         resfi = {}
         for metric in metricList:
@@ -278,85 +286,99 @@ class ProcessArea:
 
         # import matplotlib.pylab as plt
         # fig, ax = plt.subplots()
-        dataSel = dataInside(data, self.Ra, self.Dec, self.widthRa+1., self.widthDec+1.,
+        dataSel = dataInside(data, Ra, Dec, widthRa+1., widthDec+1.,
                              RaCol=self.RaCol, DecCol=self.DecCol)
         # plt.show()
 
         #print(self.Ra, self.Dec, self.RaCol, self.DecCol)
-        if dataSel is None:
-            # no data found in this area
-            return resfi
-        print(len(dataSel), dataSel.dtype, self.RaCol, self.DecCol)
+        if dataSel is not None:
+                
+            #print(len(dataSel), dataSel.dtype, self.RaCol, self.DecCol)
+            
+            # mv to panda df
+            dataset = pd.DataFrame(np.copy(dataSel))
 
-        # mv to panda df
-        dataset = pd.DataFrame(np.copy(dataSel))
+            # make groups by (Ra,dec)
+            groups = dataset.groupby([self.RaCol, self.DecCol])
+            #print('group size', np.unique(groups.size()))
+            # get central pixel ID
+            healpixID = hp.ang2pix(self.nside, Ra,
+                                   Dec, nest=True, lonlat=True)
 
-        # make groups by (Ra,dec)
-        groups = dataset.groupby([self.RaCol, self.DecCol])
-        print('group size', np.unique(groups.size()))
-        # get central pixel ID
-        healpixID = hp.ang2pix(self.nside, self.Ra,
-                               self.Dec, nest=True, lonlat=True)
+            # get nearby pixels
+            # print(Ra, Dec, np.deg2rad(Ra), np.deg2rad(Dec))
+            vec = hp.pix2vec(self.nside, healpixID, nest=True)
+            healpixIDs = hp.query_disc(
+                self.nside, vec, np.deg2rad(widthRa), inclusive=False, nest=True)
 
-        # get nearby pixels
-        # print(Ra, Dec, np.deg2rad(Ra), np.deg2rad(Dec))
-        vec = hp.pix2vec(self.nside, healpixID, nest=True)
-        healpixIDs = hp.query_disc(
-            self.nside, vec, np.deg2rad(self.widthRa), inclusive=False, nest=True)
+            # get pixel coordinates
+            coords = hp.pix2ang(self.nside, healpixIDs, nest=True, lonlat=True)
+            pixRa, pixDec = coords[0], coords[1]
 
-        # get pixel coordinates
-        coords = hp.pix2ang(self.nside, healpixIDs, nest=True, lonlat=True)
-        pixRa, pixDec = coords[0], coords[1]
+            # match pixels to data
+            matched_pixels = groups.apply(
+                lambda x: self.match(x, healpixIDs, pixRa, pixDec))
 
-        # match pixels to data
-        matched_pixels = groups.apply(
-            lambda x: self.match(x, healpixIDs, pixRa, pixDec))
-
-        """
-        import matplotlib.pylab as plt
-        for name, group in groups:
+            """
+            import matplotlib.pylab as plt
+            for name, group in groups:
             fig, ax = plt.subplots()
             self.match(group, healpixIDs, pixRa, pixDec, ax=ax)
             plt.show()
-        """
-        # process pixels with data
+            """
+            # process pixels with data
+        
+            for healpixID in matched_pixels['healpixID'].unique():
+                ib = matched_pixels['healpixID'] == healpixID
+                thematch = matched_pixels.loc[ib].copy()
 
-        for healpixID in matched_pixels['healpixID'].unique():
-            ib = matched_pixels['healpixID'] == healpixID
-            thematch = matched_pixels.loc[ib].copy()
+                grnames = [grname for grname in thematch['groupName']]
 
-            grnames = [grname for grname in thematch['groupName']]
+                dataPixel = pd.concat([groups.get_group(grname)
+                                       for grname in grnames])
 
-            dataPixel = pd.concat([groups.get_group(grname)
-                                   for grname in grnames])
+                pixRa = thematch['pixRa'].unique()
+                pixDec = thematch['pixDec'].unique()
+                #print('there', healpixID, pixRa, pixDec)
 
-            pixRa = thematch['pixRa'].unique()
-            pixDec = thematch['pixDec'].unique()
-            print('there', healpixID, pixRa, pixDec)
+                dataPixel.loc[:, 'healpixID'] = healpixID
+                dataPixel.loc[:, 'pixRa'] = pixRa[0]
+                dataPixel.loc[:, 'pixDec'] = pixDec[0]
 
-            dataPixel.loc[:, 'healpixID'] = healpixID
-            dataPixel.loc[:, 'pixRa'] = pixRa[0]
-            dataPixel.loc[:, 'pixDec'] = pixDec[0]
+                #print(len(thematch), len(dataPixel))
 
-            print(len(thematch), len(dataPixel))
+                resdict = {}
+                time_ref = time.time()
+                for metric in metricList:
+                    resdict[metric.name] = metric.run(
+                        season(dataPixel.to_records(index=False)))
+                #print('Metrics run', time.time()-time_ref)
+                for key in resfi.keys():
+                    if resdict[key] is not None:
+                        if resfi[key] is None:
+                            resfi[key] = resdict[key]
+                        else:
+                            # print('vstack', key,
+                            #      resfi[key].dtype, resdict[key].dtype)
+                            # resfi[key] = np.vstack([resfi[key], resdict[key]])
+                            resfi[key] = np.concatenate((resfi[key], resdict[key]))
 
-            resdict = {}
-            time_ref = time.time()
-            for metric in metricList:
-                resdict[metric.name] = metric.run(
-                    season(dataPixel.to_records(index=False)))
-            print('Metrics run', time.time()-time_ref)
-            for key in resfi.keys():
-                if resdict[key] is not None:
-                    if resfi[key] is None:
-                        resfi[key] = resdict[key]
-                    else:
-                        # print('vstack', key,
-                        #      resfi[key].dtype, resdict[key].dtype)
-                        # resfi[key] = np.vstack([resfi[key], resdict[key]])
-                        resfi[key] = np.concatenate((resfi[key], resdict[key]))
+        # dump the result to disk (hdf file)
+        
+        
+        for key, vals in resfi.items():
+            if vals is not None:
+                outName = '{}/{}_{}_{}.hdf5'.format(self.outDir,self.dbName,key,self.num)
+                df = pd.DataFrame(vals)
+                #tab.meta = dict(zip(['Ra','Dec','witdhRa','widthDec'],[Ra,Dec,widthRa,widthDec]))
+                #tab.write(outName, 'metric_{}_{}'.format(np.round(Ra,3),np.round(Dec,3)),append=True,compression=True)
+                #keyhdf =  'metric_{}_{}_{}'.format(np.round(Ra,3),np.round(Dec,3),np.round(widthRa,1)) 
+                keyhdf =  'metric_{}_{}'.format(self.num,ipoint)
+                
+                df.to_hdf(outName,key=keyhdf,mode='a',complevel=9)
 
-        return resfi
+
+        #return resfi
 
     def match(self, grp, healpixIDs, pixRa, pixDec, ax=None):
 
