@@ -43,6 +43,7 @@ def pavingSky(ramin, ramax, decmin, decmax, radius):
     shift = radius*np.sqrt(3.)/2.
     decrefs = np.arange(decmax, decmin, -decstep)
     r = []
+    # this is to pave the sky loopin on Ra, same Dec
     for i in range(len(decrefs)):
         shift_i = shift*(i % 2)
         for ra in list(np.arange(ramin-shift_i, ramax, rastep)):
@@ -54,13 +55,18 @@ def pavingSky(ramin, ramax, decmin, decmax, radius):
 
 def area(minRa, maxRa, minDec, maxDec, ax=None):
 
+    return dict(zip(['minRa', 'maxRa', 'minDec', 'maxDec'],[minRa, maxRa, minDec, maxDec]))
+
+def areap(minRa, maxRa, minDec, maxDec, ax=None):
+
     poly = [[minRa, minDec], [minRa, maxDec], [maxRa, maxDec], [maxRa, minDec]]
 
     return geometry.Polygon(poly)
 
-
 def dataInside(data, Ra, Dec, widthRa, widthDec, RaCol='fieldRa', DecCol='fieldDec', ax=None):
 
+
+    #time_ref = time.time()
     minRa = Ra-widthRa
     maxRa = Ra+widthRa
 
@@ -72,27 +78,35 @@ def dataInside(data, Ra, Dec, widthRa, widthDec, RaCol='fieldRa', DecCol='fieldD
     # special treatement near Ra~0
 
     areaList = []
+    #areapList = []
 
     if maxRa >= 360.:
         # in that case two areas necessary
         areaList.append(area(minRa, 0.0, minDec, maxDec))
         areaList.append(area(0.0, maxRa-360., minDec, maxDec))
+        #areapList.append(areap(minRa, 0.0, minDec, maxDec))
+        #areapList.append(areap(0.0, maxRa-360., minDec, maxDec))
     else:
         if minRa < 0.:
             # in that case two areas necessary
             areaList.append(area(minRa+360., 360., minDec, maxDec))
             areaList.append(area(-1.e-8, maxRa, minDec, maxDec))
+            #areapList.append(areap(minRa+360., 360., minDec, maxDec))
+            #areapList.append(areap(-1.e-8, maxRa, minDec, maxDec))
         else:
             areaList.append(area(minRa, maxRa, minDec, maxDec))
-
-        if ax is not None:
-            for poly in areaList:
-                pf = PolygonPatch(poly, facecolor=(
-                    0, 0, 0, 0), edgecolor='red')
-                ax.add_patch(pf)
-            ax.plot(data[RaCol], data[DecCol], 'ko')
+            #areapList.append(areap(minRa, maxRa, minDec, maxDec))
+    #print('dti a',time.time()-time_ref)
+    #time_ref = time.time()
+    if ax is not None:
+        for poly in areaList:
+            pf = PolygonPatch(poly, facecolor=(
+                0, 0, 0, 0), edgecolor='red')
+            ax.add_patch(pf)
+        ax.plot(data[RaCol], data[DecCol], 'ko')
 
     # select data inside this area
+    """
     dataSel = None
     x = data[RaCol]
     y = data[DecCol]
@@ -103,7 +117,21 @@ def dataInside(data, Ra, Dec, widthRa, widthDec, RaCol='fieldRa', DecCol='fieldD
                 dataSel = data[idf]
             else:
                 dataSel = np.concatenate((dataSel, data[idf]))
+    print('dti b',time.time()-time_ref)
+    """
+    #time_ref = time.time()
 
+    dataSel = None
+    for areal in areaList:
+        idf = (data[RaCol]>=areal['minRa'])&(data[RaCol]<=areal['maxRa']) 
+        idf &= (data[DecCol]>=areal['minDec'])&(data[DecCol]<=areal['maxDec']) 
+        if len(data[idf]) > 0.:
+            if dataSel is None:
+                dataSel = data[idf]
+            else:
+                dataSel = np.concatenate((dataSel, data[idf]))
+            
+    #print('dti c',time.time()-time_ref,dataSel)
     return dataSel
 
 
@@ -293,6 +321,7 @@ class ProcessArea:
         #print(self.Ra, self.Dec, self.RaCol, self.DecCol)
         if dataSel is not None:
                 
+            
             #print(len(dataSel), dataSel.dtype, self.RaCol, self.DecCol)
             
             # mv to panda df
@@ -376,8 +405,8 @@ class ProcessArea:
                 keyhdf =  'metric_{}_{}'.format(self.num,ipoint)
                 
                 df.to_hdf(outName,key=keyhdf,mode='a',complevel=9)
-
-
+        
+        
         #return resfi
 
     def match(self, grp, healpixIDs, pixRa, pixDec, ax=None):
