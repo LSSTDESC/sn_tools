@@ -277,7 +277,7 @@ def LSSTPointing(xc, yc, angle_rot=0., area=None, maxbound=None):
 
 
 class ProcessArea:
-    def __init__(self, nside, RaCol, DecCol, num, outDir,dbName):
+    def __init__(self, nside, RaCol, DecCol, num, outDir,dbName,saveData):
         self.nside = nside
         """
         self.Ra = Ra
@@ -292,6 +292,7 @@ class ProcessArea:
        
 
         self.dbName = dbName
+        self.saveData = saveData
 
         # get the LSST focal plane scale factor
         # corresponding to a sphere radius equal to one
@@ -394,17 +395,17 @@ class ProcessArea:
 
         # dump the result to disk (hdf file)
         
-        
-        for key, vals in resfi.items():
-            if vals is not None:
-                outName = '{}/{}_{}_{}.hdf5'.format(self.outDir,self.dbName,key,self.num)
-                df = pd.DataFrame(vals)
-                #tab.meta = dict(zip(['Ra','Dec','witdhRa','widthDec'],[Ra,Dec,widthRa,widthDec]))
-                #tab.write(outName, 'metric_{}_{}'.format(np.round(Ra,3),np.round(Dec,3)),append=True,compression=True)
-                #keyhdf =  'metric_{}_{}_{}'.format(np.round(Ra,3),np.round(Dec,3),np.round(widthRa,1)) 
-                keyhdf =  'metric_{}_{}'.format(self.num,ipoint)
+        if self.saveData:
+            for key, vals in resfi.items():
+                if vals is not None:
+                    outName = '{}/{}_{}_{}.hdf5'.format(self.outDir,self.dbName,key,self.num)
+                    df = pd.DataFrame(vals)
+                    #tab.meta = dict(zip(['Ra','Dec','witdhRa','widthDec'],[Ra,Dec,widthRa,widthDec]))
+                    #tab.write(outName, 'metric_{}_{}'.format(np.round(Ra,3),np.round(Dec,3)),append=True,compression=True)
+                    #keyhdf =  'metric_{}_{}_{}'.format(np.round(Ra,3),np.round(Dec,3),np.round(widthRa,1)) 
+                    keyhdf =  'metric_{}_{}'.format(self.num,ipoint)
                 
-                df.to_hdf(outName,key=keyhdf,mode='a',complevel=9)
+                    df.to_hdf(outName,key=keyhdf,mode='a',complevel=9)
         
         
         #return resfi
