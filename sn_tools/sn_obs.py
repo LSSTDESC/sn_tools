@@ -124,14 +124,16 @@ def dataInside(data, Ra, Dec, widthRa, widthDec, RaCol='fieldRa', DecCol='fieldD
     dataSel = None
     for areal in areaList:
         idf = (data[RaCol]>=areal['minRa'])&(data[RaCol]<=areal['maxRa']) 
-        idf &= (data[DecCol]>=areal['minDec'])&(data[DecCol]<=areal['maxDec']) 
+        idf &= (data[DecCol]>=areal['minDec'])&(data[DecCol]<=areal['maxDec'])
         if len(data[idf]) > 0.:
             if dataSel is None:
                 dataSel = data[idf]
             else:
                 dataSel = np.concatenate((dataSel, data[idf]))
-            
+
+    #print('datasel',areaList,dataSel)
     #print('dti c',time.time()-time_ref,dataSel)
+    
     return dataSel
 
 
@@ -306,19 +308,50 @@ class ProcessArea:
         #print('theta', theta, np.rad2deg(theta))
         self.fpscale = np.tan(theta)
 
-    def __call__(self, data, metricList, Ra, Dec, widthRa, widthDec,ipoint):
+    def __call__(self, data, metricList, Ra, Dec, widthRa, widthDec,ipoint,nodither,display=False):
 
         resfi = {}
         for metric in metricList:
             resfi[metric.name] = None
         # select data inside the area
+        
+        if display:
+            import matplotlib.pylab as plt
+            fig, ax = plt.subplots()
+            ax.plot(data[self.RaCol],data[self.DecCol],'ko')
+            plt.show()
+        
+        #dataSel = dataInside(data, Ra, Dec, widthRa+1., widthDec+1.,
+        #                     RaCol=self.RaCol, DecCol=self.DecCol)
 
-        # import matplotlib.pylab as plt
-        # fig, ax = plt.subplots()
-        dataSel = dataInside(data, Ra, Dec, widthRa+1., widthDec+1.,
+        dataSel = dataInside(data, Ra, Dec, 1., 1.,
                              RaCol=self.RaCol, DecCol=self.DecCol)
-        # plt.show()
+        
+        #dataSel = dataSel[:10]
+        #print(dataSel.dtype)
+        #idt = dataSel['filter'] == 'r'
+        #print(dataSel[idt][[self.RaCol,self.DecCol,'filter','night','observationId']])
 
+        if display:
+            import matplotlib.pylab as plt
+            fig, ax = plt.subplots()
+            ax.plot(dataSel[self.RaCol],dataSel[self.DecCol],'ko')
+            plt.show()
+
+
+        #Remove DD dithering here
+        # This is just to make a test
+
+        if nodither != '':
+            dataSel[self.RaCol] = np.mean(dataSel[self.RaCol])
+            dataSel[self.DecCol] = np.mean(dataSel[self.DecCol])
+
+
+        """
+        print('selection',dataSel,Ra,Dec)
+        plt.plot(dataSel[self.RaCol],dataSel[self.DecCol],'ko')
+        plt.show()
+        """
         #print(self.Ra, self.Dec, self.RaCol, self.DecCol)
         if dataSel is not None:
                 
@@ -328,8 +361,7 @@ class ProcessArea:
             # mv to panda df
             dataset = pd.DataFrame(np.copy(dataSel))
 
-            # make groups by (Ra,dec)
-            groups = dataset.groupby([self.RaCol, self.DecCol])
+           
             #print('group size', np.unique(groups.size()))
             # get central pixel ID
             healpixID = hp.ang2pix(self.nside, Ra,
@@ -345,28 +377,48 @@ class ProcessArea:
             coords = hp.pix2ang(self.nside, healpixIDs, nest=True, lonlat=True)
             pixRa, pixDec = coords[0], coords[1]
 
-            # match pixels to data
+            if display:
+                print('number of pixels here',len(pixRa))
+                import matplotlib.pyplot as plt
+                plt.plot(pixRa,pixDec,'ko')
+                plt.show()
+            
+            # make groups by (Ra,dec)
+            dataset = dataset.round({self.RaCol: 4,self.DecCol: 4}) 
+            groups = dataset.groupby([self.RaCol, self.DecCol])
+            
+
+
+            if display:
+                import matplotlib.pylab as plt
+                for name, group in groups:
+                    fig, ax = plt.subplots()
+                    self.match(group, healpixIDs, pixRa, pixDec, name,ax=ax)
+                    #ax.plot(dataset[self.RaCol],dataset[self.DecCol],'bs',mfc='None')
+                    plt.show()
+            
+            # process pixels with data
+             # match pixels to data
             matched_pixels = groups.apply(
                 lambda x: self.match(x, healpixIDs, pixRa, pixDec))
 
-            """
-            import matplotlib.pylab as plt
-            for name, group in groups:
-            fig, ax = plt.subplots()
-            self.match(group, healpixIDs, pixRa, pixDec, ax=ax)
-            plt.show()
-            """
-            # process pixels with data
-        
+            #print('number of pixels',len(matched_pixels['healpixID'].unique()))
+            ipix = -1
+            isave = -1
             for healpixID in matched_pixels['healpixID'].unique():
+                #print('hello',healpixID)
+                ipix += 1
+                time_ref = time.time()
                 ib = matched_pixels['healpixID'] == healpixID
                 thematch = matched_pixels.loc[ib].copy()
+                
 
                 grnames = [grname for grname in thematch['groupName']]
 
                 dataPixel = pd.concat([groups.get_group(grname)
                                        for grname in grnames])
 
+                #print(dataPixel[[self.RaCol,self.DecCol,'filter']])
                 pixRa = thematch['pixRa'].unique()
                 pixDec = thematch['pixDec'].unique()
                 #print('there', healpixID, pixRa, pixDec)
@@ -376,13 +428,29 @@ class ProcessArea:
                 dataPixel.loc[:, 'pixDec'] = pixDec[0]
 
                 #print(len(thematch), len(dataPixel))
-
+                
+                
                 resdict = {}
                 time_ref = time.time()
+                
                 for metric in metricList:
                     resdict[metric.name] = metric.run(
                         season(dataPixel.to_records(index=False)))
-                #print('Metrics run', time.time()-time_ref)
+
+                #print(test)
+                
+                    #print('Metrics run', time.time()-time_ref,resdict[metric.name])
+                """
+                if self.saveData:
+                    for key, vals in resdict.items():
+                        if vals is not None:
+                            outName = '{}/{}{}_{}_{}.hdf5'.format(self.outDir,self.dbName,nodither,key,self.num)
+                            df = pd.DataFrame(vals)
+                            keyhdf =  'metric_{}_{}_{}'.format(self.num,ipoint,int(healpixID))
+                
+                            df.to_hdf(outName,key=keyhdf,mode='a',complevel=9)
+                """
+                
                 for key in resfi.keys():
                     if resdict[key] is not None:
                         if resfi[key] is None:
@@ -391,26 +459,52 @@ class ProcessArea:
                             # print('vstack', key,
                             #      resfi[key].dtype, resdict[key].dtype)
                             # resfi[key] = np.vstack([resfi[key], resdict[key]])
+                            #print('here pal',resfi[key], resdict[key])
                             resfi[key] = np.concatenate((resfi[key], resdict[key]))
+                # from time to time: dump data
+                if ipix >= 10:
+                    if self.saveData:
+                        print('dumping',ipix)
+                        #print(resfi)
+                        isave += 1
+                        self.dump(resfi,nodither,key,ipoint,isave)
+                        resfi = {}
+                        for metric in metricList:
+                            resfi[metric.name] = None
+                        ipix = -1
 
-        # dump the result to disk (hdf file)
+            if ipix != -1:
+                if self.saveData:
+                    isave += 1
+                    self.dump(resfi,nodither,key,ipoint,isave)
+
+      
+
+    def dump(self,resfi,nodither,key,ipoint,isave):
+
+        outName = '{}/{}{}_{}_{}.hdf5'.format(self.outDir,self.dbName,nodither,key,self.num)
         
-        if self.saveData:
-            for key, vals in resfi.items():
+        for key, vals in resfi.items():
                 if vals is not None:
-                    outName = '{}/{}_{}_{}.hdf5'.format(self.outDir,self.dbName,key,self.num)
-                    df = pd.DataFrame(vals)
-                    #tab.meta = dict(zip(['Ra','Dec','witdhRa','widthDec'],[Ra,Dec,widthRa,widthDec]))
-                    #tab.write(outName, 'metric_{}_{}'.format(np.round(Ra,3),np.round(Dec,3)),append=True,compression=True)
-                    #keyhdf =  'metric_{}_{}_{}'.format(np.round(Ra,3),np.round(Dec,3),np.round(widthRa,1)) 
-                    keyhdf =  'metric_{}_{}'.format(self.num,ipoint)
-                
-                    df.to_hdf(outName,key=keyhdf,mode='a',complevel=9)
-        
-        
-        #return resfi
-
-    def match(self, grp, healpixIDs, pixRa, pixDec, ax=None):
+                    #print(vals)
+                    #print(vals.dtype)
+                    #df = pd.DataFrame.from_records(vals)
+                    keyhdf =  'metric_{}_{}_{}'.format(self.num,ipoint,isave)
+                    #print('here',df)
+                    #with pd.HDFStore(outName) as store:
+                    #    store.append('df', df, data_columns= True)
+                    #df.to_hdf(outName,key=keyhdf,mode='a',complevel=9)
+                    #df.to_hdf(outName,keyhdf,append=True)
+                    #store = pd.io.pytables.HDFStore(outName)
+                    #store[keyhdf] = df
+                    #with pd.get_store(outName) as store:
+                    #    store.append('foo',df)
+                    # little trick here because of astropy table string format pb
+                    # when converted from numpy array
+                    df = pd.DataFrame.from_records(vals)
+                    tab = Table.from_pandas(df)
+                    tab.write(outName,keyhdf,append=True,compression=True)
+    def match(self, grp, healpixIDs, pixRa, pixDec,name=None,ax=None):
 
         # print('hello', grp.columns)
         pixRa_rad = np.deg2rad(pixRa)
@@ -427,18 +521,19 @@ class ProcessArea:
 
         # print(x, y)
         # get LSST FP with the good scale
-        fpnew = LSSTPointing(0., 0., maxbound=self.fpscale)
+        fpnew = LSSTPointing(0.,0., maxbound=self.fpscale)
 
         # print(shapely.vectorized.contains(
         #    fpnew, x, y), self.fpscale, fpnew.area)
 
         idf = shapely.vectorized.contains(fpnew, x, y)
 
+        """
         if ax is not None:
             ax.plot(x, y, 'ks')
             pf = PolygonPatch(fpnew, facecolor=(0, 0, 0, 0), edgecolor='red')
             ax.add_patch(pf)
-
+        """
         """
         x = np.rad2deg(x)+pRa
         y = np.rad2deg(y)+pDec
@@ -467,10 +562,24 @@ class ProcessArea:
         matched_pixels.iloc[:, 'grname'] = grp.name
         """
 
+
         pixID_matched = list(healpixIDs[idf])
         pixRa_matched = list(pixRa[idf])
         pixDec_matched = list(pixDec[idf])
-        names = [grp.name]*len(pixID_matched)
+       
+        if ax is not None:
+            ax.plot(pixRa,pixDec,'ko',mfc='None')
+            ax.plot(pixRa[idf],pixDec[idf],'r*')
+            fpnew = LSSTPointing(pRa,pDec, area=9.6)
+            pf = PolygonPatch(fpnew, facecolor=(0, 0, 0, 0), edgecolor='red')
+            ax.add_patch(pf)
+            print('matching',grp[self.RaCol,self.DecCol,'filter'],pixID_matched,len(pixID_matched),pixRa_matched,pixDec_matched)
+
+
+        if name is not None:
+            names = [name]*len(pixID_matched)
+        else:
+            names = [grp.name]*len(pixID_matched)
         # names = ['test']*len(pixID_matched)
         # return pd.Series([matched_pixels], ['healpixIDs'])
         return pd.DataFrame({'healpixID': pixID_matched,

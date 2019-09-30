@@ -52,7 +52,8 @@ def loadFile(filename, objtype='pandasDataFrame'):
             f = h5py.File(filename, 'r')
             # get the keys
             keys = f.keys()
-            res = pd.DataFrame()
+            if objtype == 'pandasDataFrame':
+                res = pd.DataFrame()
             if objtype == 'astropyTable':
                 res = Table()
 
@@ -63,7 +64,7 @@ def loadFile(filename, objtype='pandasDataFrame'):
                     df = pd.read_hdf(filename, key=kk, mode='r')
                     res = pd.concat([res,df],sort=False)
                 if objtype == 'astropyTable':
-                    df = Table.read(fname, key=kk)
+                    df = Table.read(filename, path=kk)
                     res = vstack([res,df])
             return res
         else:
@@ -91,7 +92,7 @@ def loopStack(namelist,objtype='pandasDataFrame'):
                 res = tab
             else:
                 res = np.concatenate((res,tab))    
-
+                
     return res
 
 def convert_DF_npy(namelist):
