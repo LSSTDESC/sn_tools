@@ -538,8 +538,8 @@ class LCfast:
 
         nvals = len(phases)
 
-        #obs_time = np.ma.array(
-        #    np.tile(sel_obs[self.mjdCol], (nvals, 1)), mask=~flag)
+        obs_time = np.ma.array(
+            np.tile(sel_obs[self.mjdCol], (nvals, 1)), mask=~flag)
         seasons = np.ma.array(
             np.tile(sel_obs[self.seasonCol], (nvals, 1)), mask=~flag)
         #exp_time = np.ma.array(
@@ -572,10 +572,11 @@ class LCfast:
 
         if ndata > 0:
 
-            #lc['flux'] = fluxes[~fluxes.mask]
+            lc['flux'] = fluxes[~fluxes.mask]
             lc['fluxerr'] = fluxes_err[~fluxes_err.mask]
             lc['phase'] = phases[~phases.mask]
             lc['snr_m5'] = snr_m5[~snr_m5.mask]
+            lc['time'] = obs_time[~obs_time.mask]
             """
             lc['m5'] = m5_obs[~m5_obs.mask]
             lc['mag'] = mag_obs[~mag_obs.mask]
