@@ -321,11 +321,11 @@ class ProcessArea:
             ax.plot(data[self.RaCol],data[self.DecCol],'ko')
             plt.show()
         
-        #dataSel = dataInside(data, Ra, Dec, widthRa+1., widthDec+1.,
-        #                     RaCol=self.RaCol, DecCol=self.DecCol)
-
-        dataSel = dataInside(data, Ra, Dec, 1., 1.,
+        dataSel = dataInside(data, Ra, Dec, widthRa+1., widthDec+1.,
                              RaCol=self.RaCol, DecCol=self.DecCol)
+
+        #dataSel = dataInside(data, Ra, Dec, 1., 1.,
+        #                     RaCol=self.RaCol, DecCol=self.DecCol)
         
         #dataSel = dataSel[:10]
         #print(dataSel.dtype)
@@ -460,14 +460,17 @@ class ProcessArea:
                             #      resfi[key].dtype, resdict[key].dtype)
                             # resfi[key] = np.vstack([resfi[key], resdict[key]])
                             #print('here pal',resfi[key], resdict[key])
+                            #print('here pal',resdict[key])
                             resfi[key] = np.concatenate((resfi[key], resdict[key]))
                 # from time to time: dump data
                 if ipix >= 10:
                     if self.saveData:
-                        print('dumping',ipix)
+                        #print('dumping',ipix)
                         #print(resfi)
                         isave += 1
-                        self.dump(resfi,nodither,key,ipoint,isave)
+                        for key, vals in resfi.items():
+                            if vals is not None:
+                                self.dump(vals,nodither,key,ipoint,isave)
                         resfi = {}
                         for metric in metricList:
                             resfi[metric.name] = None
@@ -476,11 +479,22 @@ class ProcessArea:
             if ipix != -1:
                 if self.saveData:
                     isave += 1
-                    self.dump(resfi,nodither,key,ipoint,isave)
+                    for key, vals in resfi.items():
+                        if vals is not None:
+                            self.dump(vals,nodither,key,ipoint,isave)
 
       
 
     def dump(self,resfi,nodither,key,ipoint,isave):
+        
+        outName = '{}/{}{}_{}_{}.hdf5'.format(self.outDir,self.dbName,nodither,key,self.num)
+
+        df = pd.DataFrame.from_records(resfi)
+        tab = Table.from_pandas(df)
+        keyhdf =  'metric_{}_{}_{}'.format(self.num,ipoint,isave)
+        tab.write(outName,keyhdf,append=True,compression=True)
+
+    def dump_old(self,resfi,nodither,key,ipoint,isave):
 
         outName = '{}/{}{}_{}_{}.hdf5'.format(self.outDir,self.dbName,nodither,key,self.num)
         
@@ -489,7 +503,8 @@ class ProcessArea:
                     #print(vals)
                     #print(vals.dtype)
                     #df = pd.DataFrame.from_records(vals)
-                    keyhdf =  'metric_{}_{}_{}'.format(self.num,ipoint,isave)
+                    keyhdf =  'metric_{}_{}_{}_{}'.format(self.num,ipoint,isave,key)
+                    print('rrr',keyhdf)
                     #print('here',df)
                     #with pd.HDFStore(outName) as store:
                     #    store.append('df', df, data_columns= True)
@@ -1239,3 +1254,71 @@ class GetShape:
             ax.set_ylabel('Dec [deg]')
 
         return polyshape
+
+def getFields_fromId(observations, fieldIds):
+    
+    obs = None
+    for fieldId in fieldIds:
+        idf = observations['fieldId'] == fieldId
+        if obs is None:
+            obs = observations[idf]
+        else:
+            obs = np.concatenate((obs, observations[idf]))
+    return obs
+
+
+def getFields(observations, fieldType = 'WFD', fieldIds=None, nside=64):
+
+    print(observations.dtype)
+
+    obs = None
+
+    # this is for the WFD
+
+    for pName in ['proposalId','survey_id']:
+        if pName in observations.dtype.names:
+
+            print(np.unique(observations[pName]))
+            propId = list(np.unique(observations[pName]))
+
+            # loop on proposal id
+            # and take the one with the highest number of evts
+            propIds = list(np.unique(observations[pName]))
+            r = []
+            for propId in propIds:
+                idx = observations[pName] == propId
+                r.append((propId, len(observations[idx])))
+
+            res = np.rec.fromrecords(r, names=['propId','Nobs'])
+            if fieldType == 'WFD':
+                #Take the propId with the largest number of fields
+                propId_WFD = propIds[np.argmax(res['Nobs'])]
+                print(res,np.argmax(res['Nobs']),propId_WFD)
+                return observations[observations[pName]==propId_WFD]
+            if fieldType == 'DD':
+                # could be tricky here depending on the database structure
+                if 'fieldId' in observations.dtype.names:
+                    # easy one: grab DDF from fieldIds
+                    if len(propIds)>=3:
+                        obser = getFields_fromId(observations, fieldIds)
+                    else:
+                        obser = getFields_fromId(observations, [0])
+                    return pixelate(obser, nside, RaCol='fieldRA', DecCol='fieldDec')
+
+                else:
+                    """
+                    Tricky
+                    we do not have other ways to identify
+                    DD except by selecting pixels with a large number of visits
+                    """
+                    pixels = pixelate(observations, nside, RaCol='fieldRA', DecCol='fieldDec')
+
+                    df = pd.DataFrame(np.copy(pixels))
+                    
+                    groups = df.groupby('healpixID').filter(lambda x: len(x) > 5000)
+                    
+                    group_DD = groups.groupby(['fieldRA', 'fieldDec']).filter(
+                        lambda x: len(x) > 4000)
+                    
+                    # return np.array(group_DD.to_records().view(type=np.matrix))
+                    return group_DD.to_records(index=False)
