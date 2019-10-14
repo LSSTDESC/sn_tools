@@ -448,11 +448,6 @@ class ProcessArea:
                         if resfi[key] is None:
                             resfi[key] = resdict[key]
                         else:
-                            # print('vstack', key,
-                            #      resfi[key].dtype, resdict[key].dtype)
-                            # resfi[key] = np.vstack([resfi[key], resdict[key]])
-<<<<<<< HEAD
-                            #print('here pal',resfi[key], resdict[key])
                             #print('here pal',resdict[key])
                             resfi[key] = np.concatenate((resfi[key], resdict[key]))
                 # from time to time: dump data
@@ -464,7 +459,7 @@ class ProcessArea:
                         for key, vals in resfi.items():
                             if vals is not None:
                                 self.dump(vals,nodither,key,ipoint,isave)
-=======
+
                             #print('here pal', resfi[key], resdict[key])
                             resfi[key] = np.concatenate(
                                 (resfi[key], resdict[key]))
@@ -475,7 +470,6 @@ class ProcessArea:
                         # print(resfi)
                         isave += 1
                         self.dump(resfi, nodither, key, ipoint, isave)
->>>>>>> f59b12617a1bcfa9d95cb4be58bd9e751c51671d
                         resfi = {}
                         for metric in metricList:
                             resfi[metric.name] = None
@@ -484,17 +478,12 @@ class ProcessArea:
             if ipix != -1:
                 if self.saveData:
                     isave += 1
-<<<<<<< HEAD
                     for key, vals in resfi.items():
                         if vals is not None:
                             self.dump(vals,nodither,key,ipoint,isave)
-=======
-                    self.dump(resfi, nodither, key, ipoint, isave)
->>>>>>> f59b12617a1bcfa9d95cb4be58bd9e751c51671d
 
-    def dump(self, resfi, nodither, key, ipoint, isave):
+                    #self.dump(resfi, nodither, key, ipoint, isave)
 
-<<<<<<< HEAD
     def dump(self,resfi,nodither,key,ipoint,isave):
         
         outName = '{}/{}{}_{}_{}.hdf5'.format(self.outDir,self.dbName,nodither,key,self.num)
@@ -503,19 +492,18 @@ class ProcessArea:
         tab = Table.from_pandas(df)
         keyhdf =  'metric_{}_{}_{}'.format(self.num,ipoint,isave)
         tab.write(outName,keyhdf,append=True,compression=True)
-
+"""
     def dump_old(self,resfi,nodither,key,ipoint,isave):
-=======
+
         outName = '{}/{}{}_{}_{}.hdf5'.format(self.outDir,
                                               self.dbName, nodither, key, self.num)
->>>>>>> f59b12617a1bcfa9d95cb4be58bd9e751c51671d
 
         for key, vals in resfi.items():
             if vals is not None:
                     # print(vals)
                     # print(vals.dtype)
                     #df = pd.DataFrame.from_records(vals)
-<<<<<<< HEAD
+
                     keyhdf =  'metric_{}_{}_{}_{}'.format(self.num,ipoint,isave,key)
                     print('rrr',keyhdf)
                     #print('here',df)
@@ -532,6 +520,7 @@ class ProcessArea:
                     df = pd.DataFrame.from_records(vals)
                     tab = Table.from_pandas(df)
                     tab.write(outName,keyhdf,append=True,compression=True)
+
     def match(self, grp, healpixIDs, pixRa, pixDec,name=None,ax=None):
 =======
                 keyhdf = 'metric_{}_{}_{}'.format(self.num, ipoint, isave)
@@ -549,9 +538,9 @@ class ProcessArea:
                 df = pd.DataFrame.from_records(vals)
                 tab = Table.from_pandas(df)
                 tab.write(outName, keyhdf, append=True, compression=True)
+"""
 
     def match(self, grp, healpixIDs, pixRa, pixDec, name=None, ax=None):
->>>>>>> f59b12617a1bcfa9d95cb4be58bd9e751c51671d
 
         # print('hello', grp.columns)
         pixRa_rad = np.deg2rad(pixRa)
