@@ -322,23 +322,11 @@ class ProcessArea:
             fig, ax = plt.subplots()
             ax.plot(data[self.RaCol], data[self.DecCol], 'ko')
             plt.show()
-<<<<<<< HEAD
         
         dataSel = dataInside(data, Ra, Dec, widthRa+1., widthDec+1.,
                              RaCol=self.RaCol, DecCol=self.DecCol)
 
-        #dataSel = dataInside(data, Ra, Dec, 1., 1.,
-        #                     RaCol=self.RaCol, DecCol=self.DecCol)
-        
-=======
 
-        dataSel = dataInside(data, Ra, Dec, widthRa+1., widthDec+1.,
-                             RaCol=self.RaCol, DecCol=self.DecCol)
-
-       # dataSel = dataInside(data, Ra, Dec, 1., 1.,
-       #                      RaCol=self.RaCol, DecCol=self.DecCol)
-
->>>>>>> f59b12617a1bcfa9d95cb4be58bd9e751c51671d
         #dataSel = dataSel[:10]
         # print(dataSel.dtype)
         #idt = dataSel['filter'] == 'r'
