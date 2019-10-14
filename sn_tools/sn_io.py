@@ -3,6 +3,7 @@ from astropy.table import Table,vstack
 import numpy as np
 import pandas as pd
 import os
+import glob
 
 def geth5Data(name,thedir):
     
@@ -95,6 +96,15 @@ def loopStack(namelist,objtype='pandasDataFrame'):
                 
     return res
 
-def convert_DF_npy(namelist):
+def convert_to_npy(namelist,objtype='pandasDataFrame'):
 
     return loopStack(namelist).to_records(index=False)
+
+
+def convert_save(dirFile,dbName,metricName,fieldType='WFD',objtype='pandasDataFrame'):
+
+   fileNames = glob.glob('{}/{}/*{}_{}*'.format(dirFile,dbName,metricName,fieldType))
+
+   tab = convert_to_npy(fileNames,objtype=objtype)
+
+   np.save('{}_{}.npy'.format(dbName,metricName),tab)
