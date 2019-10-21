@@ -217,6 +217,9 @@ def pixelate(data, nside, RaCol='Ra', DecCol='Dec'):
 
 def season(obs, season_gap=80., mjdCol='observationStartMJD'):
 
+    if 'season' in obs.dtype.names:
+        return obs
+
     obs.sort(order=mjdCol)
 
     if len(obs) == 1:
@@ -450,30 +453,19 @@ class ProcessArea:
                         else:
                             #print('here pal',resdict[key])
                             resfi[key] = np.concatenate((resfi[key], resdict[key]))
+                
                 # from time to time: dump data
                 if ipix >= 10:
                     if self.saveData:
-                        #print('dumping',ipix)
-                        #print(resfi)
                         isave += 1
                         for key, vals in resfi.items():
                             if vals is not None:
                                 self.dump(vals,nodither,key,ipoint,isave)
-
-                            #print('here pal', resfi[key], resdict[key])
-                            resfi[key] = np.concatenate(
-                                (resfi[key], resdict[key]))
-                # from time to time: dump data
-                if ipix >= 10:
-                    if self.saveData:
-                        print('dumping', ipix)
-                        # print(resfi)
-                        isave += 1
-                        self.dump(resfi, nodither, key, ipoint, isave)
-                        resfi = {}
-                        for metric in metricList:
-                            resfi[metric.name] = None
-                        ipix = -1
+                            resfi = {}
+                            for metric in metricList:
+                                resfi[metric.name] = None
+                            ipix = -1
+                            
 
             if ipix != -1:
                 if self.saveData:
@@ -492,7 +484,7 @@ class ProcessArea:
         tab = Table.from_pandas(df)
         keyhdf =  'metric_{}_{}_{}'.format(self.num,ipoint,isave)
         tab.write(outName,keyhdf,append=True,compression=True)
-"""
+    """
     def dump_old(self,resfi,nodither,key,ipoint,isave):
 
         outName = '{}/{}{}_{}_{}.hdf5'.format(self.outDir,
@@ -522,7 +514,7 @@ class ProcessArea:
                     tab.write(outName,keyhdf,append=True,compression=True)
 
     def match(self, grp, healpixIDs, pixRa, pixDec,name=None,ax=None):
-=======
+    =======
                 keyhdf = 'metric_{}_{}_{}'.format(self.num, ipoint, isave)
                 # print('here',df)
                 # with pd.HDFStore(outName) as store:
@@ -538,7 +530,7 @@ class ProcessArea:
                 df = pd.DataFrame.from_records(vals)
                 tab = Table.from_pandas(df)
                 tab.write(outName, keyhdf, append=True, compression=True)
-"""
+    """
 
     def match(self, grp, healpixIDs, pixRa, pixDec, name=None, ax=None):
 
