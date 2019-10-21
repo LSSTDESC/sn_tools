@@ -43,6 +43,21 @@ class LCfast:
 
         self.snr_min = snr_min
 
+        self.zp = {}
+        for b in 'ugrizy':
+            #print(b,telescope.zp(b))
+            #r.append((b,telescope.zp(b)))
+            self.zp[b] = telescope.zp(b)
+        #self.zp = np.rec.fromrecords(r, names=['band','zp'])
+
+        """
+        test = np.array(['u','g','g'])
+        index = np.argwhere(zp['band'] == test[:,None])
+
+        print(index)
+        print(zp['zp'][index][:,1])
+        print(toto)
+        """
     def __call__(self, obs, index_hdf5, gen_par=None, bands='grizy'):
         """ Simulation of the light curve
         We use multiprocessing (one band per process) to increase speed
@@ -557,7 +572,7 @@ class LCfast:
 
         z_vals = gen_par['z'][flag_idx[:, 0]]
         daymax_vals = gen_par['daymax'][flag_idx[:, 0]]
-        #mag_obs = np.ma.array(mag_obs, mask=~flag)
+        mag_obs = np.ma.array(mag_obs, mask=~flag)
         Fisher_Mat = {}
         for key, vals in Derivative_for_Fisher.items():
             Fisher_Mat[key] = np.ma.array(vals, mask=~flag)
@@ -577,6 +592,7 @@ class LCfast:
             lc['phase'] = phases[~phases.mask]
             lc['snr_m5'] = snr_m5[~snr_m5.mask]
             lc['time'] = obs_time[~obs_time.mask]
+            lc['mag'] = mag_obs[~mag_obs.mask]
             """
             lc['m5'] = m5_obs[~m5_obs.mask]
             lc['mag'] = mag_obs[~mag_obs.mask]
@@ -585,6 +601,7 @@ class LCfast:
             lc['exposuretime'] = exp_time[~exp_time.mask]
             """
             lc['band'] = ['LSST::'+band]*len(lc)
+            lc.loc[:,'zp'] = self.zp[band]
             #lc['zp'] = [2.5*np.log10(3631)]*len(lc)
             #lc['zpsys'] = ['ab']*len(lc)
             lc['season'] = seasons[~seasons.mask]
