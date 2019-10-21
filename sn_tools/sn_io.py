@@ -4,6 +4,9 @@ import numpy as np
 import pandas as pd
 import os
 import glob
+from astropy.coordinates import SkyCoord
+from astropy import units as u
+from scipy.interpolate import interp1d
 
 def geth5Data(name,thedir):
     
@@ -101,10 +104,73 @@ def convert_to_npy(namelist,objtype='pandasDataFrame'):
     return loopStack(namelist).to_records(index=False)
 
 
-def convert_save(dirFile,dbName,metricName,fieldType='WFD',objtype='pandasDataFrame'):
+def convert_save(inputDir,dbName,metricName,outDir,fieldType='WFD',objtype='pandasDataFrame',unique=False,path=None,remove_galactic=False):
 
-   fileNames = glob.glob('{}/{}/*{}_{}*'.format(dirFile,dbName,metricName,fieldType))
+    search_path = path
+    if path is None:
+        search_path = '{}/*{}Metric_{}*'.format(inputDir,metricName,fieldType)
+    print('search path',search_path)
+    fileNames = glob.glob(search_path)
 
-   tab = convert_to_npy(fileNames,objtype=objtype)
+    print('files',fileNames)
+    tab = convert_to_npy(fileNames,objtype=objtype)
+    
+    if unique:
+        u, indices = np.unique(tab['healpixID'], return_index=True)
+        tab = np.copy(tab[indices])
 
-   np.save('{}_{}.npy'.format(dbName,metricName),tab)
+    if remove_galactic:
+       tab = remove_galactic_area(tab)
+
+
+    np.save('{}/{}_{}.npy'.format(outDir,dbName,metricName),np.copy(tab))
+
+
+def remove_galactic_area(tab):
+
+    rg = []
+
+    for val in np.arange(0., 360., 0.5):
+        c_gal = SkyCoord(val*u.degree, 0.*u.degree, frame='galactic')
+        
+        #c_gal = SkyCoord(val*u.degree, 0.*u.degree,
+        #                frame='geocentrictrueecliptic')
+        c = c_gal.transform_to('icrs')
+        rg.append(('Galactic plane', c.ra.degree, c.dec.degree))
+            
+    resrg = np.rec.fromrecords(rg, names=['name','Ra','Dec'])
+    idx = (resrg['Ra']>=200)&(resrg['Ra']<290.)      
+    
+    resrg = resrg[idx]
+
+    interp_m = interp1d(resrg['Ra']-11.,resrg['Dec'],bounds_error=False,fill_value=0.)
+    interp_p = interp1d(resrg['Ra']+11.,resrg['Dec'],bounds_error=False,fill_value=0.)
+    
+    ida = (tab['pixDec']<0.)&(tab['pixDec']>=-60.)
+    sel = tab[ida]
+    
+
+    print('cut1',len(sel))
+    idx = (sel['pixRa']>190)&(sel['pixRa']<295.)
+    sela = sel[~idx]
+    selb = sel[idx]
+    
+    selb.sort(order='pixRa')
+    
+    valDec_m = interp_m(np.copy(selb['pixRa']))
+    
+    idt_m = (selb['pixDec']-valDec_m)>0.
+    
+    selm = selb[idt_m]
+    
+    valDec_p = interp_p(np.copy(selb['pixRa']))
+    
+    idt_p = (selb['pixDec']-valDec_p)<0.
+
+    selp = selb[idt_p]
+    
+    
+    sela = np.concatenate((sela,selm))
+    sela = np.concatenate((sela,selp))
+    
+    return sela
