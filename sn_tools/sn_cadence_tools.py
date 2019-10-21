@@ -103,7 +103,9 @@ class GenerateFakeObservations:
                  mjdCol='observationStartMJD', RaCol='fieldRA',
                  DecCol='fieldDec', filterCol='filter', m5Col='fiveSigmaDepth',
                  exptimeCol='visitExposureTime', nexpCol='numExposures',
-                 seasonCol='season', seeingEffCol='seeingFwhmEff', seeingGeomCol='seeingFwhmGeom',):
+                 seasonCol='season', seeingEffCol='seeingFwhmEff', seeingGeomCol='seeingFwhmGeom',
+                 visitTime='visitTime',
+                 sequences=False):
 
         # config = yaml.load(open(config_filename))
         self.mjdCol = mjdCol
@@ -116,8 +118,106 @@ class GenerateFakeObservations:
         self.nexpCol = nexpCol
         self.seeingEffCol = seeingEffCol
         self.seeingGeomCol = seeingGeomCol
+        self.visitTime = visitTime
         # now make fake obs
-        self.makeFake(config)
+        if not sequences:
+            self.makeFake(config)
+        else:
+            self.makeFake_sqs(config) 
+
+    def makeFake_sqs(self, config):
+        """ Generate Fake observations
+
+        Parameters
+        -------------
+        config : dict
+           dict of parameters (config file)
+
+        Returns
+        ---------
+        recordarray of observations with the fields:
+        MJD, Ra, Dec, band,m5,Nexp, ExpTime, Season
+        accessible through self.Observations
+
+        """
+
+        bands = config['bands']
+        cadence = config['cadence']
+        shift_days = dict(
+            zip(bands, [config['shift_days']*io for io in range(len(bands))]))
+        m5 = dict(zip(bands, config['m5']))
+        #Nvisits = dict(zip(bands, config['Nvisits']))
+        #Single_Exposure_Time = dict(zip(bands, config['Single_Exposure_Time']))
+        inter_season_gap = 300.
+        seeingEff = dict(zip(bands, config['seeingEff']))
+        seeingGeom = dict(zip(bands, config['seeingGeom']))
+        Ra = config['Ra']
+        Dec = config['Dec']
+        rtot = []
+        # for season in range(1, config['nseasons']+1):
+        Nvisits = {}
+        Single_Exposure_Time = {}
+        for il, season in enumerate(config['seasons']):
+            #mjd_min = config['MJD_min'] + float(season-1)*inter_season_gap
+            mjd_min = config['MJD_min']+il*(config['season_length']+10.)
+            mjd_max = mjd_min+config['season_length']
+            n_visits = config['Nvisits'][season]
+            seqs = config['sequences'][season]
+            sing_exp_time = config['Single_Exposure_Time'][season]
+            cadence = config['cadence'][season]
+            
+            for i in range(len(seqs)):
+            #for i,val in enumerate(config['sequences']):
+                mjd_min_seq = mjd_min+i*config['deltaT_seq'][i]
+                mjd_max_seq = mjd_max+i*config['deltaT_seq'][i]
+                mjd = np.arange(mjd_min_seq, mjd_max_seq,cadence)
+                night = (mjd-config['MJD_min']).astype(int)+1
+                print('allo',i,seqs[i])
+                for j,band in enumerate(seqs[i]):
+                    mjd += shift_days[band]
+                    Nvisits[band] = n_visits[i][j]
+                    Single_Exposure_Time[band] = sing_exp_time[i][j]
+                    m5_coadded = self.m5coadd(m5[band],
+                                                  Nvisits[band],
+                                                  Single_Exposure_Time[band])
+
+                    myarr = np.array(mjd, dtype=[(self.mjdCol, 'f8')])
+                    myarr = rf.append_fields(myarr,'night',night)
+                    myarr = rf.append_fields(myarr, [self.RaCol, self.DecCol, self.filterCol], [
+                        [Ra]*len(myarr), [Dec]*len(myarr), [band]*len(myarr)])
+                    myarr = rf.append_fields(myarr, [self.m5Col, self.nexpCol, self.exptimeCol, self.seasonCol], [
+                                         [m5_coadded]*len(myarr), [Nvisits[band]]*len(myarr), [Nvisits[band]*Single_Exposure_Time[band]]*len(myarr), [season]*len(myarr)])
+                    myarr = rf.append_fields(myarr, [self.seeingEffCol, self.seeingGeomCol], [
+                                         [seeingEff[band]]*len(myarr), [seeingGeom[band]]*len(myarr)])
+                    myarr = rf.append_fields(myarr,self.visitTime,[Nvisits[band]*Single_Exposure_Time[band]]*len(myarr))
+                    rtot.append(myarr)
+                    
+
+            """
+            for i, band in enumerate(bands):
+                mjd = np.arange(mjd_min, mjd_max+cadence[band],cadence[band])
+                #if mjd_max not in mjd:
+                #    mjd = np.append(mjd, mjd_max)
+                mjd += shift_days[band]
+                m5_coadded = self.m5coadd(m5[band],
+                                          Nvisits[band],
+                                          Exposure_Time[band])
+
+                myarr = np.array(mjd, dtype=[(self.mjdCol, 'f8')])
+                myarr = rf.append_fields(myarr, [self.RaCol, self.DecCol, self.filterCol], [
+                                         [Ra]*len(myarr), [Dec]*len(myarr), [band]*len(myarr)])
+                myarr = rf.append_fields(myarr, [self.m5Col, self.nexpCol, self.exptimeCol, self.seasonCol], [
+                                         [m5_coadded]*len(myarr), [Nvisits[band]]*len(myarr), [Nvisits[band]*Exposure_Time[band]]*len(myarr), [season]*len(myarr)])
+                myarr = rf.append_fields(myarr, [self.seeingEffCol, self.seeingGeomCol], [
+                                         [seeingEff[band]]*len(myarr), [seeingGeom[band]]*len(myarr)])
+                rtot.append(myarr)
+            """
+        res = np.copy(np.concatenate(rtot))
+        res.sort(order=self.mjdCol)
+
+        res = rf.append_fields(res,'observationId',np.random.randint(10*len(res),size=len(res)))
+
+        self.Observations = res
 
     def makeFake(self, config):
         """ Generate Fake observations
@@ -125,7 +225,7 @@ class GenerateFakeObservations:
         Parameters
         -------------
         config : dict
-           dict of parameters
+           dict of parameters (config file)
 
         Returns
         ---------
