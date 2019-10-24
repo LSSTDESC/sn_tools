@@ -148,7 +148,7 @@ class GenerateFakeObservations:
         m5 = dict(zip(bands, config['m5']))
         #Nvisits = dict(zip(bands, config['Nvisits']))
         #Single_Exposure_Time = dict(zip(bands, config['Single_Exposure_Time']))
-        inter_season_gap = 300.
+        inter_season_gap = 100.
         seeingEff = dict(zip(bands, config['seeingEff']))
         seeingGeom = dict(zip(bands, config['seeingGeom']))
         Ra = config['Ra']
@@ -159,8 +159,8 @@ class GenerateFakeObservations:
         Single_Exposure_Time = {}
         for il, season in enumerate(config['seasons']):
             #mjd_min = config['MJD_min'] + float(season-1)*inter_season_gap
-            mjd_min = config['MJD_min']+il*(config['season_length']+10.)
-            mjd_max = mjd_min+config['season_length']
+            mjd_min = config['MJD_min']+il*(config['season_length'][season]+inter_season_gap)
+            mjd_max = mjd_min+config['season_length'][season]
             n_visits = config['Nvisits'][season]
             seqs = config['sequences'][season]
             sing_exp_time = config['Single_Exposure_Time'][season]
@@ -170,9 +170,9 @@ class GenerateFakeObservations:
             #for i,val in enumerate(config['sequences']):
                 mjd_min_seq = mjd_min+i*config['deltaT_seq'][i]
                 mjd_max_seq = mjd_max+i*config['deltaT_seq'][i]
-                mjd = np.arange(mjd_min_seq, mjd_max_seq,cadence)
+                mjd = np.arange(mjd_min_seq, mjd_max_seq+cadence,cadence)
                 night = (mjd-config['MJD_min']).astype(int)+1
-                print('allo',i,seqs[i])
+    
                 for j,band in enumerate(seqs[i]):
                     mjd += shift_days[band]
                     Nvisits[band] = n_visits[i][j]
