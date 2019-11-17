@@ -234,7 +234,7 @@ class SN_Rate:
     def PlotNSN(self, zmin=0.1, zmax=0.2,
                 dz=0.01, survey_area=9.6,
                 bins=None, account_for_edges=False,
-                duration=140., duration_z=None):
+                duration=140., duration_z=None, norm=False):
         """ Plot integrated number of supernovae as a function of redshift
         uses the __call__ function
 
@@ -264,6 +264,9 @@ class SN_Rate:
         duration_z : list(float),opt
           survey duration (as a function of z)
           Default : None
+        norm: bool, opt
+          to normalise the results
+          Default: False
 
         """
         import pylab as plt
@@ -273,7 +276,13 @@ class SN_Rate:
             account_for_edges=account_for_edges,
             duration=duration,survey_area=survey_area)
 
-        plt.errorbar(zz, np.cumsum(nsn), yerr=np.sqrt(np.cumsum(err_nsn**2)))
+        nsn_sum = np.cumsum(nsn)
+
+        if norm is False:
+            plt.errorbar(zz, nsn_sum, yerr=np.sqrt(np.cumsum(err_nsn**2)))
+        else:
+            plt.errorbar(zz, nsn_sum/nsn_sum[-1])
         plt.xlabel('z')
         plt.ylabel('N$_{SN}$ <')
-        plt.show()
+        plt.grid()
+        
