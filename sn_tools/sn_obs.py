@@ -15,6 +15,7 @@ import pandas as pd
 import time
 import h5py
 from astropy.table import Table
+import multiprocessing
 
 
 def pavingSky(ramin, ramax, decmin, decmax, radius):
@@ -54,12 +55,12 @@ def pavingSky(ramin, ramax, decmin, decmax, radius):
     return res
 
 
-def area(minRa, maxRa, minDec, maxDec, ax=None):
+def area(minRa, maxRa, minDec, maxDec):
 
     return dict(zip(['minRa', 'maxRa', 'minDec', 'maxDec'], [minRa, maxRa, minDec, maxDec]))
 
 
-def areap(minRa, maxRa, minDec, maxDec, ax=None):
+def areap(minRa, maxRa, minDec, maxDec):
 
     poly = [[minRa, minDec], [minRa, maxDec], [maxRa, maxDec], [maxRa, minDec]]
 
@@ -80,14 +81,17 @@ def dataInside(data, Ra, Dec, widthRa, widthDec, RaCol='fieldRa', DecCol='fieldD
     # special treatement near Ra~0
 
     areaList = []
-    #areapList = []
+    if ax is not None:
+        areapList = []
 
     if maxRa >= 360.:
         # in that case two areas necessary
-        areaList.append(area(minRa, 0.0, minDec, maxDec))
+        #print('hello poly',minRa,360., minDec, maxDec,0.0, maxRa-360., minDec, maxDec)
+        areaList.append(area(minRa,360., minDec, maxDec))
         areaList.append(area(0.0, maxRa-360., minDec, maxDec))
-        #areapList.append(areap(minRa, 0.0, minDec, maxDec))
-        #areapList.append(areap(0.0, maxRa-360., minDec, maxDec))
+        if ax is not None:
+            areapList.append(areap(minRa,360., minDec, maxDec))
+            areapList.append(areap(0.0, maxRa-360., minDec, maxDec))
     else:
         if minRa < 0.:
             # in that case two areas necessary
@@ -101,7 +105,7 @@ def dataInside(data, Ra, Dec, widthRa, widthDec, RaCol='fieldRa', DecCol='fieldD
     #print('dti a',time.time()-time_ref)
     #time_ref = time.time()
     if ax is not None:
-        for poly in areaList:
+        for poly in areapList:
             pf = PolygonPatch(poly, facecolor=(
                 0, 0, 0, 0), edgecolor='red')
             ax.add_patch(pf)
@@ -326,9 +330,11 @@ class ProcessArea:
             ax.plot(data[self.RaCol], data[self.DecCol], 'ko')
             plt.show()
         
+
+        
         dataSel = dataInside(data, Ra, Dec, widthRa+1., widthDec+1.,
                              RaCol=self.RaCol, DecCol=self.DecCol)
-
+        
 
         #dataSel = dataSel[:10]
         # print(dataSel.dtype)
@@ -367,7 +373,7 @@ class ProcessArea:
                                    Dec, nest=True, lonlat=True)
 
             # get nearby pixels
-            # print(Ra, Dec, np.deg2rad(Ra), np.deg2rad(Dec))
+           # print(Ra, Dec, np.deg2rad(Ra), np.deg2rad(Dec))
             vec = hp.pix2vec(self.nside, healpixID, nest=True)
             healpixIDs = hp.query_disc(
                 self.nside, vec, np.deg2rad(widthRa), inclusive=False, nest=True)
@@ -395,25 +401,45 @@ class ProcessArea:
                     plt.show()
 
             # process pixels with data
-             # match pixels to data
+            # match pixels to data
+            time_ref = time.time()
             matched_pixels = groups.apply(
-                lambda x: self.match(x, healpixIDs, pixRa, pixDec))
+                lambda x: self.match(x, healpixIDs, pixRa, pixDec)).reset_index()
 
+            print('after matching',time.time()-time_ref,len(matched_pixels['healpixID'].unique()))
+            
             #print('number of pixels',len(matched_pixels['healpixID'].unique()))
             ipix = -1
             isave = -1
             for healpixID in matched_pixels['healpixID'].unique():
+            #for healpixID in [70677]:
                 # print('hello',healpixID)
-                ipix += 1
+                #ipix += 1
                 time_ref = time.time()
                 ib = matched_pixels['healpixID'] == healpixID
-                thematch = matched_pixels.loc[ib].copy()
+                thematch = matched_pixels.loc[ib]
 
-                grnames = [grname for grname in thematch['groupName']]
-
+                if len(thematch) == 0:
+                    continue
+                ipix += 1
+                #print('boo')
+                #grnames = [grname for grname in thematch['groupName']]
+                
+                """
                 dataPixel = pd.concat([groups.get_group(grname)
-                                       for grname in grnames])
+                                       for grname in thematch['groupName']])
+                print('dataPixel done',time.time()-time_ref,len(dataPixel))
+                time_ref = time.time()
+                """
+                #dataPixel = self.multi_read(groups, thematch['groupName'],nproc=1)
+                #print('hello',healpixID, thematch['index'].tolist())
+                #time_ref = time.time()
+                dataPixel = dataset.iloc[thematch['index'].tolist()].copy()
+                #print('there',time.time()-time_ref)
+                #print('dataPixel done',time.time()-time_ref,len(dataPixel),len(dataPixelb))
 
+
+                #print('hello',healpixID,len(dataPixel),thematch['index'].tolist())
                 # print(dataPixel[[self.RaCol,self.DecCol,'filter']])
                 pixRa = thematch['pixRa'].unique()
                 pixDec = thematch['pixDec'].unique()
@@ -451,9 +477,8 @@ class ProcessArea:
                         if resfi[key] is None:
                             resfi[key] = resdict[key]
                         else:
-                            #print('here pal',resdict[key])
+                            #print('here pal',resdict[key],resfi[key])
                             resfi[key] = np.concatenate((resfi[key], resdict[key]))
-                
                 # from time to time: dump data
                 if ipix >= 10:
                     if self.saveData:
@@ -475,6 +500,64 @@ class ProcessArea:
                             self.dump(vals,nodither,key,ipoint,isave)
 
                     #self.dump(resfi, nodither, key, ipoint, isave)
+
+    def multi_read(self, groups, names,nproc=4):
+
+        n_names = int(len(names))
+        print('hello',n_names)
+        delta = n_names
+        if nproc > 1:
+            delta = int(delta/(nproc))
+
+        tabnames = range(0, n_names, delta)
+        if n_names not in tabnames:
+            tabnames = np.append(tabnames, n_names)
+
+        tabnames = tabnames.tolist()
+
+
+        if nproc >=7:
+            if tabnames[-1]-tabnames[-2] <= 10:
+                tabnames.remove(tabnames[-2])
+
+        #print(tabnames, len(tabnames))
+        result_queue = multiprocessing.Queue()
+
+        for j in range(len(tabnames)-1):
+
+            ida = tabnames[j]
+            idb = tabnames[j+1]
+
+            #print('Field', names[ida:idb])
+            p = multiprocessing.Process(name='Subprocess-'+str(j), target=self.concat, args=(groups,
+                names[ida:idb],j, result_queue))
+            p.start()
+
+        resultdict = {}
+        
+        for j in range(len(tabnames)-1):
+            resultdict.update(result_queue.get())
+        
+        for p in multiprocessing.active_children():
+            p.join()                           
+    
+        tab_tot = pd.DataFrame()
+        for j in range(len(tabnames)-1):
+            tab_tot = tab_tot.append(resultdict[j], ignore_index=True) 
+
+        return tab_tot
+
+        
+
+    def concat(self, groups, names, j=-1, output_q=None):
+
+        res = pd.concat([groups.get_group(grname)
+                         for grname in names])
+    
+        if output_q is not None:              
+            output_q.put({j: res})                    
+        else:                                 
+            return res 
 
     def dump(self,resfi,nodither,key,ipoint,isave):
         
@@ -609,11 +692,45 @@ class ProcessArea:
             names = [grp.name]*len(pixID_matched)
         # names = ['test']*len(pixID_matched)
         # return pd.Series([matched_pixels], ['healpixIDs'])
-        return pd.DataFrame({'healpixID': pixID_matched,
-                             'pixRa': pixRa_matched,
-                             'pixDec': pixDec_matched,
-                             'groupName': names})
+        
+        
+        n_index = len(grp.index.values)
+        
+        arr_index = grp.index.values
 
+       
+        #arr_index = np.reshape(arr_index,(len(arr_index),1))
+        #print('hhh',arr_index)
+        df_pix = pd.DataFrame({'healpixID': pixID_matched,
+                               'pixRa': pixRa_matched,
+                               'pixDec': pixDec_matched,
+                               'groupName': names})
+
+        #print(arr_index,df_pix)
+        #if n_index > 1:
+        #    print('here',n_index,type(grp.index.values))
+        
+        n_pix = len(df_pix)
+        #n_index = len(df_index)
+        #print('indices',n_index,n_pix)
+        if n_pix > 1:
+            arr_index = arr_index.repeat(n_pix)
+        #    if n_index > 1:
+        #        print('after repeat',arr_index,arr_index.shape)
+        if n_index > 1:
+            df_pix = df_pix.append([df_pix]*(n_index-1),ignore_index=True)
+         
+        #if n_index > 1:
+        #    print(arr_index)
+        #    print(n_index,n_pix,len(arr_index),len(df_pix))
+        df_pix.loc[:,'index'] = arr_index
+        
+        return df_pix
+        
+        grp = pd.concat([grp]*len(pixID_matched), ignore_index=True)
+        grp.loc[:,'healpixID'] = pixID_matched
+        grp.loc[:,'pixRa']  = pixRa_matched
+        grp.loc[:,'pixDec']  = pixDec_matched
 
 class ObsPixel:
 
@@ -1310,6 +1427,7 @@ def getFields(observations, fieldType = 'WFD', fieldIds=None, nside=64):
             if fieldType == 'DD':
                 # could be tricky here depending on the database structure
                 if 'fieldId' in observations.dtype.names:
+                    #print('hello',np.unique(observations['fieldId']))
                     # easy one: grab DDF from fieldIds
                     if len(propIds)>=3:
                         obser = getFields_fromId(observations, fieldIds)
