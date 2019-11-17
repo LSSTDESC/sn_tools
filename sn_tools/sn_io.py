@@ -158,9 +158,9 @@ def remove_galactic_area(tab):
     interp_m = interp1d(resrg['Ra']-11.,resrg['Dec'],bounds_error=False,fill_value=0.)
     interp_p = interp1d(resrg['Ra']+11.,resrg['Dec'],bounds_error=False,fill_value=0.)
     
-    ida = (tab['pixDec']<0.)&(tab['pixDec']>=-60.)
-    sel = tab[ida]
-    
+    #ida = (tab['pixDec']<0.)&(tab['pixDec']>=-60.)
+    #sel = tab[ida]
+    sel = tab
 
     print('cut1',len(sel))
     idx = (sel['pixRa']>190)&(sel['pixRa']<295.)
