@@ -6,6 +6,10 @@ import h5py
 from astropy.table import Table, Column, vstack
 from scipy.interpolate import griddata, interpn, CloughTocher2DInterpolator, LinearNDInterpolator
 from sn_tools.sn_telescope import Telescope
+from sn_tools.sn_io import Read_Sqlite
+from sn_tools.sn_obs import renameFields, getFields
+from sklearn.datasets import make_blobs
+from sklearn.cluster import KMeans
 
 class ReferenceData:
     """
@@ -786,6 +790,261 @@ class TemplateData_x1color(object):
         return flux
 """
 
-    
+class AnaOS:
 
+    def __init__(self,dbDir, dbName,dbExtens,n_clusters):
+        
+        self.dbDir = dbDir
+        self.dbName = dbName
+        self.dbExtens = dbExtens
+        
+        #load observations
+        observations = self.load_obs()
+
+        #DDF obs
+        nside = 128 
+
+        fieldIds = [290,744,1427, 2412, 2786]
+        self.obs_DD = getFields(observations, 'DD', fieldIds,nside)
+        n_DD = len(self.obs_DD)
+        Nvisits_DD = self.getVisitsBand(self.obs_DD)
+        #WDF obs
+        self.obs_WFD = getFields(observations,'WFD')
+        n_WFD = len(self.obs_WFD)
+        Nvisits_WFD = self.getVisitsBand(self.obs_WFD)
+        
+        # make cluster out of these observations
+
+        self.points, self.clus, self.labels = self.clusters(n_clusters=n_clusters)
+        
+        self.ddfclus = self.ana_clusters(n_clusters=n_clusters) 
+
+        dbName = self.dbName.ljust(26)
+        n_tot = n_WFD+n_DD
+        r = [dbName]
+        names = ['cadence']
+        
+
+        rb = [(dbName,'DD'.ljust(9),n_DD)]
+        rb.append((dbName,'WFD'.ljust(9),n_WFD))
+
+
+        r += [n_WFD,n_DD]
+        names += ['WFD','DD']
+
+        r_dd, names_dd = self.fillVisits(Nvisits_DD,'DD')
+        r_wfd, names_wfd = self.fillVisits(Nvisits_WFD,'WFD')
+
+        r += r_dd
+        names += names_dd
+
+        r += r_wfd
+        names += names_wfd
+        
+        for i in range(len(r_dd)):
+            rb.append((dbName,names_dd[i].ljust(9),r_dd[i]))
+            rb.append((dbName,names_wfd[i].ljust(9),r_wfd[i]))
+
+        """
+        r.append((self.dbName.ljust(26),n_WFD,'WFD'.ljust(7)))
+        r.append((self.dbName.ljust(26),n_DD,'DD'.ljust(7)))
+        """
+
+        print('DDF Frac',n_DD/n_tot,n_WFD,n_DD,np.sum(self.ddfclus['Nvisits']))
+
+        for ddc in self.ddfclus:
+            fieldName = ddc['fieldName']
+            print(ddc['fieldName'],ddc['Nvisits']/n_tot)
+            #r.append((ddc['dbName'],ddc['Nvisits'],ddc['fieldName']))
+            r += [ddc['Nvisits']]
+            names += [fieldName]
+            rb.append((dbName,fieldName.ljust(9),ddc['Nvisits']))
+            for band in 'ugrizy':
+                fName = fieldName.strip()
+                r += [ddc['Nvisits_{}'.format(band)]]
+                names += ['{}_{}'.format(fieldName,band)]
+                rb.append((dbName,'{}_{}'.format(fName,band).ljust(9),ddc['Nvisits_{}'.format(band)]))
+                 
+        self.stat = np.rec.fromrecords(rb, names=['cadence','Field','Nvisits'])
+
+
+    def load_obs(self):
+
+        # loading observations
+
+        dbFullName = '{}/{}.{}'.format(self.dbDir, self.dbName,self.dbExtens)
+        # if extension is npy -> load
+        if self.dbExtens == 'npy':
+            observations = np.load(dbFullName)
+        else:
+            #db as input-> need to transform as npy
+            print('looking for',dbFullName)
+            keymap = {'observationStartMJD': 'mjd',
+                      'filter': 'band',
+                      'visitExposureTime': 'exptime',
+                      'skyBrightness': 'sky',
+                      'fieldRA': 'Ra',
+                      'fieldDec': 'Dec',}
+            
+            reader = Read_Sqlite(dbFullName)
+            #sql = reader.sql_selection(None)
+            observations = reader.get_data(cols=None, sql='',
+                                           to_degrees=False,
+                                           new_col_names=keymap)
+
+        observations = renameFields(observations)
+
+        return observations
+
+    def fillVisits(self, thedict, name):
+        
+        r = []
+        names = []
+
+        for key,vals in thedict.items():
+            r.append(vals)
+            names.append('{}_{}'.format(name,key))
+
+        return r, names
+
+
+    def clusters(self,n_clusters):
+
+        r = []
+        for (pixRa, pixDec) in self.obs_DD[['fieldRA', 'fieldDec']]:
+            r.append([pixRa, pixDec])
+
+        points = np.array(r)
+      
+        # create kmeans object
+        kmeans = KMeans(n_clusters=n_clusters)
+        # fit kmeans object to data
+        kmeans.fit(points)
+
+        # print location of clusters learned by kmeans object
+        print('cluster centers',kmeans.cluster_centers_)
+
+        # save new clusters for chart
+        y_km = kmeans.fit_predict(points)
+
+        return points, y_km,kmeans.labels_
+
+
+    def ana_clusters(self,n_clusters):
+
+        fields = DDFields()
+        r= []
+       
+        
+        for io in range(n_clusters):
+            ra = []
+            names = []
+            RA = self.points[self.clus ==io,0]
+            Dec = self.points[self.clus == io,1]
+            #ax.scatter(RA,Dec, s=10, c=color[io])
+            indx = np.where(self.labels == io)[0]
+            sel_obs = self.obs_DD[indx]
+            Nvisits = self.getVisitsBand(sel_obs)
+            
+            min_RA = np.min(RA)
+            max_RA = np.max(RA)
+            min_Dec = np.min(Dec)
+            max_Dec = np.max(Dec)
+            mean_RA = np.mean(RA)
+            mean_Dec = np.mean(Dec)
+            area = np.pi*(max_RA-min_RA)*(max_Dec-min_Dec)/4.
+            idx, fieldName = self.getName(fields,mean_RA)
+            ra = [int(io),idx,mean_RA,mean_Dec,
+                  max_RA-min_RA,max_Dec-min_Dec,
+                  area,self.dbName.ljust(26),fieldName.ljust(7),len(RA)]
+            names = ['clusid','fid','RA','Dec','width_RA','width_Dec','area','dbName','fieldName','Nvisits']
+
+            
+            for key, vals in Nvisits.items():
+                ra += [vals]
+                names += ['Nvisits_{}'.format(key)]
+
+            r.append((ra))
+   
+        env = np.rec.fromrecords(r, names=names)
+
+        return env
+
+    def getVisitsBand(self,obs):
+
+        bands = 'ugrizy'
+        Nvisits = {}
+        for band in bands:
+            ib = obs['filter']==band
+            Nvisits[band] = len(obs[ib])
+
+        return Nvisits
+    def getName(self,fields,RA):
+
+        idx = np.abs(fields['RA'] - RA).argmin()
+        
+        return idx,fields[idx]['name']
+
+    def plot_dithering(self,n_clusters):
+
+        fig, ax = plt.subplots(ncols=2, nrows=3, figsize=(10, 9))
+        fig.suptitle('{}'.format(dbName))
+        fig.subplots_adjust(right=0.75)
+
+        color = ['red','black','blue','cyan','green']
+        pos = [(0,0),(0,1),(1,0),(1,1),(2,0),(2,1)]
+
+        #fields = DDFields()
+
+        lista = []
+        listb = []
+        for io in range(n_clusters):
+            RA = self.points[self.clus == io,0]
+            Dec = self.points[self.clus == io,1]
+            xp = pos[io][0]
+            yp = pos[io][1]
+            idx = self.dithering['clusid']==io
+            val = self.dithering[idx]
+            print('hello',xp,yp)
+            label = '{} - {} deg2'.format(val['fieldName'][0],np.round(val['area'][0],2))
+            ab, = ax[xp][yp].plot(RA,Dec,marker='o',color=color[io],label=label)
+    
+            lista.append(ab)
+            listb.append(label)
+   
+            ell = Ellipse((val['RA'],val['Dec']),val['width_RA'],val['width_Dec'],facecolor='none',edgecolor='black')
+            print(val['RA'],val['Dec'],val['width_RA'],val['width_Dec'])
+            ax[xp][yp].add_patch(ell)
+
+            ell = Ellipse((0.,0.),val['width_RA'],val['width_Dec'],facecolor='none',edgecolor=color[io])
+            ax[2][1].add_patch(ell)
+            if yp == 0:
+                ax[xp][yp].set_ylabel('Dec [rad]')
+            if xp == 2:
+                ax[xp][yp].set_xlabel('RA [rad]')
+                    
+   
+        RAmax = np.max(self.dithering['width_RA'])+0.3
+        Decmax = np.max(self.dithering['width_Dec'])+0.3
+
+        ax[2][1].set_xlim(-RAmax/2.,RAmax/2.)
+        ax[2][1].set_ylim(-Decmax/2.,Decmax/2.)
+        ax[2][1].set_xlabel('RA [rad]')
+
+        plt.legend(lista,listb,loc='center left', bbox_to_anchor=(1, 2.0),ncol=1,fontsize=12)
+ 
+def DDFields():
+
+    r = []
+
+    r.append(('ELAIS', 744, 10.0, -45.52))   
+    r.append(('SPT', 290, 349.39, -63.32))
+    r.append(('COSMOS', 2786, 150.36, 2.84))
+    r.append(('XMM-LSS', 2412, 34.39, -5.09))
+    r.append(('CDFS', 1427, 53.00, -27.44))
+    r.append(('ADFS', 290, 61.00, -48.0))
+    fields = np.rec.fromrecords(
+        r, names=['name', 'fieldId', 'RA', 'Dec'])
+
+    return fields
 
