@@ -268,3 +268,27 @@ class Read_Sqlite:
         names = list(d.dtype.names)
         d.dtype.names = [new_col_names[n] if n in new_col_names else n for n in d.dtype.names]
         return d
+
+def getObservations(dbDir, dbName,dbExtens):
+
+    dbFullName = '{}/{}.{}'.format(dbDir, dbName,dbExtens)
+    # if extension is npy -> load
+    if dbExtens == 'npy':
+        observations = np.load(dbFullName)
+    else:
+        #db as input-> need to transform as npy
+        print('looking for',dbFullName)
+        keymap = {'observationStartMJD': 'mjd',
+                  'filter': 'band',
+                  'visitExposureTime': 'exptime',
+                  'skyBrightness': 'sky',
+                  'fieldRA': 'Ra',
+                  'fieldDec': 'Dec',}
+
+        reader = Read_Sqlite(dbFullName)
+        #sql = reader.sql_selection(None)
+        observations = reader.get_data(cols=None, sql='',
+                                       to_degrees=False,
+                                       new_col_names=keymap)
+    
+    return observations
