@@ -10,6 +10,7 @@ from sn_tools.sn_io import Read_Sqlite
 from sn_tools.sn_obs import renameFields, getFields
 from sklearn.datasets import make_blobs
 from sklearn.cluster import KMeans
+from sn_tools.sn_io import getObservations
 
 class ReferenceData:
     """
@@ -790,6 +791,76 @@ class TemplateData_x1color(object):
         return flux
 """
 
+class ClusterObs:
+
+    def __init__(self,data,n_clusters,dbName):
+        
+        self.data = data
+        self.dbName = dbName
+        self.points, self.clus, self.labels = self.makeClusters(n_clusters)
+        
+        self.clusters = self.anaClusters(n_clusters)
+
+    def makeClusters(self,n_clusters):
+
+        r = []
+        for (pixRa, pixDec) in self.data[['fieldRA', 'fieldDec']]:
+            r.append([pixRa, pixDec])
+
+        points = np.array(r)
+      
+        # create kmeans object
+        kmeans = KMeans(n_clusters=n_clusters)
+        # fit kmeans object to data
+        kmeans.fit(points)
+
+        # print location of clusters learned by kmeans object
+        print('cluster centers',kmeans.cluster_centers_)
+
+        # save new clusters for chart
+        y_km = kmeans.fit_predict(points)
+
+        return points, y_km,kmeans.labels_
+
+
+    def anaClusters(self,n_clusters):
+
+        fields = DDFields()
+        r= []
+       
+        for io in range(n_clusters):
+            ra = []
+            names = []
+            RA = self.points[self.clus ==io,0]
+            Dec = self.points[self.clus == io,1]
+            #ax.scatter(RA,Dec, s=10, c=color[io])
+            indx = np.where(self.labels == io)[0]
+            sel_obs = self.data[indx]
+            Nvisits = getVisitsBand(sel_obs)
+            
+            min_RA = np.min(RA)
+            max_RA = np.max(RA)
+            min_Dec = np.min(Dec)
+            max_Dec = np.max(Dec)
+            mean_RA = np.mean(RA)
+            mean_Dec = np.mean(Dec)
+            area = np.pi*(max_RA-min_RA)*(max_Dec-min_Dec)/4.
+            idx, fieldName = getName(fields,mean_RA)
+            ra = [int(io),idx,mean_RA,mean_Dec,
+                  max_RA-min_RA,max_Dec-min_Dec,
+                  area,self.dbName.ljust(26),fieldName.ljust(7),len(RA)]
+            names = ['clusid','fieldId','RA','Dec','width_RA','width_Dec','area','dbName','fieldName','Nvisits']
+
+            for key, vals in Nvisits.items():
+                ra += [vals]
+                names += ['Nvisits_{}'.format(key)]
+
+            r.append((ra))
+   
+        env = np.rec.fromrecords(r, names=names)
+
+        return env
+
 class AnaOS:
 
     def __init__(self,dbDir, dbName,dbExtens,n_clusters):
@@ -807,18 +878,16 @@ class AnaOS:
         fieldIds = [290,744,1427, 2412, 2786]
         self.obs_DD = getFields(observations, 'DD', fieldIds,nside)
         n_DD = len(self.obs_DD)
-        Nvisits_DD = self.getVisitsBand(self.obs_DD)
+        Nvisits_DD = getVisitsBand(self.obs_DD)
         #WDF obs
         self.obs_WFD = getFields(observations,'WFD')
         n_WFD = len(self.obs_WFD)
-        Nvisits_WFD = self.getVisitsBand(self.obs_WFD)
+        Nvisits_WFD = getVisitsBand(self.obs_WFD)
         
-        # make cluster out of these observations
+        # make cluster out of these DDF observations
 
-        self.points, self.clus, self.labels = self.clusters(n_clusters=n_clusters)
+        self.ddfclus = ClusterObs(self.obs_DD,n_clusters,dbName).clusters
         
-        self.ddfclus = self.ana_clusters(n_clusters=n_clusters) 
-
         dbName = self.dbName.ljust(26)
         n_tot = n_WFD+n_DD
         r = [dbName]
@@ -866,32 +935,14 @@ class AnaOS:
                 rb.append((dbName,'{}_{}'.format(fName,band).ljust(9),ddc['Nvisits_{}'.format(band)]))
                  
         self.stat = np.rec.fromrecords(rb, names=['cadence','Field','Nvisits'])
-
+        self.nvisits_DD = n_DD
+        self.nvisits_WFD = n_WFD
 
     def load_obs(self):
 
         # loading observations
 
-        dbFullName = '{}/{}.{}'.format(self.dbDir, self.dbName,self.dbExtens)
-        # if extension is npy -> load
-        if self.dbExtens == 'npy':
-            observations = np.load(dbFullName)
-        else:
-            #db as input-> need to transform as npy
-            print('looking for',dbFullName)
-            keymap = {'observationStartMJD': 'mjd',
-                      'filter': 'band',
-                      'visitExposureTime': 'exptime',
-                      'skyBrightness': 'sky',
-                      'fieldRA': 'Ra',
-                      'fieldDec': 'Dec',}
-            
-            reader = Read_Sqlite(dbFullName)
-            #sql = reader.sql_selection(None)
-            observations = reader.get_data(cols=None, sql='',
-                                           to_degrees=False,
-                                           new_col_names=keymap)
-
+        observations = getObservations(self.dbDir, self.dbName,self.dbExtens)
         observations = renameFields(observations)
 
         return observations
@@ -906,84 +957,6 @@ class AnaOS:
             names.append('{}_{}'.format(name,key))
 
         return r, names
-
-
-    def clusters(self,n_clusters):
-
-        r = []
-        for (pixRa, pixDec) in self.obs_DD[['fieldRA', 'fieldDec']]:
-            r.append([pixRa, pixDec])
-
-        points = np.array(r)
-      
-        # create kmeans object
-        kmeans = KMeans(n_clusters=n_clusters)
-        # fit kmeans object to data
-        kmeans.fit(points)
-
-        # print location of clusters learned by kmeans object
-        print('cluster centers',kmeans.cluster_centers_)
-
-        # save new clusters for chart
-        y_km = kmeans.fit_predict(points)
-
-        return points, y_km,kmeans.labels_
-
-
-    def ana_clusters(self,n_clusters):
-
-        fields = DDFields()
-        r= []
-       
-        
-        for io in range(n_clusters):
-            ra = []
-            names = []
-            RA = self.points[self.clus ==io,0]
-            Dec = self.points[self.clus == io,1]
-            #ax.scatter(RA,Dec, s=10, c=color[io])
-            indx = np.where(self.labels == io)[0]
-            sel_obs = self.obs_DD[indx]
-            Nvisits = self.getVisitsBand(sel_obs)
-            
-            min_RA = np.min(RA)
-            max_RA = np.max(RA)
-            min_Dec = np.min(Dec)
-            max_Dec = np.max(Dec)
-            mean_RA = np.mean(RA)
-            mean_Dec = np.mean(Dec)
-            area = np.pi*(max_RA-min_RA)*(max_Dec-min_Dec)/4.
-            idx, fieldName = self.getName(fields,mean_RA)
-            ra = [int(io),idx,mean_RA,mean_Dec,
-                  max_RA-min_RA,max_Dec-min_Dec,
-                  area,self.dbName.ljust(26),fieldName.ljust(7),len(RA)]
-            names = ['clusid','fid','RA','Dec','width_RA','width_Dec','area','dbName','fieldName','Nvisits']
-
-            
-            for key, vals in Nvisits.items():
-                ra += [vals]
-                names += ['Nvisits_{}'.format(key)]
-
-            r.append((ra))
-   
-        env = np.rec.fromrecords(r, names=names)
-
-        return env
-
-    def getVisitsBand(self,obs):
-
-        bands = 'ugrizy'
-        Nvisits = {}
-        for band in bands:
-            ib = obs['filter']==band
-            Nvisits[band] = len(obs[ib])
-
-        return Nvisits
-    def getName(self,fields,RA):
-
-        idx = np.abs(fields['RA'] - RA).argmin()
-        
-        return idx,fields[idx]['name']
 
     def plot_dithering(self,n_clusters):
 
@@ -1042,9 +1015,26 @@ def DDFields():
     r.append(('COSMOS', 2786, 150.36, 2.84))
     r.append(('XMM-LSS', 2412, 34.39, -5.09))
     r.append(('CDFS', 1427, 53.00, -27.44))
-    r.append(('ADFS', 290, 61.00, -48.0))
+    r.append(('ADFS1', 290, 63.59, -47.59)) 
+    r.append(('ADFS2', 290, 58.97, -49.28))
+
     fields = np.rec.fromrecords(
         r, names=['name', 'fieldId', 'RA', 'Dec'])
 
     return fields
 
+def getName(fields,RA):
+
+    idx = np.abs(fields['RA'] - RA).argmin()
+    
+    return idx,fields[idx]['name']
+
+def getVisitsBand(obs):
+
+    bands = 'ugrizy'
+    Nvisits = {}
+    for band in bands:
+        ib = obs['filter']==band
+        Nvisits[band] = len(obs[ib])
+
+    return Nvisits
