@@ -331,15 +331,10 @@ class ProcessArea:
             plt.show()
         
 
-        
+        #select data inside an area centered in (Ra,Dec) with width (widthRa+1,widthDec+1)
+
         dataSel = dataInside(data, Ra, Dec, widthRa+1., widthDec+1.,
                              RaCol=self.RaCol, DecCol=self.DecCol)
-        
-
-        #dataSel = dataSel[:10]
-        # print(dataSel.dtype)
-        #idt = dataSel['filter'] == 'r'
-        # print(dataSel[idt][[self.RaCol,self.DecCol,'filter','night','observationId']])
 
         if display:
             import matplotlib.pylab as plt
@@ -347,33 +342,23 @@ class ProcessArea:
             ax.plot(dataSel[self.RaCol], dataSel[self.DecCol], 'ko')
             plt.show()
 
-        # Remove DD dithering here
-        # This is just to make a test
+        # Possible to remove DD dithering here
+        # This is just to test impact of dithering on DDF
 
         if nodither != '':
             dataSel[self.RaCol] = np.mean(dataSel[self.RaCol])
             dataSel[self.DecCol] = np.mean(dataSel[self.DecCol])
 
-        """
-        print('selection',dataSel,Ra,Dec)
-        plt.plot(dataSel[self.RaCol],dataSel[self.DecCol],'ko')
-        plt.show()
-        """
-        #print(self.Ra, self.Dec, self.RaCol, self.DecCol)
         if dataSel is not None:
-
-            #print(len(dataSel), dataSel.dtype, self.RaCol, self.DecCol)
 
             # mv to panda df
             dataset = pd.DataFrame(np.copy(dataSel))
 
-            #print('group size', np.unique(groups.size()))
             # get central pixel ID
             healpixID = hp.ang2pix(self.nside, Ra,
                                    Dec, nest=True, lonlat=True)
 
             # get nearby pixels
-           # print(Ra, Dec, np.deg2rad(Ra), np.deg2rad(Dec))
             vec = hp.pix2vec(self.nside, healpixID, nest=True)
             healpixIDs = hp.query_disc(
                 self.nside, vec, np.deg2rad(widthRa), inclusive=False, nest=True)
@@ -412,9 +397,6 @@ class ProcessArea:
             ipix = -1
             isave = -1
             for healpixID in matched_pixels['healpixID'].unique():
-            #for healpixID in [70677]:
-                # print('hello',healpixID)
-                #ipix += 1
                 time_ref = time.time()
                 ib = matched_pixels['healpixID'] == healpixID
                 thematch = matched_pixels.loc[ib]
@@ -422,56 +404,26 @@ class ProcessArea:
                 if len(thematch) == 0:
                     continue
                 ipix += 1
-                #print('boo')
-                #grnames = [grname for grname in thematch['groupName']]
-                
-                """
-                dataPixel = pd.concat([groups.get_group(grname)
-                                       for grname in thematch['groupName']])
-                print('dataPixel done',time.time()-time_ref,len(dataPixel))
-                time_ref = time.time()
-                """
-                #dataPixel = self.multi_read(groups, thematch['groupName'],nproc=1)
-                #print('hello',healpixID, thematch['index'].tolist())
-                #time_ref = time.time()
+               
                 dataPixel = dataset.iloc[thematch['index'].tolist()].copy()
-                #print('there',time.time()-time_ref)
-                #print('dataPixel done',time.time()-time_ref,len(dataPixel),len(dataPixelb))
 
-
-                #print('hello',healpixID,len(dataPixel),thematch['index'].tolist())
-                # print(dataPixel[[self.RaCol,self.DecCol,'filter']])
                 pixRa = thematch['pixRa'].unique()
                 pixDec = thematch['pixDec'].unique()
-                #print('there', healpixID, pixRa, pixDec)
 
                 dataPixel.loc[:, 'healpixID'] = healpixID
                 dataPixel.loc[:, 'pixRa'] = pixRa[0]
                 dataPixel.loc[:, 'pixDec'] = pixDec[0]
 
-                #print(len(thematch), len(dataPixel))
-
                 resdict = {}
                 time_ref = time.time()
 
+
+                #run the metrics on those pixels
                 for metric in metricList:
                     resdict[metric.name] = metric.run(
                         season(dataPixel.to_records(index=False)))
 
-                # print(test)
-
-                    #print('Metrics run', time.time()-time_ref,resdict[metric.name])
-                """
-                if self.saveData:
-                    for key, vals in resdict.items():
-                        if vals is not None:
-                            outName = '{}/{}{}_{}_{}.hdf5'.format(self.outDir,self.dbName,nodither,key,self.num)
-                            df = pd.DataFrame(vals)
-                            keyhdf =  'metric_{}_{}_{}'.format(self.num,ipoint,int(healpixID))
-                
-                            df.to_hdf(outName,key=keyhdf,mode='a',complevel=9)
-                """
-
+                # concatenate the results
                 for key in resfi.keys():
                     if resdict[key] is not None:
                         if resfi[key] is None:
@@ -479,7 +431,11 @@ class ProcessArea:
                         else:
                             #print('here pal',resdict[key],resfi[key])
                             resfi[key] = np.concatenate((resfi[key], resdict[key]))
+                
+
                 # from time to time: dump data
+                # this is only done for metrics
+
                 if ipix >= 10:
                     if self.saveData:
                         isave += 1
@@ -498,8 +454,7 @@ class ProcessArea:
                     for key, vals in resfi.items():
                         if vals is not None:
                             self.dump(vals,nodither,key,ipoint,isave)
-
-                    #self.dump(resfi, nodither, key, ipoint, isave)
+                   
 
     def multi_read(self, groups, names,nproc=4):
 
