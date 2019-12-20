@@ -13,7 +13,8 @@ import numpy.lib.recfunctions as rf
 class LCfast:
     def __init__(self, reference_lc, x1, color, telescope, mjdCol, RaCol, DecCol,
                  filterCol, exptimeCol,
-                 m5Col, seasonCol,snr_min):
+                 m5Col, seasonCol,snr_min,
+                 lightOutput=True):
 
         self.RaCol = RaCol
         self.DecCol = DecCol
@@ -24,6 +25,7 @@ class LCfast:
         self.seasonCol = seasonCol
         self.x1 = x1
         self.color = color
+        self.lightOutput = lightOutput
 
         # Loading reference file
         self.reference_lc = reference_lc
@@ -35,7 +37,7 @@ class LCfast:
         # selection: min_rf_phase < phase < max_rf_phase
         # and        blue_cutoff < mean_rest_frame < red_cutoff
         # where mean_rest_frame = telescope.mean_wavelength/(1.+z)
-        self.blue_cutoff = 300.
+        self.blue_cutoff = 350.
         self.red_cutoff = 800.
 
         # SN parameters for Fisher matrix estimation
@@ -102,7 +104,7 @@ class LCfast:
             if len(obs[idx]) > 0:
                 jproc += 1
                 p = multiprocessing.Process(name='Subprocess-'+str(
-                    j), target=self.processBand_light, args=(obs[idx], band, gen_par, jproc, result_queue))
+                    j), target=self.processBand, args=(obs[idx], band, gen_par, jproc, result_queue))
                 p.start()
 
         resultdict = {}
@@ -119,7 +121,7 @@ class LCfast:
         # return produced LC
         return tab_tot
 
-    def processBand(self, sel_obs, band, gen_par, j=-1, output_q=None):
+    def processBand_old(self, sel_obs, band, gen_par, j=-1, output_q=None):
         """ LC simulation of a set of obs corresponding to a band
         The idea is to use python broadcasting so as to estimate 
         all the requested values (flux, flux error, Fisher components, ...)
@@ -374,7 +376,7 @@ class LCfast:
         x = 10**(0.4*(mag-m5))
         return np.sqrt((0.04-gamma)*x+gamma*x**2)
     """
-    def processBand_light(self, sel_obs, band, gen_par, j=-1, output_q=None):
+    def processBand(self, sel_obs, band, gen_par, j=-1, output_q=None):
         """ LC simulation of a set of obs corresponding to a band
         The idea is to use python broadcasting so as to estimate 
         all the requested values (flux, flux error, Fisher components, ...)
@@ -557,10 +559,11 @@ class LCfast:
             np.tile(sel_obs[self.mjdCol], (nvals, 1)), mask=~flag)
         seasons = np.ma.array(
             np.tile(sel_obs[self.seasonCol], (nvals, 1)), mask=~flag)
-        #exp_time = np.ma.array(
-        #    np.tile(sel_obs[self.exptimeCol], (nvals, 1)), mask=~flag)
-        #m5_obs = np.ma.array(
-        #    np.tile(sel_obs[self.m5Col], (nvals, 1)), mask=~flag)
+        if not self.lightOutput:
+            exp_time = np.ma.array(
+                np.tile(sel_obs[self.exptimeCol], (nvals, 1)), mask=~flag)
+            m5_obs = np.ma.array(
+                np.tile(sel_obs[self.m5Col], (nvals, 1)), mask=~flag)
         healpixIds = np.ma.array(
             np.tile(sel_obs['healpixID'].astype(int), (nvals, 1)), mask=~flag)
 
@@ -593,13 +596,13 @@ class LCfast:
             lc['snr_m5'] = snr_m5[~snr_m5.mask]
             lc['time'] = obs_time[~obs_time.mask]
             lc['mag'] = mag_obs[~mag_obs.mask]
-            """
-            lc['m5'] = m5_obs[~m5_obs.mask]
-            lc['mag'] = mag_obs[~mag_obs.mask]
-            lc['magerr'] = (2.5/np.log(10.))/snr_m5[~snr_m5.mask]
-            lc['time'] = obs_time[~obs_time.mask]
-            lc['exposuretime'] = exp_time[~exp_time.mask]
-            """
+            if not self.lightOutput:
+                lc['m5'] = m5_obs[~m5_obs.mask]
+                lc['mag'] = mag_obs[~mag_obs.mask]
+                lc['magerr'] = (2.5/np.log(10.))/snr_m5[~snr_m5.mask]
+                lc['time'] = obs_time[~obs_time.mask]
+                lc['exposuretime'] = exp_time[~exp_time.mask]
+            
             lc['band'] = ['LSST::'+band]*len(lc)
             lc.loc[:,'zp'] = self.zp[band]
             #lc['zp'] = [2.5*np.log10(3631)]*len(lc)
@@ -611,10 +614,11 @@ class LCfast:
             lc['pixDec'] = pixDecs[~pixDecs.mask]
             lc['z'] = z_vals
             lc['daymax'] = daymax_vals
-            #lc['flux_e_sec'] = self.reference_lc.mag_to_flux_e_sec[band](
-            #    lc['mag'])
-            #lc['flux_5'] = self.reference_lc.mag_to_flux_e_sec[band](
-            #    lc['m5'])
+            if not self.lightOutput:
+                lc['flux_e_sec'] = self.reference_lc.mag_to_flux_e_sec[band](
+                    lc['mag'])
+                lc['flux_5'] = self.reference_lc.mag_to_flux_e_sec[band](
+                    lc['m5'])
             for key, vals in Fisher_Mat.items():
                 lc['F_{}'.format(key)] = vals[~vals.mask]/(lc['fluxerr']**2)
             lc.loc[:, 'x1'] = self.x1
