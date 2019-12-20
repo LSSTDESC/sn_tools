@@ -165,9 +165,10 @@ class GenerateSample:
         epsilon = 1.e-8
         if self.params['z']['type'] == 'random':
             # get sn rate for this z range
-            #print(zmin, zmax, duration, self.area)
+            
             if zmin<1.e-6:
                 zmin = 0.01
+            print(zmin, zmax, duration, self.area)
             zz, rate, err_rate, nsn, err_nsn = self.sn_rate(
                 zmin=zmin, zmax=zmax,
                 duration=duration,
@@ -1492,11 +1493,15 @@ class GetReference:
             zmin, zmax, zstep, nz = self.limVals(lc_sel,'z')
             phamin, phamax, phastep, npha= self.limVals(lc_sel,'phase')
 
-            #print(zmin,zmax,zstep,nz,phamin, phamax, phastep, npha)
+            zstep = np.round(zstep,3)
+            phastep = np.round(phastep,3)
+            
             zv = np.linspace(zmin,zmax,nz)
+            #zv = np.round(zv,2)
+            #print(band,zv)
             phav = np.linspace(phamin,phamax,npha)
-
-
+            
+            
             index = np.lexsort((lc_sel['z'],lc_sel['phase']))
             flux = np.reshape(lc_sel[index]['flux'],(npha,nz))
             fluxerr = np.reshape(lc_sel[index]['fluxerr'],(npha,nz))
