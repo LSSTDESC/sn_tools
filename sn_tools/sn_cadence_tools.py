@@ -1,6 +1,7 @@
 import numpy as np
 from scipy import interpolate
 import matplotlib.pyplot as plt
+from matplotlib.patches import Ellipse
 import numpy.lib.recfunctions as rf
 import h5py
 from astropy.table import Table, Column, vstack
@@ -794,34 +795,79 @@ class TemplateData_x1color(object):
 
 class ClusterObs:
 
-    def __init__(self,data,n_clusters,dbName,RA_name='fieldRA',Dec_name='fieldDec'):
-        
+    def __init__(self,data,nclusters,dbName,RA_name='fieldRA',Dec_name='fieldDec'):
+        """
+        class to identify clusters of points in (RA,Dec)
+
+        Parameters
+        ----------
+        data: numpy record array
+         data to process
+        nclusters: int
+         number of clusters to find
+        dbName: str
+         name of the file where the data where extracted from
+        RA_name: str, opt
+         field name for the RA (default=fieldRA)
+        Dec_name: str, opt
+         field name for the Dec (default=fieldDec)
+
+        """
+
+        # grab necessary infos
         self.data = data
         self.dbName = dbName
         self.RA_name = RA_name
         self.Dec_name = Dec_name
 
-        self.points, self.clus, self.labels = self.makeClusters(n_clusters)
+        # make the cluster of points
+        self.points, self.clus, self.labels = self.makeClusters(nclusters)
         
-        clusters,dfclus = self.anaClusters(n_clusters)
+        #analyse the clusters
+        clusters,dfclus = self.anaClusters(nclusters)
      
+        # this is a summary of the clusters found
         self.clusters = clusters
 
+        # this dataframe is a matching of initial data and clusters infos
         datadf = pd.DataFrame(np.copy(data))
 
         self.dataclus = datadf.merge(dfclus,left_on=[self.RA_name,self.Dec_name],right_on=['RA','Dec'])
 
 
-    def makeClusters(self,n_clusters):
+    def makeClusters(self,nclusters):
+        """
+        Method to identify clusters
+        It uses the KMeans algorithm from scipy
 
+        Parameters
+        ---------
+        nclusters: int
+         number of clusters to find
+
+        Returns
+        -------
+        points: numpy array
+          array of (RA,Dec) of the points
+        y_km: numpy array
+          index of the clusters
+        kmeans.labels_: numpy array
+          kmeans label
+        """
+
+
+        """
         r = []
         for (pixRa, pixDec) in self.data[[self.RA_name,self.Dec_name]]:
             r.append([pixRa, pixDec])
 
         points = np.array(r)
-      
+        """
+
+        points = np.array(self.data[[self.RA_name,self.Dec_name]].tolist())
+        
         # create kmeans object
-        kmeans = KMeans(n_clusters=n_clusters)
+        kmeans = KMeans(n_clusters=nclusters)
         # fit kmeans object to data
         kmeans.fit(points)
 
@@ -831,16 +877,36 @@ class ClusterObs:
         # save new clusters for chart
         y_km = kmeans.fit_predict(points)
 
-        return points, y_km,kmeans.labels_
+        return points, y_km, kmeans.labels_
 
 
-    def anaClusters(self,n_clusters):
+    def anaClusters(self,nclusters):
+        """
+        Method matching clusters to data
+
+        Parameters
+        ----------
+        nclusters: int
+         number of clusters to consider
+
+        Returns
+        -------
+        env: numpy record array
+          summary of cluster infos:
+          clusid, fieldId, RA, Dec, width_RA, width_Dec, 
+          area, dbName, fieldName, Nvisits, Nvisits_all, 
+          Nvisits_u, Nvisits_g, Nvisits_r, Nvisits_i, 
+          Nvisits_z, Nvisits_y
+        dfcluster: pandas df
+          for each data point considered: RA,Dec,fieldName,clusId
+         
+        """
 
         fields = DDFields()
         r= []
        
         dfcluster = pd.DataFrame()
-        for io in range(n_clusters):
+        for io in range(nclusters):
             ra = []
             names = []
             RA = self.points[self.clus ==io,0]
@@ -882,13 +948,42 @@ class ClusterObs:
 
 class AnaOS:
 
-    def __init__(self,dbDir, dbName,dbExtens,n_clusters,ljustdb=26,ljustfieldtype=9):
-        
+    def __init__(self,dbDir, dbName,dbExtens,nclusters,ljustdb=26,ljustfieldtype=9):
+        """
+        class to analyze an observing strategy
+        The idea here is to disentangle WFD and DD obs
+        so as to estimate statistics such as the total 
+        number of visits or the DDF fraction.
+
+        Parameters
+        ----------
+        dbDir: str
+         path to the location dir of the database
+        dbName: str
+         name of the dbfile to load
+        dbExtens: str
+         extension of the dbfile
+         two possibilities:
+         - dbExtens = db for scheduler files
+         - dbExtens = npy for npy files (generated from scheduler files)
+        nclusters: int
+         number of clusters to search in DD data
+        ljustdb: int, opt
+         length of the dbname (default: 26)
+         this is to have the same length for numpy array column
+        ljustfieldtype: int, opt
+         length of the fieldtype (default: 9)
+         this is to have the same length for numpy array column
+
+        """
+
+
         self.dbDir = dbDir
         self.dbName = dbName
         self.dbExtens = dbExtens
         self.ljustdb = ljustdb
         self.ljustfieldtype = ljustfieldtype
+        self.nclusters = nclusters
         
         #load observations
         observations = self.load_obs()
@@ -896,13 +991,15 @@ class AnaOS:
         #WDF obs
         self.obs_WFD = getFields(observations,'WFD')
         n_WFD = len(self.obs_WFD)
+        #get the number of visits per band
         Nvisits_WFD = getVisitsBand(self.obs_WFD)
+
         #DDF obs
         nside = 128 
-
         fieldIds = [290,744,1427, 2412, 2786]
         self.obs_DD = getFields(observations, 'DD', fieldIds,nside)
         n_DD = len(self.obs_DD)
+        #get the number of visits per band
         Nvisits_DD = getVisitsBand(self.obs_DD)
 
         self.nvisits_DD = n_DD
@@ -915,7 +1012,9 @@ class AnaOS:
         # make cluster out of these DDF observations
 
         print('NDD',len(self.obs_DD))
-        self.ddfclus = ClusterObs(self.obs_DD,n_clusters,dbName).clusters
+        self.clus = ClusterObs(self.obs_DD,self.nclusters,dbName)
+        self.ddfclus = self.clus.clusters
+        
         
         dbName = self.dbName.ljust(self.ljustdb)
         n_tot = n_WFD+n_DD
@@ -968,8 +1067,28 @@ class AnaOS:
         
 
     def load_obs(self):
+        """
+        Method to load observations (from simulation)
 
-        # loading observations
+        Parameters
+        ----------
+
+        Returns
+        -------
+
+        numpy record array with scheduler information like
+         observationId, fieldRA, fieldDec, observationStartMJD, 
+         flush_by_mjd, visitExposureTime, filter, rotSkyPos, 
+         numExposures, airmass, seeingFwhm500, seeingFwhmEff, 
+         seeingFwhmGeom, sky, night, slewTime, visitTime, 
+         slewDistance, fiveSigmaDepth, altitude, azimuth, 
+         paraAngle, cloud, moonAlt, sunAlt, note, fieldId,
+         proposalId, block_id, observationStartLST, rotTelPos, 
+         moonAz, sunAz, sunRA, sunDec, moonRA, moonDec, 
+         moonDistance, solarElong, moonPhase
+         This list may change from file to file.
+
+        """
 
         observations = getObservations(self.dbDir, self.dbName,self.dbExtens)
         observations = renameFields(observations)
@@ -977,7 +1096,17 @@ class AnaOS:
         return observations
 
     def fillVisits(self, thedict, name):
-        
+        """
+        Method to fill the number of visits
+
+        Parameters
+        ----------
+        thedict: dict
+         dict of visits; keys: bands; values: number of visits
+        name: str
+         name of the field (DD or WFD)
+        """
+
         r = []
         names = []
 
@@ -987,55 +1116,83 @@ class AnaOS:
 
         return r, names
 
-    def plot_dithering(self,n_clusters):
+    def plot_dithering(self):
+        """
+        Method to plot clusters of data
+
+        """
 
         fig, ax = plt.subplots(ncols=2, nrows=3, figsize=(10, 9))
-        fig.suptitle('{}'.format(dbName))
+        fig.suptitle('{}'.format(self.dbName))
         fig.subplots_adjust(right=0.75)
 
-        color = ['red','black','blue','cyan','green']
+        color = ['red','black','blue','cyan','green','purple']
         pos = [(0,0),(0,1),(1,0),(1,1),(2,0),(2,1)]
 
         #fields = DDFields()
 
         lista = []
         listb = []
-        for io in range(n_clusters):
-            RA = self.points[self.clus == io,0]
-            Dec = self.points[self.clus == io,1]
+        for io in range(self.nclusters):
+            RA = self.clus.points[self.clus.clus == io,0]
+            Dec = self.clus.points[self.clus.clus == io,1]
             xp = pos[io][0]
             yp = pos[io][1]
-            idx = self.dithering['clusid']==io
-            val = self.dithering[idx]
-            print('hello',xp,yp)
-            label = '{} - {} deg2'.format(val['fieldName'][0],np.round(val['area'][0],2))
-            ab, = ax[xp][yp].plot(RA,Dec,marker='o',color=color[io],label=label)
-    
-            lista.append(ab)
-            listb.append(label)
-   
-            ell = Ellipse((val['RA'],val['Dec']),val['width_RA'],val['width_Dec'],facecolor='none',edgecolor='black')
-            print(val['RA'],val['Dec'],val['width_RA'],val['width_Dec'])
-            ax[xp][yp].add_patch(ell)
+            idx = self.clus.clusters['clusid']==io
+            val = self.clus.clusters[idx]
+            
+            #label = '{} - {} deg2'.format(val['fieldName'][0],np.round(val['area'][0],2))
+            #print('hello',xp,yp,label,io)
+            #ab  = ax[xp][yp].plot(RA,Dec,marker='o',color=color[io],label=label)
+            print(RA,Dec)
+            ax[xp][yp].plot(RA,Dec,marker='o',color=color[io])
 
-            ell = Ellipse((0.,0.),val['width_RA'],val['width_Dec'],facecolor='none',edgecolor=color[io])
-            ax[2][1].add_patch(ell)
+            #lista.append(ab)
+            #listb.append(label)
+   
+            
+            #ell = Ellipse((val['RA'],val['Dec']),val['width_RA'],val['width_Dec'],facecolor='none',edgecolor='black')
+            print(val['RA'],val['Dec'],val['width_RA'],val['width_Dec'])
+            #ax[xp][yp].add_patch(ell)
+
+            #ell = Ellipse((0.,0.),val['width_RA'],val['width_Dec'],facecolor='none',edgecolor=color[io])
+            #ax[2][1].add_patch(ell)
             if yp == 0:
                 ax[xp][yp].set_ylabel('Dec [rad]')
             if xp == 2:
                 ax[xp][yp].set_xlabel('RA [rad]')
                     
    
-        RAmax = np.max(self.dithering['width_RA'])+0.3
-        Decmax = np.max(self.dithering['width_Dec'])+0.3
+        """
+        RAmax = np.max(self.clus.clusters['width_RA'])+0.3
+        Decmax = np.max(self.clus.clusters['width_Dec'])+0.3
 
         ax[2][1].set_xlim(-RAmax/2.,RAmax/2.)
         ax[2][1].set_ylim(-Decmax/2.,Decmax/2.)
         ax[2][1].set_xlabel('RA [rad]')
+        """
 
-        plt.legend(lista,listb,loc='center left', bbox_to_anchor=(1, 2.0),ncol=1,fontsize=12)
+        #plt.legend(lista,listb,loc='center left', bbox_to_anchor=(1, 2.0),ncol=1,fontsize=12)
  
 def DDFields():
+    """
+    Function to define DD fields
+    The definitions are hardcoded for the moment
+    Should move to an input file
+
+    Returns
+    -------
+    
+    fields: numpy record array
+     array of fields with the following columns:
+     - name: name of the field
+     - fieldId: Id of the field
+     - RA: RA of the field
+     - Dec: Dec of the field
+     - fieldnum: field number
+    
+
+    """
 
     r = []
 
@@ -1053,12 +1210,49 @@ def DDFields():
     return fields
 
 def getName(fields,RA):
+    """
+    Function to get a field name corresponding to RA
+
+    Parameters
+    ----------
+    fields: numpy record array
+     array of fields with the following columns:
+     - name: name of the field
+     - fieldId: Id of the field
+     - RA: RA of the field
+     - Dec: Dec of the field
+     - fieldnum: field number
+
+    Returns
+    -------
+    idx: int
+     idx (row number) of the matching field
+    name: str
+     name of the matching field
+
+    """
+
 
     idx = np.abs(fields['RA'] - RA).argmin()
     
     return idx,fields[idx]['name']
 
 def getVisitsBand(obs):
+    """
+    Function to estimate the number of visits per band
+    for a set of observations
+
+    Parameters
+    ----------
+    obs: numpy record array
+     array of observations
+
+    Returns
+    -------
+    Nvisits: dict
+     dict with bands as keys and number of visits as values
+
+    """
 
     bands = 'ugrizy'
     Nvisits = {}
