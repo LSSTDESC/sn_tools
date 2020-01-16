@@ -11,6 +11,78 @@ import numpy.lib.recfunctions as rf
 import sqlite3
 import logging
 
+def append(metricTot,sel):
+    """
+    Method to concatenate a numpy array to another numpy array
+    with the same structure
+
+    Parameters
+    ----------
+    metricTot: numpy array
+    sel: numpy array
+
+    Returns
+    -------
+    concatenated numpy array
+
+    """
+
+    if metricTot is None:
+        metricTot = np.copy(sel)
+    else:
+        metricTot = np.concatenate((metricTot,np.copy(sel)))
+
+    return metricTot
+
+def getMetricValues(dirFile,dbName,metricName,fieldType,nside):
+    """
+    Method to read and analyze files from the metrics
+
+    Parameters
+    ----------
+    dirFile: str
+     location directory of the files
+    dbName: str
+     name of the simulation to process
+    metricName: str
+     name of the metric
+    nside: int
+     nside paramater value (healpix)
+    fields_DD: record array
+     array of DD fields with the following columns:
+     - name: name of the field
+     - fieldId: Id of the field
+     - RA: RA of the field
+     - Dec: Dec of the field
+     - fieldnum: field number 
+    """
+
+    metricTot = None
+
+    search_path = '{}/{}/{}/*{}Metric_{}*_nside_{}_*'.format(dirFile,dbName,metricName,metricName,fieldType,nside)
+
+    print('looking for',search_path)
+    fileNames = glob.glob(search_path)
+
+    if fileNames:
+        #plt.plot(metricValues['pixRa'],metricValues['pixDec'],'ko')
+        #plt.show()
+        #get the values from the metrics
+        metricValues = np.array(loopStack(fileNames,'astropyTable'))
+        
+        # analyze these values
+        #tab = getVals(fields_DD, metricValues, dbName.ljust(adjl), nside)
+        
+        #plt.plot(sel['pixRa'],sel['pixDec'],'ko')
+        #plt.show()
+    
+        metricTot = append(metricTot,metricValues)
+    
+        return metricTot
+
+
+
+
 def geth5Data(name,thedir):
     
     sumName = 'Simu_{}.hdf5'.format(name)
