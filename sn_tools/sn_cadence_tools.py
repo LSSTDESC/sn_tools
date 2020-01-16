@@ -14,6 +14,7 @@ from sklearn.cluster import KMeans
 from sn_tools.sn_io import getObservations
 import pandas as pd
 
+
 class ReferenceData:
     """
     class to handle light curve of SN
@@ -130,7 +131,7 @@ class GenerateFakeObservations:
         if not sequences:
             self.makeFake(config)
         else:
-            self.makeFake_sqs(config) 
+            self.makeFake_sqs(config)
 
     def makeFake_sqs(self, config):
         """ Generate Fake observations
@@ -152,9 +153,9 @@ class GenerateFakeObservations:
         cadence = config['cadence']
         shift_days = dict(
             zip(bands, [config['shift_days']*io for io in range(len(bands))]))
-        m5 = dict(zip(bands, config['m5']))
-        #Nvisits = dict(zip(bands, config['Nvisits']))
-        #Single_Exposure_Time = dict(zip(bands, config['Single_Exposure_Time']))
+        # m5 = dict(zip(bands, config['m5']))
+        # Nvisits = dict(zip(bands, config['Nvisits']))
+        # Single_Exposure_Time = dict(zip(bands, config['Single_Exposure_Time']))
         inter_season_gap = 100.
         seeingEff = dict(zip(bands, config['seeingEff']))
         seeingGeom = dict(zip(bands, config['seeingGeom']))
@@ -165,45 +166,48 @@ class GenerateFakeObservations:
         Nvisits = {}
         Single_Exposure_Time = {}
         for il, season in enumerate(config['seasons']):
-            #mjd_min = config['MJD_min'] + float(season-1)*inter_season_gap
-            mjd_min = config['MJD_min']+il*(config['season_length'][season]+inter_season_gap)
+            m5 = dict(zip(bands, config['m5'][season]))
+            print('hello', m5)
+            # mjd_min = config['MJD_min'] + float(season-1)*inter_season_gap
+            mjd_min = config['MJD_min']+il * \
+                (config['season_length'][season]+inter_season_gap)
             mjd_max = mjd_min+config['season_length'][season]
             n_visits = config['Nvisits'][season]
             seqs = config['sequences'][season]
             sing_exp_time = config['Single_Exposure_Time'][season]
             cadence = config['cadence'][season]
-            
+
             for i in range(len(seqs)):
-            #for i,val in enumerate(config['sequences']):
+                # for i,val in enumerate(config['sequences']):
                 mjd_min_seq = mjd_min+i*config['deltaT_seq'][i]
                 mjd_max_seq = mjd_max+i*config['deltaT_seq'][i]
-                mjd = np.arange(mjd_min_seq, mjd_max_seq+cadence,cadence)
+                mjd = np.arange(mjd_min_seq, mjd_max_seq+cadence, cadence)
                 night = (mjd-config['MJD_min']).astype(int)+1
-    
-                for j,band in enumerate(seqs[i]):
+
+                for j, band in enumerate(seqs[i]):
                     mjd += shift_days[band]
                     Nvisits[band] = n_visits[i][j]
                     Single_Exposure_Time[band] = sing_exp_time[i][j]
                     m5_coadded = self.m5coadd(m5[band],
-                                                  Nvisits[band],
-                                                  Single_Exposure_Time[band])
+                                              Nvisits[band],
+                                              Single_Exposure_Time[band])
 
                     myarr = np.array(mjd, dtype=[(self.mjdCol, 'f8')])
-                    myarr = rf.append_fields(myarr,'night',night)
+                    myarr = rf.append_fields(myarr, 'night', night)
                     myarr = rf.append_fields(myarr, [self.RaCol, self.DecCol, self.filterCol], [
                         [Ra]*len(myarr), [Dec]*len(myarr), [band]*len(myarr)])
                     myarr = rf.append_fields(myarr, [self.m5Col, self.nexpCol, self.exptimeCol, self.seasonCol], [
-                                         [m5_coadded]*len(myarr), [Nvisits[band]]*len(myarr), [Nvisits[band]*Single_Exposure_Time[band]]*len(myarr), [season]*len(myarr)])
+                        [m5_coadded]*len(myarr), [Nvisits[band]]*len(myarr), [Nvisits[band]*Single_Exposure_Time[band]]*len(myarr), [season]*len(myarr)])
                     myarr = rf.append_fields(myarr, [self.seeingEffCol, self.seeingGeomCol], [
-                                         [seeingEff[band]]*len(myarr), [seeingGeom[band]]*len(myarr)])
-                    myarr = rf.append_fields(myarr,self.visitTime,[Nvisits[band]*Single_Exposure_Time[band]]*len(myarr))
+                        [seeingEff[band]]*len(myarr), [seeingGeom[band]]*len(myarr)])
+                    myarr = rf.append_fields(myarr, self.visitTime, [
+                                             Nvisits[band]*Single_Exposure_Time[band]]*len(myarr))
                     rtot.append(myarr)
-                    
 
             """
             for i, band in enumerate(bands):
                 mjd = np.arange(mjd_min, mjd_max+cadence[band],cadence[band])
-                #if mjd_max not in mjd:
+                # if mjd_max not in mjd:
                 #    mjd = np.append(mjd, mjd_max)
                 mjd += shift_days[band]
                 m5_coadded = self.m5coadd(m5[band],
@@ -222,7 +226,8 @@ class GenerateFakeObservations:
         res = np.copy(np.concatenate(rtot))
         res.sort(order=self.mjdCol)
 
-        res = rf.append_fields(res,'observationId',np.random.randint(10*len(res),size=len(res)))
+        res = rf.append_fields(res, 'observationId',
+                               np.random.randint(10*len(res), size=len(res)))
 
         self.Observations = res
 
@@ -257,13 +262,13 @@ class GenerateFakeObservations:
         rtot = []
         # for season in range(1, config['nseasons']+1):
         for il, season in enumerate(config['seasons']):
-            #mjd_min = config['MJD_min'] + float(season-1)*inter_season_gap
+            # mjd_min = config['MJD_min'] + float(season-1)*inter_season_gap
             mjd_min = config['MJD_min'][il]
             mjd_max = mjd_min+config['season_length']
 
             for i, band in enumerate(bands):
-                mjd = np.arange(mjd_min, mjd_max+cadence[band],cadence[band])
-                #if mjd_max not in mjd:
+                mjd = np.arange(mjd_min, mjd_max+cadence[band], cadence[band])
+                # if mjd_max not in mjd:
                 #    mjd = np.append(mjd, mjd_max)
                 mjd += shift_days[band]
                 m5_coadded = self.m5coadd(m5[band],
@@ -282,7 +287,8 @@ class GenerateFakeObservations:
         res = np.copy(np.concatenate(rtot))
         res.sort(order=self.mjdCol)
 
-        res = rf.append_fields(res,'observationId',np.random.randint(10*len(res),size=len(res)))
+        res = rf.append_fields(res, 'observationId',
+                               np.random.randint(10*len(res), size=len(res)))
 
         self.Observations = res
 
@@ -637,7 +643,7 @@ class TemplateData(object):
         daymax = param['daymax']
 
         # estimate element for Fisher matrix
-        #FisherEl = self.FisherValues(param, phase, fluxerr)
+        # FisherEl = self.FisherValues(param, phase, fluxerr)
 
         # flag for LC points outside the restframe phase range
         min_rf_phase = min_rf_phase[:, np.newaxis]
@@ -704,7 +710,7 @@ class TemplateData(object):
 """
 class TemplateData_x1color(object):
     
-    #class to load template LC
+    # class to load template LC
     
 
     def __init__(self, filenames, band):
@@ -793,9 +799,10 @@ class TemplateData_x1color(object):
         return flux
 """
 
+
 class ClusterObs:
 
-    def __init__(self,data,nclusters,dbName,RA_name='fieldRA',Dec_name='fieldDec'):
+    def __init__(self, data, nclusters, dbName, RA_name='fieldRA', Dec_name='fieldDec'):
         """
         class to identify clusters of points in (RA,Dec)
 
@@ -822,20 +829,20 @@ class ClusterObs:
 
         # make the cluster of points
         self.points, self.clus, self.labels = self.makeClusters(nclusters)
-        
-        #analyse the clusters
-        clusters,dfclus = self.anaClusters(nclusters)
-     
+
+        # analyse the clusters
+        clusters, dfclus = self.anaClusters(nclusters)
+
         # this is a summary of the clusters found
         self.clusters = clusters
 
         # this dataframe is a matching of initial data and clusters infos
         datadf = pd.DataFrame(np.copy(data))
 
-        self.dataclus = datadf.merge(dfclus,left_on=[self.RA_name,self.Dec_name],right_on=['RA','Dec'])
+        self.dataclus = datadf.merge(
+            dfclus, left_on=[self.RA_name, self.Dec_name], right_on=['RA', 'Dec'])
 
-
-    def makeClusters(self,nclusters):
+    def makeClusters(self, nclusters):
         """
         Method to identify clusters
         It uses the KMeans algorithm from scipy
@@ -855,7 +862,6 @@ class ClusterObs:
           kmeans label
         """
 
-
         """
         r = []
         for (pixRa, pixDec) in self.data[[self.RA_name,self.Dec_name]]:
@@ -864,23 +870,22 @@ class ClusterObs:
         points = np.array(r)
         """
 
-        points = np.array(self.data[[self.RA_name,self.Dec_name]].tolist())
-        
+        points = np.array(self.data[[self.RA_name, self.Dec_name]].tolist())
+
         # create kmeans object
         kmeans = KMeans(n_clusters=nclusters)
         # fit kmeans object to data
         kmeans.fit(points)
 
         # print location of clusters learned by kmeans object
-        print('cluster centers',kmeans.cluster_centers_)
+        print('cluster centers', kmeans.cluster_centers_)
 
         # save new clusters for chart
         y_km = kmeans.fit_predict(points)
 
         return points, y_km, kmeans.labels_
 
-
-    def anaClusters(self,nclusters):
+    def anaClusters(self, nclusters):
         """
         Method matching clusters to data
 
@@ -899,25 +904,25 @@ class ClusterObs:
           Nvisits_z, Nvisits_y
         dfcluster: pandas df
           for each data point considered: RA,Dec,fieldName,clusId
-         
+
         """
 
         fields = DDFields()
-        r= []
-       
+        r = []
+
         dfcluster = pd.DataFrame()
         for io in range(nclusters):
             ra = []
             names = []
-            RA = self.points[self.clus ==io,0]
-            Dec = self.points[self.clus == io,1]
+            RA = self.points[self.clus == io, 0]
+            Dec = self.points[self.clus == io, 1]
 
-            dfclus = pd.DataFrame({'RA': RA,'Dec':Dec})
-            #ax.scatter(RA,Dec, s=10, c=color[io])
+            dfclus = pd.DataFrame({'RA': RA, 'Dec': Dec})
+            # ax.scatter(RA,Dec, s=10, c=color[io])
             indx = np.where(self.labels == io)[0]
             sel_obs = self.data[indx]
             Nvisits = getVisitsBand(sel_obs)
-            
+
             min_RA = np.min(RA)
             max_RA = np.max(RA)
             min_Dec = np.min(Dec)
@@ -925,30 +930,31 @@ class ClusterObs:
             mean_RA = np.mean(RA)
             mean_Dec = np.mean(Dec)
             area = np.pi*(max_RA-min_RA)*(max_Dec-min_Dec)/4.
-            idx, fieldName = getName(fields,mean_RA)
-            ra = [int(io),idx,mean_RA,mean_Dec,
-                  max_RA-min_RA,max_Dec-min_Dec,
-                  area,self.dbName.ljust(26),fieldName.ljust(7),len(RA),Nvisits['all']]
-            names = ['clusid','fieldId','RA','Dec','width_RA','width_Dec','area','dbName','fieldName','Nvisits']
-           
-            dfclus.loc[:,'fieldName'] = fieldName
-            dfclus.loc[:,'clusId'] = int(io)
-            dfcluster = pd.concat([dfcluster,dfclus],sort=False)
+            idx, fieldName = getName(fields, mean_RA)
+            ra = [int(io), idx, mean_RA, mean_Dec,
+                  max_RA-min_RA, max_Dec-min_Dec,
+                  area, self.dbName.ljust(26), fieldName.ljust(7), len(RA), Nvisits['all']]
+            names = ['clusid', 'fieldId', 'RA', 'Dec', 'width_RA',
+                     'width_Dec', 'area', 'dbName', 'fieldName', 'Nvisits']
 
-            
+            dfclus.loc[:, 'fieldName'] = fieldName
+            dfclus.loc[:, 'clusId'] = int(io)
+            dfcluster = pd.concat([dfcluster, dfclus], sort=False)
+
             for key, vals in Nvisits.items():
                 ra += [vals]
                 names += ['Nvisits_{}'.format(key)]
 
             r.append((ra))
-   
+
         env = np.rec.fromrecords(r, names=names)
 
-        return env,dfcluster
+        return env, dfcluster
+
 
 class AnaOS:
 
-    def __init__(self,dbDir, dbName,dbExtens,nclusters,ljustdb=26,ljustfieldtype=9):
+    def __init__(self, dbDir, dbName, dbExtens, nclusters, ljustdb=26, ljustfieldtype=9):
         """
         class to analyze an observing strategy
         The idea here is to disentangle WFD and DD obs
@@ -977,94 +983,94 @@ class AnaOS:
 
         """
 
-
         self.dbDir = dbDir
         self.dbName = dbName
         self.dbExtens = dbExtens
         self.ljustdb = ljustdb
         self.ljustfieldtype = ljustfieldtype
         self.nclusters = nclusters
-        
-        #load observations
+
+        # load observations
         observations = self.load_obs()
 
-        #WDF obs
-        self.obs_WFD = getFields(observations,'WFD')
+        # WDF obs
+        self.obs_WFD = getFields(observations, 'WFD')
         n_WFD = len(self.obs_WFD)
-        #get the number of visits per band
+        # get the number of visits per band
         Nvisits_WFD = getVisitsBand(self.obs_WFD)
 
-        #DDF obs
-        nside = 128 
-        fieldIds = [290,744,1427, 2412, 2786]
-        self.obs_DD = getFields(observations, 'DD', fieldIds,nside)
+        # DDF obs
+        nside = 128
+        fieldIds = [290, 744, 1427, 2412, 2786]
+        self.obs_DD = getFields(observations, 'DD', fieldIds, nside)
         n_DD = len(self.obs_DD)
-        #get the number of visits per band
+        # get the number of visits per band
         Nvisits_DD = getVisitsBand(self.obs_DD)
 
         self.nvisits_DD = n_DD
         self.nvisits_WFD = n_WFD
-        
+
         if n_DD < 1:
             self.ddfclus = None
             self.stat = None
             return
         # make cluster out of these DDF observations
 
-        print('NDD',len(self.obs_DD))
-        self.clus = ClusterObs(self.obs_DD,self.nclusters,dbName)
+        print('NDD', len(self.obs_DD))
+        self.clus = ClusterObs(self.obs_DD, self.nclusters, dbName)
         self.ddfclus = self.clus.clusters
-        
-        
+
         dbName = self.dbName.ljust(self.ljustdb)
         n_tot = n_WFD+n_DD
         r = [dbName]
         names = ['cadence']
-        
 
-        rb = [(dbName,'DD'.ljust(self.ljustfieldtype),n_DD)]
-        rb.append((dbName,'WFD'.ljust(self.ljustfieldtype),n_WFD))
+        rb = [(dbName, 'DD'.ljust(self.ljustfieldtype), n_DD)]
+        rb.append((dbName, 'WFD'.ljust(self.ljustfieldtype), n_WFD))
 
+        r += [n_WFD, n_DD]
+        names += ['WFD', 'DD']
 
-        r += [n_WFD,n_DD]
-        names += ['WFD','DD']
-
-        r_dd, names_dd = self.fillVisits(Nvisits_DD,'DD')
-        r_wfd, names_wfd = self.fillVisits(Nvisits_WFD,'WFD')
+        r_dd, names_dd = self.fillVisits(Nvisits_DD, 'DD')
+        r_wfd, names_wfd = self.fillVisits(Nvisits_WFD, 'WFD')
 
         r += r_dd
         names += names_dd
 
         r += r_wfd
         names += names_wfd
-        
+
         for i in range(len(r_dd)):
-            rb.append((dbName,names_dd[i].ljust(self.ljustfieldtype),r_dd[i]))
-            rb.append((dbName,names_wfd[i].ljust(self.ljustfieldtype),r_wfd[i]))
+            rb.append((dbName, names_dd[i].ljust(
+                self.ljustfieldtype), r_dd[i]))
+            rb.append((dbName, names_wfd[i].ljust(
+                self.ljustfieldtype), r_wfd[i]))
 
         """
         r.append((self.dbName.ljust(26),n_WFD,'WFD'.ljust(7)))
         r.append((self.dbName.ljust(26),n_DD,'DD'.ljust(7)))
         """
 
-       
-        print('DDF Frac',n_DD/n_tot,n_WFD,n_DD,np.sum(self.ddfclus['Nvisits']))
+        print('DDF Frac', n_DD/n_tot, n_WFD, n_DD,
+              np.sum(self.ddfclus['Nvisits']))
 
         for ddc in self.ddfclus:
             fieldName = ddc['fieldName']
-            print(ddc['fieldName'],ddc['Nvisits']/n_tot)
-            r.append((ddc['dbName'],ddc['Nvisits'],ddc['fieldName']))
+            print(ddc['fieldName'], ddc['Nvisits']/n_tot)
+            r.append((ddc['dbName'], ddc['Nvisits'], ddc['fieldName']))
             r += [ddc['Nvisits']]
             names += [fieldName]
-            rb.append((dbName,fieldName.ljust(self.ljustfieldtype),ddc['Nvisits']))
+            rb.append((dbName, fieldName.ljust(
+                self.ljustfieldtype), ddc['Nvisits']))
             for band in 'ugrizy':
                 fName = fieldName.strip()
                 r += [ddc['Nvisits_{}'.format(band)]]
-                names += ['{}_{}'.format(fieldName,band)]
-                rb.append((dbName,'{}_{}'.format(fName,band).ljust(self.ljustfieldtype),ddc['Nvisits_{}'.format(band)]))
-                 
-        self.stat = np.rec.fromrecords(rb, names=['cadence','Field','Nvisits'])
-        
+                names += ['{}_{}'.format(fieldName, band)]
+                rb.append((dbName, '{}_{}'.format(fName, band).ljust(
+                    self.ljustfieldtype), ddc['Nvisits_{}'.format(band)]))
+
+        self.stat = np.rec.fromrecords(
+            rb, names=['cadence', 'Field', 'Nvisits'])
 
     def load_obs(self):
         """
@@ -1090,7 +1096,7 @@ class AnaOS:
 
         """
 
-        observations = getObservations(self.dbDir, self.dbName,self.dbExtens)
+        observations = getObservations(self.dbDir, self.dbName, self.dbExtens)
         observations = renameFields(observations)
 
         return observations
@@ -1110,9 +1116,9 @@ class AnaOS:
         r = []
         names = []
 
-        for key,vals in thedict.items():
+        for key, vals in thedict.items():
             r.append(vals)
-            names.append('{}_{}'.format(name,key))
+            names.append('{}_{}'.format(name, key))
 
         return r, names
 
@@ -1126,43 +1132,41 @@ class AnaOS:
         fig.suptitle('{}'.format(self.dbName))
         fig.subplots_adjust(right=0.75)
 
-        color = ['red','black','blue','cyan','green','purple']
-        pos = [(0,0),(0,1),(1,0),(1,1),(2,0),(2,1)]
+        color = ['red', 'black', 'blue', 'cyan', 'green', 'purple']
+        pos = [(0, 0), (0, 1), (1, 0), (1, 1), (2, 0), (2, 1)]
 
-        #fields = DDFields()
+        # fields = DDFields()
 
         lista = []
         listb = []
         for io in range(self.nclusters):
-            RA = self.clus.points[self.clus.clus == io,0]
-            Dec = self.clus.points[self.clus.clus == io,1]
+            RA = self.clus.points[self.clus.clus == io, 0]
+            Dec = self.clus.points[self.clus.clus == io, 1]
             xp = pos[io][0]
             yp = pos[io][1]
-            idx = self.clus.clusters['clusid']==io
+            idx = self.clus.clusters['clusid'] == io
             val = self.clus.clusters[idx]
-            
-            #label = '{} - {} deg2'.format(val['fieldName'][0],np.round(val['area'][0],2))
-            #print('hello',xp,yp,label,io)
-            #ab  = ax[xp][yp].plot(RA,Dec,marker='o',color=color[io],label=label)
-            print(RA,Dec)
-            ax[xp][yp].plot(RA,Dec,marker='o',color=color[io])
 
-            #lista.append(ab)
-            #listb.append(label)
-   
-            
-            #ell = Ellipse((val['RA'],val['Dec']),val['width_RA'],val['width_Dec'],facecolor='none',edgecolor='black')
-            print(val['RA'],val['Dec'],val['width_RA'],val['width_Dec'])
-            #ax[xp][yp].add_patch(ell)
+            # label = '{} - {} deg2'.format(val['fieldName'][0],np.round(val['area'][0],2))
+            # print('hello',xp,yp,label,io)
+            # ab  = ax[xp][yp].plot(RA,Dec,marker='o',color=color[io],label=label)
+            print(RA, Dec)
+            ax[xp][yp].plot(RA, Dec, marker='o', color=color[io])
 
-            #ell = Ellipse((0.,0.),val['width_RA'],val['width_Dec'],facecolor='none',edgecolor=color[io])
-            #ax[2][1].add_patch(ell)
+            # lista.append(ab)
+            # listb.append(label)
+
+            # ell = Ellipse((val['RA'],val['Dec']),val['width_RA'],val['width_Dec'],facecolor='none',edgecolor='black')
+            print(val['RA'], val['Dec'], val['width_RA'], val['width_Dec'])
+            # ax[xp][yp].add_patch(ell)
+
+            # ell = Ellipse((0.,0.),val['width_RA'],val['width_Dec'],facecolor='none',edgecolor=color[io])
+            # ax[2][1].add_patch(ell)
             if yp == 0:
                 ax[xp][yp].set_ylabel('Dec [rad]')
             if xp == 2:
                 ax[xp][yp].set_xlabel('RA [rad]')
-                    
-   
+
         """
         RAmax = np.max(self.clus.clusters['width_RA'])+0.3
         Decmax = np.max(self.clus.clusters['width_Dec'])+0.3
@@ -1172,8 +1176,9 @@ class AnaOS:
         ax[2][1].set_xlabel('RA [rad]')
         """
 
-        #plt.legend(lista,listb,loc='center left', bbox_to_anchor=(1, 2.0),ncol=1,fontsize=12)
- 
+        # plt.legend(lista,listb,loc='center left', bbox_to_anchor=(1, 2.0),ncol=1,fontsize=12)
+
+
 def DDFields():
     """
     Function to define DD fields
@@ -1182,7 +1187,7 @@ def DDFields():
 
     Returns
     -------
-    
+
     fields: numpy record array
      array of fields with the following columns:
      - name: name of the field
@@ -1190,26 +1195,27 @@ def DDFields():
      - RA: RA of the field
      - Dec: Dec of the field
      - fieldnum: field number
-    
+
 
     """
 
     r = []
 
-    r.append(('ELAIS', 744, 10.0, -45.52,4))   
-    r.append(('SPT', 290, 349.39, -63.32,5))
-    r.append(('COSMOS', 2786, 150.36, 2.84,1))
-    r.append(('XMM-LSS', 2412, 34.39, -5.09,2))
-    r.append(('CDFS', 1427, 53.00, -27.44,3))
-    r.append(('ADFS1', 290, 63.59, -47.59,6)) 
-    r.append(('ADFS2', 290, 58.97, -49.28,7))
+    r.append(('ELAIS', 744, 10.0, -45.52, 4))
+    r.append(('SPT', 290, 349.39, -63.32, 5))
+    r.append(('COSMOS', 2786, 150.36, 2.84, 1))
+    r.append(('XMM-LSS', 2412, 34.39, -5.09, 2))
+    r.append(('CDFS', 1427, 53.00, -27.44, 3))
+    r.append(('ADFS1', 290, 63.59, -47.59, 6))
+    r.append(('ADFS2', 290, 58.97, -49.28, 7))
 
     fields = np.rec.fromrecords(
-        r, names=['name', 'fieldId', 'RA', 'Dec','fieldnum'])
+        r, names=['name', 'fieldId', 'RA', 'Dec', 'fieldnum'])
 
     return fields
 
-def getName(fields,RA):
+
+def getName(fields, RA):
     """
     Function to get a field name corresponding to RA
 
@@ -1232,10 +1238,10 @@ def getName(fields,RA):
 
     """
 
-
     idx = np.abs(fields['RA'] - RA).argmin()
-    
-    return idx,fields[idx]['name']
+
+    return idx, fields[idx]['name']
+
 
 def getVisitsBand(obs):
     """
@@ -1258,9 +1264,9 @@ def getVisitsBand(obs):
     Nvisits = {}
 
     if 'filter' in obs.dtype.names:
-        Nvisits['all']=0
+        Nvisits['all'] = 0
         for band in bands:
-            ib = obs['filter']==band
+            ib = obs['filter'] == band
             Nvisits[band] = len(obs[ib])
             Nvisits['all'] += len(obs[ib])
     else:
