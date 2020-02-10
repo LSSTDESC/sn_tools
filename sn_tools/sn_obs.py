@@ -18,6 +18,38 @@ from astropy.table import Table
 import multiprocessing
 
 
+def getPix(nside, fieldRA, fieldDec):
+    """
+    Function returning pixRa, pixDec and healpixId
+
+    Parameters
+    ---------------
+    nside: int
+      nside value for healpix
+    fieldRa: float
+      field Ra
+    fieldDec: float
+      field Dec
+
+    Returns
+    ----------
+    healpixId: Id from healpix
+    pixRa: Ra from healpix
+    pixDec: Dec from healpix
+
+    """
+
+    healpixId = hp.ang2pix(nside, fieldRA,
+                           fieldDec, nest=True, lonlat=True)
+    coord = hp.pix2ang(nside,
+                       healpixId, nest=True, lonlat=True)
+
+    pixRa = coord[0]
+    pixDec = coord[1]
+
+    return healpixId, pixRa, pixDec
+
+
 def pavingSky(ramin, ramax, decmin, decmax, radius):
     """ Function to perform a paving of the sky
 
@@ -87,10 +119,10 @@ def dataInside(data, Ra, Dec, widthRa, widthDec, RaCol='fieldRa', DecCol='fieldD
     if maxRa >= 360.:
         # in that case two areas necessary
         #print('hello poly',minRa,360., minDec, maxDec,0.0, maxRa-360., minDec, maxDec)
-        areaList.append(area(minRa,360., minDec, maxDec))
+        areaList.append(area(minRa, 360., minDec, maxDec))
         areaList.append(area(0.0, maxRa-360., minDec, maxDec))
         if ax is not None:
-            areapList.append(areap(minRa,360., minDec, maxDec))
+            areapList.append(areap(minRa, 360., minDec, maxDec))
             areapList.append(areap(0.0, maxRa-360., minDec, maxDec))
     else:
         if minRa < 0.:
@@ -329,9 +361,8 @@ class ProcessArea:
             fig, ax = plt.subplots()
             ax.plot(data[self.RaCol], data[self.DecCol], 'ko')
             plt.show()
-        
 
-        #select data inside an area centered in (Ra,Dec) with width (widthRa+1,widthDec+1)
+        # select data inside an area centered in (Ra,Dec) with width (widthRa+1,widthDec+1)
 
         dataSel = dataInside(data, Ra, Dec, widthRa+1., widthDec+1.,
                              RaCol=self.RaCol, DecCol=self.DecCol)
@@ -391,8 +422,9 @@ class ProcessArea:
             matched_pixels = groups.apply(
                 lambda x: self.match(x, healpixIDs, pixRa, pixDec)).reset_index()
 
-            print('after matching',time.time()-time_ref,len(matched_pixels['healpixID'].unique()))
-            
+            print('after matching', time.time()-time_ref,
+                  len(matched_pixels['healpixID'].unique()))
+
             #print('number of pixels',len(matched_pixels['healpixID'].unique()))
             ipix = -1
             isave = -1
@@ -404,7 +436,7 @@ class ProcessArea:
                 if len(thematch) == 0:
                     continue
                 ipix += 1
-               
+
                 dataPixel = dataset.iloc[thematch['index'].tolist()].copy()
 
                 pixRa = thematch['pixRa'].unique()
@@ -417,8 +449,7 @@ class ProcessArea:
                 resdict = {}
                 time_ref = time.time()
 
-
-                #run the metrics on those pixels
+                # run the metrics on those pixels
                 for metric in metricList:
                     resdict[metric.name] = metric.run(
                         season(dataPixel.to_records(index=False)))
@@ -430,8 +461,8 @@ class ProcessArea:
                             resfi[key] = resdict[key]
                         else:
                             #print('here pal',resdict[key],resfi[key])
-                            resfi[key] = np.concatenate((resfi[key], resdict[key]))
-                
+                            resfi[key] = np.concatenate(
+                                (resfi[key], resdict[key]))
 
                 # from time to time: dump data
                 # this is only done for metrics
@@ -441,25 +472,23 @@ class ProcessArea:
                         isave += 1
                         for key, vals in resfi.items():
                             if vals is not None:
-                                self.dump(vals,nodither,key,ipoint,isave)
+                                self.dump(vals, nodither, key, ipoint, isave)
                             resfi = {}
                             for metric in metricList:
                                 resfi[metric.name] = None
                             ipix = -1
-                            
 
             if ipix != -1:
                 if self.saveData:
                     isave += 1
                     for key, vals in resfi.items():
                         if vals is not None:
-                            self.dump(vals,nodither,key,ipoint,isave)
-                   
+                            self.dump(vals, nodither, key, ipoint, isave)
 
-    def multi_read(self, groups, names,nproc=4):
+    def multi_read(self, groups, names, nproc=4):
 
         n_names = int(len(names))
-        print('hello',n_names)
+        print('hello', n_names)
         delta = n_names
         if nproc > 1:
             delta = int(delta/(nproc))
@@ -470,8 +499,7 @@ class ProcessArea:
 
         tabnames = tabnames.tolist()
 
-
-        if nproc >=7:
+        if nproc >= 7:
             if tabnames[-1]-tabnames[-2] <= 10:
                 tabnames.remove(tabnames[-2])
 
@@ -485,43 +513,42 @@ class ProcessArea:
 
             #print('Field', names[ida:idb])
             p = multiprocessing.Process(name='Subprocess-'+str(j), target=self.concat, args=(groups,
-                names[ida:idb],j, result_queue))
+                                                                                             names[ida:idb], j, result_queue))
             p.start()
 
         resultdict = {}
-        
+
         for j in range(len(tabnames)-1):
             resultdict.update(result_queue.get())
-        
+
         for p in multiprocessing.active_children():
-            p.join()                           
-    
+            p.join()
+
         tab_tot = pd.DataFrame()
         for j in range(len(tabnames)-1):
-            tab_tot = tab_tot.append(resultdict[j], ignore_index=True) 
+            tab_tot = tab_tot.append(resultdict[j], ignore_index=True)
 
         return tab_tot
-
-        
 
     def concat(self, groups, names, j=-1, output_q=None):
 
         res = pd.concat([groups.get_group(grname)
                          for grname in names])
-    
-        if output_q is not None:              
-            output_q.put({j: res})                    
-        else:                                 
-            return res 
 
-    def dump(self,resfi,nodither,key,ipoint,isave):
-        
-        outName = '{}/{}{}_{}_{}.hdf5'.format(self.outDir,self.dbName,nodither,key,self.num)
+        if output_q is not None:
+            output_q.put({j: res})
+        else:
+            return res
+
+    def dump(self, resfi, nodither, key, ipoint, isave):
+
+        outName = '{}/{}{}_{}_{}.hdf5'.format(self.outDir,
+                                              self.dbName, nodither, key, self.num)
 
         df = pd.DataFrame.from_records(resfi)
         tab = Table.from_pandas(df)
-        keyhdf =  'metric_{}_{}_{}'.format(self.num,ipoint,isave)
-        tab.write(outName,keyhdf,append=True,compression=True)
+        keyhdf = 'metric_{}_{}_{}'.format(self.num, ipoint, isave)
+        tab.write(outName, keyhdf, append=True, compression=True)
     """
     def dump_old(self,resfi,nodither,key,ipoint,isave):
 
@@ -647,45 +674,44 @@ class ProcessArea:
             names = [grp.name]*len(pixID_matched)
         # names = ['test']*len(pixID_matched)
         # return pd.Series([matched_pixels], ['healpixIDs'])
-        
-        
+
         n_index = len(grp.index.values)
-        
+
         arr_index = grp.index.values
 
-       
         #arr_index = np.reshape(arr_index,(len(arr_index),1))
-        #print('hhh',arr_index)
+        # print('hhh',arr_index)
         df_pix = pd.DataFrame({'healpixID': pixID_matched,
                                'pixRa': pixRa_matched,
                                'pixDec': pixDec_matched,
                                'groupName': names})
 
-        #print(arr_index,df_pix)
-        #if n_index > 1:
+        # print(arr_index,df_pix)
+        # if n_index > 1:
         #    print('here',n_index,type(grp.index.values))
-        
+
         n_pix = len(df_pix)
         #n_index = len(df_index)
-        #print('indices',n_index,n_pix)
+        # print('indices',n_index,n_pix)
         if n_pix > 1:
             arr_index = arr_index.repeat(n_pix)
         #    if n_index > 1:
         #        print('after repeat',arr_index,arr_index.shape)
         if n_index > 1:
-            df_pix = df_pix.append([df_pix]*(n_index-1),ignore_index=True)
-         
-        #if n_index > 1:
+            df_pix = df_pix.append([df_pix]*(n_index-1), ignore_index=True)
+
+        # if n_index > 1:
         #    print(arr_index)
         #    print(n_index,n_pix,len(arr_index),len(df_pix))
-        df_pix.loc[:,'index'] = arr_index
-        
+        df_pix.loc[:, 'index'] = arr_index
+
         return df_pix
-        
+
         grp = pd.concat([grp]*len(pixID_matched), ignore_index=True)
-        grp.loc[:,'healpixID'] = pixID_matched
-        grp.loc[:,'pixRa']  = pixRa_matched
-        grp.loc[:,'pixDec']  = pixDec_matched
+        grp.loc[:, 'healpixID'] = pixID_matched
+        grp.loc[:, 'pixRa'] = pixRa_matched
+        grp.loc[:, 'pixDec'] = pixDec_matched
+
 
 class ObsPixel:
 
@@ -1339,8 +1365,9 @@ class GetShape:
 
         return polyshape
 
+
 def getFields_fromId(observations, fieldIds):
-    
+
     obs = None
     for fieldId in fieldIds:
         idf = observations['fieldId'] == fieldId
@@ -1351,7 +1378,7 @@ def getFields_fromId(observations, fieldIds):
     return obs
 
 
-def getFields(observations, fieldType = 'WFD', fieldIds=None, nside=64):
+def getFields(observations, fieldType='WFD', fieldIds=None, nside=64):
 
     print(observations.dtype)
 
@@ -1359,7 +1386,7 @@ def getFields(observations, fieldType = 'WFD', fieldIds=None, nside=64):
 
     # this is for the WFD
 
-    for pName in ['proposalId','survey_id']:
+    for pName in ['proposalId', 'survey_id']:
         if pName in observations.dtype.names:
 
             print(np.unique(observations[pName]))
@@ -1373,18 +1400,18 @@ def getFields(observations, fieldType = 'WFD', fieldIds=None, nside=64):
                 idx = observations[pName] == propId
                 r.append((propId, len(observations[idx])))
 
-            res = np.rec.fromrecords(r, names=['propId','Nobs'])
+            res = np.rec.fromrecords(r, names=['propId', 'Nobs'])
             if fieldType == 'WFD':
-                #Take the propId with the largest number of fields
+                # Take the propId with the largest number of fields
                 propId_WFD = propIds[np.argmax(res['Nobs'])]
-                print(res,np.argmax(res['Nobs']),propId_WFD)
-                return observations[observations[pName]==propId_WFD]
+                print(res, np.argmax(res['Nobs']), propId_WFD)
+                return observations[observations[pName] == propId_WFD]
             if fieldType == 'DD':
                 # could be tricky here depending on the database structure
                 if 'fieldId' in observations.dtype.names:
-                    #print('hello',np.unique(observations['fieldId']))
+                    # print('hello',np.unique(observations['fieldId']))
                     # easy one: grab DDF from fieldIds
-                    if len(propIds)>=3:
+                    if len(propIds) >= 3:
                         obser = getFields_fromId(observations, fieldIds)
                     else:
                         obser = getFields_fromId(observations, [0])
@@ -1396,14 +1423,16 @@ def getFields(observations, fieldType = 'WFD', fieldIds=None, nside=64):
                     we do not have other ways to identify
                     DD except by selecting pixels with a large number of visits
                     """
-                    pixels = pixelate(observations, nside, RaCol='fieldRA', DecCol='fieldDec')
+                    pixels = pixelate(observations, nside,
+                                      RaCol='fieldRA', DecCol='fieldDec')
 
                     df = pd.DataFrame(np.copy(pixels))
-                    
-                    groups = df.groupby('healpixID').filter(lambda x: len(x) > 5000)
-                    
+
+                    groups = df.groupby('healpixID').filter(
+                        lambda x: len(x) > 5000)
+
                     group_DD = groups.groupby(['fieldRA', 'fieldDec']).filter(
                         lambda x: len(x) > 4000)
-                    
+
                     # return np.array(group_DD.to_records().view(type=np.matrix))
                     return group_DD.to_records(index=False)
