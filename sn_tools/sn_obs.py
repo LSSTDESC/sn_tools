@@ -1409,9 +1409,12 @@ def getFields(observations, fieldType='WFD', fieldIds=None, nside=64):
             if fieldType == 'DD':
                 # could be tricky here depending on the database structure
                 if 'fieldId' in observations.dtype.names:
-                    # print('hello',np.unique(observations['fieldId']))
+                    # print('hello', np.unique(
+                    #    observations['fieldId']), len(propIds))
+                    fieldIds = np.unique(observations['fieldId'])
                     # easy one: grab DDF from fieldIds
-                    if len(propIds) >= 3:
+                    # if len(propIds) >= 3:
+                    if len(fieldIds) >= 3:
                         obser = getFields_fromId(observations, fieldIds)
                     else:
                         obser = getFields_fromId(observations, [0])
