@@ -376,7 +376,7 @@ class ProcessArea:
         # Possible to remove DD dithering here
         # This is just to test impact of dithering on DDF
 
-        if nodither != '':
+        if nodither:
             dataSel[self.RaCol] = np.mean(dataSel[self.RaCol])
             dataSel[self.DecCol] = np.mean(dataSel[self.DecCol])
 
@@ -542,8 +542,8 @@ class ProcessArea:
 
     def dump(self, resfi, nodither, key, ipoint, isave):
 
-        outName = '{}/{}{}_{}_{}.hdf5'.format(self.outDir,
-                                              self.dbName, nodither, key, self.num)
+        outName = '{}/{}_{}_{}.hdf5'.format(self.outDir,
+                                            self.dbName, key, self.num)
 
         df = pd.DataFrame.from_records(resfi)
         tab = Table.from_pandas(df)
