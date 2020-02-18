@@ -16,6 +16,90 @@ from scipy.interpolate import RegularGridInterpolator
 import multiprocessing
 import pprint
 
+
+class MultiProc:
+    def __init__(self, toprocess, mainvar, params,func,nproc):
+        """
+        Class to perform multiprocessing
+        
+        Parameters
+        ----------------
+        toprocess: array (numpy or pandas df)
+         data to process
+        mainvar: str
+         field used to split processes in toprocess
+        params: dict
+         parameters
+        func: function
+         function to process a single element
+        nproc: int
+         number of // processing
+
+
+        """
+        self.toprocess = toprocess
+        self.mainvar = mainvar
+        self.params = params
+        self.nproc = nproc
+        self.func = func
+
+        self.data = self.multi()
+        
+    def multi(self):
+        """
+        Method to perform multiprocessing
+
+        """
+
+        # multiprocessing parameters
+        nz = len(self.toprocess)
+        t= np.linspace(0, nz-1, self.nproc+1, dtype='int')
+        result_queue = multiprocessing.Queue()
+
+        procs = [multiprocessing.Process(name='Subprocess-'+str(j), target=self.process,
+                                         args=(self.toprocess[t[j]:t[j+1]], self.params, j, result_queue))]
+
+        for p in procs:
+            p.start()
+
+        resultdict = {}
+        # get the results in a dict
+
+        for i in range(self.nproc):
+            resultdict.update(result_queue.get())
+
+        for p in multiprocessing.active_children():
+            p.join()
+
+        restot = None
+
+        # gather the results
+        for key, vals in resultdict.items():
+            if restot is None:
+                restot = vals
+            else:
+                restot = np.concatenate((restot, vals))
+
+        return restot
+
+    def process(self,toproc,params,j=0,output_q=None):
+
+        metricTot = None
+
+        for val in toproc[self.mainvar]:
+            tab = self.func(val, params)
+
+            if tab is not None:
+                if metricTot is None:
+                    metricTot = tab
+                else:
+                    metricTot = np.concatenate((metricTot, tab))
+
+        if output_q is not None:
+            return output_q.put({j: metricTot})
+        else:
+            return metricTot
+
 class GenerateSample:
     """ Generates a sample of parameters for simulation
 
