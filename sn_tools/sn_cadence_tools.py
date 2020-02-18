@@ -13,7 +13,7 @@ from sklearn.datasets import make_blobs
 from sklearn.cluster import KMeans
 from sn_tools.sn_io import getObservations
 import pandas as pd
-
+from sn_tools.sn_obs import dataInside
 
 class ReferenceData:
     """
@@ -1274,3 +1274,33 @@ def getVisitsBand(obs):
             Nvisits[b] = 0
 
     return Nvisits
+  
+def Match_DD(fields_DD,df):
+    """
+    Method to match df data to DD fields
+    
+    Parameters
+    ---------------
+    df: pandas df
+     data (results from a metric) to match to DD fields
+    
+    Returns
+    ----------
+    pandas df with matched DD information added.
+    
+    """""
+    
+    dfb = pd.DataFrame()
+    for field in fields_DD:
+        dataSel = dataInside(
+            df.to_records(index=False), field['RA'], field['Dec'], 10., 10., 'pixRa', 'pixDec')
+        if dataSel is not None:
+            dfSel = pd.DataFrame(np.copy(dataSel))
+            dfSel['fieldname'] = field['name']
+            dfSel['fieldId'] = field['fieldId']
+            dfSel['RA'] = field['RA']
+            dfSel['Dec'] = field['Dec']
+            dfSel['fieldnum'] = field['fieldnum']
+            dfb = pd.concat([dfb, dfSel], sort=False)
+
+    return dfb
