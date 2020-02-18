@@ -18,7 +18,7 @@ import pprint
 
 
 class MultiProc:
-    def __init__(self, toprocess, mainvar, params,func,nproc):
+    def __init__(self, toprocess,params,func,nproc):
         """
         Class to perform multiprocessing
         
@@ -38,7 +38,6 @@ class MultiProc:
 
         """
         self.toprocess = toprocess
-        self.mainvar = mainvar
         self.params = params
         self.nproc = nproc
         self.func = func
@@ -57,9 +56,11 @@ class MultiProc:
         result_queue = multiprocessing.Queue()
 
         procs = [multiprocessing.Process(name='Subprocess-'+str(j), target=self.process,
-                                         args=(self.toprocess[t[j]:t[j+1]], self.params, j, result_queue))]
+                                         args=(self.toprocess[t[j]:t[j+1]], self.params, j, result_queue)) 
+                 for j in range(self.nproc)]
 
         for p in procs:
+            print('starting proc')
             p.start()
 
         resultdict = {}
@@ -83,10 +84,25 @@ class MultiProc:
         return restot
 
     def process(self,toproc,params,j=0,output_q=None):
+        """
+        Method to perform processing on toprocs
+
+        Parameters
+        ----------------
+        toproc: array
+          data to process
+        param: dict
+          parameters of the function self.sunv
+        j: int, opt
+          index for multiprocessing (default: 0)
+        output_q: multiprocessing.Queue(),opt
+          multiprocessing queue where the results are dumped
+
+        """
 
         metricTot = None
 
-        for val in toproc[self.mainvar]:
+        for val in toproc:
             tab = self.func(val, params)
 
             if tab is not None:
