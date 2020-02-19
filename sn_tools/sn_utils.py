@@ -60,7 +60,6 @@ class MultiProc:
                  for j in range(self.nproc)]
 
         for p in procs:
-            print('starting proc')
             p.start()
 
         resultdict = {}

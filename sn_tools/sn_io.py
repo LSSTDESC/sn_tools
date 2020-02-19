@@ -61,7 +61,6 @@ def getMetricValues(dirFile,dbName,metricName,fieldType,nside):
 
     search_path = '{}/{}/{}/*{}Metric_{}*_nside_{}_*'.format(dirFile,dbName,metricName,metricName,fieldType,nside)
 
-    print('looking for',search_path)
     fileNames = glob.glob(search_path)
 
     if fileNames:
@@ -349,7 +348,7 @@ def getObservations(dbDir, dbName,dbExtens):
         observations = np.load(dbFullName)
     else:
         #db as input-> need to transform as npy
-        print('looking for',dbFullName)
+        #print('looking for',dbFullName)
         keymap = {'observationStartMJD': 'mjd',
                   'filter': 'band',
                   'visitExposureTime': 'exptime',

@@ -20,7 +20,7 @@ class ReferenceData:
     class to handle light curve of SN
 
     Parameters
-    --------------
+    -----------
 
     Li_files : list[str]
       names light curve reference file
@@ -878,7 +878,7 @@ class ClusterObs:
         kmeans.fit(points)
 
         # print location of clusters learned by kmeans object
-        print('cluster centers', kmeans.cluster_centers_)
+        #print('cluster centers', kmeans.cluster_centers_)
 
         # save new clusters for chart
         y_km = kmeans.fit_predict(points)
@@ -953,8 +953,88 @@ class ClusterObs:
 
 
 class AnaOS:
+    def __init__(self, dbDir, dbName, dbExtens, nclusters):
+        """
+        class to analyze an observing strategy
+        The idea here is to disentangle WFD and DD obs
+        so as to estimate statistics such as the total 
+        number of visits or the DDF fraction.
 
-    def __init__(self, dbDir, dbName, dbExtens, nclusters, ljustdb=26, ljustfieldtype=9):
+        Parameters
+        ----------
+        dbDir: str
+         path to the location dir of the database
+        dbName: str
+         name of the dbfile to load
+        dbExtens: str
+         extension of the dbfile
+         two possibilities:
+         - dbExtens = db for scheduler files
+         - dbExtens = npy for npy files (generated from scheduler files)
+        nclusters: int
+         number of clusters to search in DD data
+
+        """
+         
+        self.dbDir = dbDir
+        self.dbName = dbName
+        self.dbExtens = dbExtens
+        self.nclusters = nclusters
+
+
+        self.stat = self.process()
+
+    def process(self):
+
+        df = pd.DataFrame(columns=['cadence'])
+        df.loc[0] = self.dbName
+
+        # load observations
+        observations = self.load_obs()
+ 
+        # WDF obs
+        self.obs_WFD = getFields(observations, 'WFD')
+        df['WFD'] = len(self.obs_WFD)
+        df_bands = pd.DataFrame(self.obs_WFD).groupby(['filter']).size().to_frame('count').reset_index()
+        for index, row in df_bands.iterrows():
+            df['WFD_{}'.format(row['filter'])] = row['count']
+        df['WFD_all'] = df_bands['count'].sum()
+
+
+        # DDF obs
+        nside = 128
+        fieldIds = [290, 744, 1427, 2412, 2786]
+        self.obs_DD = getFields(observations, 'DD', fieldIds, nside)
+        df['DD'] = len(self.obs_DD)
+
+        if len(self.obs_DD) == 0:
+            return None
+
+        # get the number of visits per band
+        df_bands = pd.DataFrame(np.copy(self.obs_DD)).groupby(['filter']).size().to_frame('count').reset_index()
+        for index, row in df_bands.iterrows():
+            df['DD_{}'.format(row['filter'])] = row['count']
+        df['DD_all'] = df_bands['count'].sum()
+         
+        # make clusters 
+        self.clus = ClusterObs(self.obs_DD, self.nclusters, self.dbName)
+        self.ddfclus = self.clus.clusters
+         
+        #print('DDF Frac', df['DD']/(df['DD']+df['WFD']),df['DD'].values,
+        #      np.sum(self.ddfclus['Nvisits']))
+        for ddc in self.ddfclus:
+            fieldName = ddc['fieldName'].strip()
+            df[fieldName] = ddc['Nvisits']
+            for band in 'ugrizy':
+                df['{}_{}'.format(fieldName,band)] = ddc['Nvisits_{}'.format(band)]
+            for val in ['area','width_RA','width_Dec']:
+                df['{}_{}'.format(fieldName,val)] = ddc[val]
+
+
+        return df.to_records()
+
+
+    def init_old(self, dbDir, dbName, dbExtens, nclusters, ljustdb=26, ljustfieldtype=9):
         """
         class to analyze an observing strategy
         The idea here is to disentangle WFD and DD obs
@@ -990,25 +1070,45 @@ class AnaOS:
         self.ljustfieldtype = ljustfieldtype
         self.nclusters = nclusters
 
+        df = pd.DataFrame(columns=['cadence'])
+        df.loc[0] = dbName
+
         # load observations
         observations = self.load_obs()
 
         # WDF obs
         self.obs_WFD = getFields(observations, 'WFD')
         n_WFD = len(self.obs_WFD)
+        df['WFD'] = len(self.obs_WFD)
         # get the number of visits per band
         Nvisits_WFD = getVisitsBand(self.obs_WFD)
+        print('io',Nvisits_WFD)
+        #df_bands = pd.DataFrame(columns=['count'])
+        df_bands = pd.DataFrame(self.obs_WFD).groupby(['filter']).size().to_frame('count').reset_index()
+        print('iiiii',df_bands.columns)
+        for index, row in df_bands.iterrows():
+            df['WFD_{}'.format(row['filter'])] = row['count']
+        df['WFD_all'] = df_bands['count'].sum()
+
 
         # DDF obs
         nside = 128
         fieldIds = [290, 744, 1427, 2412, 2786]
         self.obs_DD = getFields(observations, 'DD', fieldIds, nside)
         n_DD = len(self.obs_DD)
+        df['DD'] = len(self.obs_DD)
+
         # get the number of visits per band
         Nvisits_DD = getVisitsBand(self.obs_DD)
+        df_bands = pd.DataFrame(np.copy(self.obs_DD)).groupby(['filter']).size().to_frame('count').reset_index()
+        print('iiiii',df_bands.columns)
+        for index, row in df_bands.iterrows():
+            df['DD_{}'.format(row['filter'])] = row['count']
+        df['DD_all'] = df_bands['count'].sum()
 
         self.nvisits_DD = n_DD
         self.nvisits_WFD = n_WFD
+
 
         if n_DD < 1:
             self.ddfclus = None
@@ -1053,6 +1153,18 @@ class AnaOS:
 
         print('DDF Frac', n_DD/n_tot, n_WFD, n_DD,
               np.sum(self.ddfclus['Nvisits']))
+        print('DDF Frac', df['DD']/(df['DD']+df['WFD']),df['DD'].values,
+              np.sum(self.ddfclus['Nvisits']))
+
+       
+        for ddc in self.ddfclus:
+            fieldName = ddc['fieldName'].strip()
+            df[fieldName] = ddc['Nvisits']
+            for band in 'ugrizy':
+                df['{}_{}'.format(fieldName,band)] = ddc['Nvisits_{}'.format(band)]
+            for val in ['area','width_RA','width_Dec']:
+                df['{}_{}'.format(fieldName,val)] = ddc[val]
+
 
         for ddc in self.ddfclus:
             fieldName = ddc['fieldName']
@@ -1069,8 +1181,13 @@ class AnaOS:
                 rb.append((dbName, '{}_{}'.format(fName, band).ljust(
                     self.ljustfieldtype), ddc['Nvisits_{}'.format(band)]))
 
-        self.stat = np.rec.fromrecords(
+        stat = np.rec.fromrecords(
             rb, names=['cadence', 'Field', 'Nvisits'])
+
+
+        print('gg',df.columns)
+        print(stat['Field'])
+        print(test)
 
     def load_obs(self):
         """
