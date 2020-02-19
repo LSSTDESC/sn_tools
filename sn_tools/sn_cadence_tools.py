@@ -1151,14 +1151,14 @@ class AnaOS:
             # print('hello',xp,yp,label,io)
             # ab  = ax[xp][yp].plot(RA,Dec,marker='o',color=color[io],label=label)
             print(RA, Dec)
-            ax[xp][yp].plot(RA, Dec, marker='o', color=color[io])
+            ax[xp][yp].plot(RA, Dec, marker='.', color=color[io], lineStyle='None')
 
             # lista.append(ab)
             # listb.append(label)
 
-            # ell = Ellipse((val['RA'],val['Dec']),val['width_RA'],val['width_Dec'],facecolor='none',edgecolor='black')
+            ell = Ellipse((val['RA'],val['Dec']),val['width_RA'],val['width_Dec'],facecolor='none',edgecolor='black')
             print(val['RA'], val['Dec'], val['width_RA'], val['width_Dec'])
-            # ax[xp][yp].add_patch(ell)
+            ax[xp][yp].add_patch(ell)
 
             # ell = Ellipse((0.,0.),val['width_RA'],val['width_Dec'],facecolor='none',edgecolor=color[io])
             # ax[2][1].add_patch(ell)
