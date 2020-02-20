@@ -802,7 +802,7 @@ class TemplateData_x1color(object):
 
 class ClusterObs:
 
-    def __init__(self, data, nclusters, dbName, RA_name='fieldRA', Dec_name='fieldDec'):
+    def __init__(self, data, nclusters, dbName, fields,RA_name='fieldRA', Dec_name='fieldDec'):
         """
         class to identify clusters of points in (RA,Dec)
 
@@ -814,11 +814,13 @@ class ClusterObs:
          number of clusters to find
         dbName: str
          name of the file where the data where extracted from
+        fields: pandas df
+          fields to consider
         RA_name: str, opt
          field name for the RA (default=fieldRA)
         Dec_name: str, opt
          field name for the Dec (default=fieldDec)
-
+        
         """
 
         # grab necessary infos
@@ -826,6 +828,7 @@ class ClusterObs:
         self.dbName = dbName
         self.RA_name = RA_name
         self.Dec_name = Dec_name
+        self.fields = fields
 
         # make the cluster of points
         self.points, self.clus, self.labels = self.makeClusters(nclusters)
@@ -835,6 +838,7 @@ class ClusterObs:
 
         # this is a summary of the clusters found
         self.clusters = clusters
+        self.dfclusters = dfclus
 
         # this dataframe is a matching of initial data and clusters infos
         datadf = pd.DataFrame(np.copy(data))
@@ -907,13 +911,10 @@ class ClusterObs:
 
         """
 
-        fields = DDFields()
-        r = []
-
+        rcluster = pd.DataFrame()
         dfcluster = pd.DataFrame()
         for io in range(nclusters):
-            ra = []
-            names = []
+            
             RA = self.points[self.clus == io, 0]
             Dec = self.points[self.clus == io, 1]
 
@@ -930,30 +931,33 @@ class ClusterObs:
             mean_RA = np.mean(RA)
             mean_Dec = np.mean(Dec)
             area = np.pi*(max_RA-min_RA)*(max_Dec-min_Dec)/4.
-            idx, fieldName = getName(fields, mean_RA)
-            ra = [int(io), idx, mean_RA, mean_Dec,
-                  max_RA-min_RA, max_Dec-min_Dec,
-                  area, self.dbName.ljust(26), fieldName.ljust(7), len(RA), Nvisits['all']]
-            names = ['clusid', 'fieldId', 'RA', 'Dec', 'width_RA',
-                     'width_Dec', 'area', 'dbName', 'fieldName', 'Nvisits']
-
+            idx, fieldName = getName(self.fields, mean_RA)
+           
             dfclus.loc[:, 'fieldName'] = fieldName
             dfclus.loc[:, 'clusId'] = int(io)
             dfcluster = pd.concat([dfcluster, dfclus], sort=False)
 
+            rclus = pd.DataFrame(columns=['clusid'])
+            rclus.loc[0] = int(io)
+            rclus.loc[:, 'RA'] = mean_RA
+            rclus.loc[:, 'Dec'] = mean_Dec
+            rclus.loc[:, 'width_RA'] = max_RA-min_RA
+            rclus.loc[:, 'width_Dec'] = max_Dec-min_Dec
+            rclus.loc[:, 'area'] = area
+            rclus.loc[:, 'dbName'] =self.dbName
+            rclus.loc[:, 'fieldName'] = fieldName
+            rclus.loc[:, 'Nvisits'] = int(Nvisits['all'])
+
             for key, vals in Nvisits.items():
-                ra += [vals]
-                names += ['Nvisits_{}'.format(key)]
+                rclus.loc[:,'Nvisits_{}'.format(key)] = int(vals)
 
-            r.append((ra))
+            rcluster = pd.concat((rcluster, rclus))
 
-        env = np.rec.fromrecords(r, names=names)
-
-        return env, dfcluster
+        return rcluster, dfcluster
 
 
 class AnaOS:
-    def __init__(self, dbDir, dbName, dbExtens, nclusters):
+    def __init__(self, dbDir, dbName, dbExtens, nclusters,fields):
         """
         class to analyze an observing strategy
         The idea here is to disentangle WFD and DD obs
@@ -973,6 +977,8 @@ class AnaOS:
          - dbExtens = npy for npy files (generated from scheduler files)
         nclusters: int
          number of clusters to search in DD data
+        fields: pandas df
+         fields to consider for matching
 
         """
          
@@ -980,7 +986,7 @@ class AnaOS:
         self.dbName = dbName
         self.dbExtens = dbExtens
         self.nclusters = nclusters
-
+        self.fields = fields
 
         self.stat = self.process()
 
@@ -993,9 +999,9 @@ class AnaOS:
         observations = self.load_obs()
  
         # WDF obs
-        self.obs_WFD = getFields(observations, 'WFD')
-        df['WFD'] = len(self.obs_WFD)
-        df_bands = pd.DataFrame(self.obs_WFD).groupby(['filter']).size().to_frame('count').reset_index()
+        obs_WFD = getFields(observations, 'WFD')
+        df['WFD'] = len(obs_WFD)
+        df_bands = pd.DataFrame(obs_WFD).groupby(['filter']).size().to_frame('count').reset_index()
         for index, row in df_bands.iterrows():
             df['WFD_{}'.format(row['filter'])] = row['count']
         df['WFD_all'] = df_bands['count'].sum()
@@ -1004,190 +1010,61 @@ class AnaOS:
         # DDF obs
         nside = 128
         fieldIds = [290, 744, 1427, 2412, 2786]
-        self.obs_DD = getFields(observations, 'DD', fieldIds, nside)
-        df['DD'] = len(self.obs_DD)
+        obs_DD = getFields(observations, 'DD', fieldIds, nside)
+        df['DD'] = len(obs_DD)
 
-        if len(self.obs_DD) == 0:
+        df['frac_DD'] = df['DD']/(df['DD']+df['WFD'])
+
+        if len(obs_DD) == 0:
             return None
 
         # get the number of visits per band
-        df_bands = pd.DataFrame(np.copy(self.obs_DD)).groupby(['filter']).size().to_frame('count').reset_index()
+        df_bands = pd.DataFrame(np.copy(obs_DD)).groupby(['filter']).size().to_frame('count').reset_index()
         for index, row in df_bands.iterrows():
             df['DD_{}'.format(row['filter'])] = row['count']
         df['DD_all'] = df_bands['count'].sum()
          
-        # make clusters 
-        self.clus = ClusterObs(self.obs_DD, self.nclusters, self.dbName)
-        self.ddfclus = self.clus.clusters
-         
-        #print('DDF Frac', df['DD']/(df['DD']+df['WFD']),df['DD'].values,
-        #      np.sum(self.ddfclus['Nvisits']))
-        for ddc in self.ddfclus:
-            fieldName = ddc['fieldName'].strip()
-            df[fieldName] = ddc['Nvisits']
-            for band in 'ugrizy':
-                df['{}_{}'.format(fieldName,band)] = ddc['Nvisits_{}'.format(band)]
-            for val in ['area','width_RA','width_Dec']:
-                df['{}_{}'.format(fieldName,val)] = ddc[val]
+        # make clusters
+        self.clus = ClusterObs(obs_DD, self.nclusters, self.dbName,self.fields)
+        clusters = self.clus.clusters
+        
+        for index, row in clusters.iterrows():
+            self._fill_field(df,row['fieldName'],row)
+
+        # check whether all fields are there if not set 0 to missing fields
+
+        for index, row in self.fields.iterrows():
+            if row['name'] not in df.columns:
+                self._fill_field(df,row['name'])
 
 
-        return df.to_records()
+        return df
 
-
-    def init_old(self, dbDir, dbName, dbExtens, nclusters, ljustdb=26, ljustfieldtype=9):
+    def _fill_field(self, df,fieldName, ddc=None):
         """
-        class to analyze an observing strategy
-        The idea here is to disentangle WFD and DD obs
-        so as to estimate statistics such as the total 
-        number of visits or the DDF fraction.
+        Method to fill infos from clusters
 
         Parameters
-        ----------
-        dbDir: str
-         path to the location dir of the database
-        dbName: str
-         name of the dbfile to load
-        dbExtens: str
-         extension of the dbfile
-         two possibilities:
-         - dbExtens = db for scheduler files
-         - dbExtens = npy for npy files (generated from scheduler files)
-        nclusters: int
-         number of clusters to search in DD data
-        ljustdb: int, opt
-         length of the dbname (default: 26)
-         this is to have the same length for numpy array column
-        ljustfieldtype: int, opt
-         length of the fieldtype (default: 9)
-         this is to have the same length for numpy array column
+        ----------------
+        df: pandas df
+         dataframe of data (to be appended)
+        ddc: numpy array, opt
+          cluster array (default: None)
+
+
+        Returns
+        -----------
+        pandas df with appended infos
+
 
         """
+        df.loc[:,fieldName] = ddc['Nvisits'] if ddc is not None else 0
+        for band in 'ugrizy':
+            df.loc[:,'{}_{}'.format(fieldName,band)] = ddc['Nvisits_{}'.format(band)] if ddc is not None else 0
+        for val in ['area','width_RA','width_Dec']:
+            df.loc[:,'{}_{}'.format(fieldName,val)] = ddc[val] if ddc is not None else 0
+        
 
-        self.dbDir = dbDir
-        self.dbName = dbName
-        self.dbExtens = dbExtens
-        self.ljustdb = ljustdb
-        self.ljustfieldtype = ljustfieldtype
-        self.nclusters = nclusters
-
-        df = pd.DataFrame(columns=['cadence'])
-        df.loc[0] = dbName
-
-        # load observations
-        observations = self.load_obs()
-
-        # WDF obs
-        self.obs_WFD = getFields(observations, 'WFD')
-        n_WFD = len(self.obs_WFD)
-        df['WFD'] = len(self.obs_WFD)
-        # get the number of visits per band
-        Nvisits_WFD = getVisitsBand(self.obs_WFD)
-        print('io',Nvisits_WFD)
-        #df_bands = pd.DataFrame(columns=['count'])
-        df_bands = pd.DataFrame(self.obs_WFD).groupby(['filter']).size().to_frame('count').reset_index()
-        print('iiiii',df_bands.columns)
-        for index, row in df_bands.iterrows():
-            df['WFD_{}'.format(row['filter'])] = row['count']
-        df['WFD_all'] = df_bands['count'].sum()
-
-
-        # DDF obs
-        nside = 128
-        fieldIds = [290, 744, 1427, 2412, 2786]
-        self.obs_DD = getFields(observations, 'DD', fieldIds, nside)
-        n_DD = len(self.obs_DD)
-        df['DD'] = len(self.obs_DD)
-
-        # get the number of visits per band
-        Nvisits_DD = getVisitsBand(self.obs_DD)
-        df_bands = pd.DataFrame(np.copy(self.obs_DD)).groupby(['filter']).size().to_frame('count').reset_index()
-        print('iiiii',df_bands.columns)
-        for index, row in df_bands.iterrows():
-            df['DD_{}'.format(row['filter'])] = row['count']
-        df['DD_all'] = df_bands['count'].sum()
-
-        self.nvisits_DD = n_DD
-        self.nvisits_WFD = n_WFD
-
-
-        if n_DD < 1:
-            self.ddfclus = None
-            self.stat = None
-            return
-        # make cluster out of these DDF observations
-
-        print('NDD', len(self.obs_DD))
-        self.clus = ClusterObs(self.obs_DD, self.nclusters, dbName)
-        self.ddfclus = self.clus.clusters
-
-        dbName = self.dbName.ljust(self.ljustdb)
-        n_tot = n_WFD+n_DD
-        r = [dbName]
-        names = ['cadence']
-
-        rb = [(dbName, 'DD'.ljust(self.ljustfieldtype), n_DD)]
-        rb.append((dbName, 'WFD'.ljust(self.ljustfieldtype), n_WFD))
-
-        r += [n_WFD, n_DD]
-        names += ['WFD', 'DD']
-
-        r_dd, names_dd = self.fillVisits(Nvisits_DD, 'DD')
-        r_wfd, names_wfd = self.fillVisits(Nvisits_WFD, 'WFD')
-
-        r += r_dd
-        names += names_dd
-
-        r += r_wfd
-        names += names_wfd
-
-        for i in range(len(r_dd)):
-            rb.append((dbName, names_dd[i].ljust(
-                self.ljustfieldtype), r_dd[i]))
-            rb.append((dbName, names_wfd[i].ljust(
-                self.ljustfieldtype), r_wfd[i]))
-
-        """
-        r.append((self.dbName.ljust(26),n_WFD,'WFD'.ljust(7)))
-        r.append((self.dbName.ljust(26),n_DD,'DD'.ljust(7)))
-        """
-
-        print('DDF Frac', n_DD/n_tot, n_WFD, n_DD,
-              np.sum(self.ddfclus['Nvisits']))
-        print('DDF Frac', df['DD']/(df['DD']+df['WFD']),df['DD'].values,
-              np.sum(self.ddfclus['Nvisits']))
-
-       
-        for ddc in self.ddfclus:
-            fieldName = ddc['fieldName'].strip()
-            df[fieldName] = ddc['Nvisits']
-            for band in 'ugrizy':
-                df['{}_{}'.format(fieldName,band)] = ddc['Nvisits_{}'.format(band)]
-            for val in ['area','width_RA','width_Dec']:
-                df['{}_{}'.format(fieldName,val)] = ddc[val]
-
-
-        for ddc in self.ddfclus:
-            fieldName = ddc['fieldName']
-            print(ddc['fieldName'], ddc['Nvisits']/n_tot)
-            r.append((ddc['dbName'], ddc['Nvisits'], ddc['fieldName']))
-            r += [ddc['Nvisits']]
-            names += [fieldName]
-            rb.append((dbName, fieldName.ljust(
-                self.ljustfieldtype), ddc['Nvisits']))
-            for band in 'ugrizy':
-                fName = fieldName.strip()
-                r += [ddc['Nvisits_{}'.format(band)]]
-                names += ['{}_{}'.format(fieldName, band)]
-                rb.append((dbName, '{}_{}'.format(fName, band).ljust(
-                    self.ljustfieldtype), ddc['Nvisits_{}'.format(band)]))
-
-        stat = np.rec.fromrecords(
-            rb, names=['cadence', 'Field', 'Nvisits'])
-
-
-        print('gg',df.columns)
-        print(stat['Field'])
-        print(test)
 
     def load_obs(self):
         """
@@ -1296,17 +1173,23 @@ class AnaOS:
         # plt.legend(lista,listb,loc='center left', bbox_to_anchor=(1, 2.0),ncol=1,fontsize=12)
 
 
-def DDFields():
+def DDFields(DDfile=None):
     """
     Function to define DD fields
     The definitions are hardcoded for the moment
     Should move to an input file
 
-    Returns
-    -------
+    Parameters
+    ----------------
+    DDfile: str, opt
+      csv file with DD infos
 
-    fields: numpy record array
-     array of fields with the following columns:
+
+    Returns
+    ---------
+
+    fields: pandas DataFrame 
+      df with the following columns:
      - name: name of the field
      - fieldId: Id of the field
      - RA: RA of the field
@@ -1316,29 +1199,29 @@ def DDFields():
 
     """
 
-    r = []
+    if DDfile is not None:
+        fields = pd.read_csv(DDfile)
+        return fields
+    else:
+        fields = pd.DataFrame(columns=['name', 'fieldId', 'RA', 'Dec', 'fieldnum'])
 
-    r.append(('ELAIS', 744, 10.0, -45.52, 4))
-    r.append(('SPT', 290, 349.39, -63.32, 5))
-    r.append(('COSMOS', 2786, 150.36, 2.84, 1))
-    r.append(('XMM-LSS', 2412, 34.39, -5.09, 2))
-    r.append(('CDFS', 1427, 53.00, -27.44, 3))
-    r.append(('ADFS1', 290, 63.59, -47.59, 6))
-    r.append(('ADFS2', 290, 58.97, -49.28, 7))
+        fields.loc[0] = ['ELAIS', 744, 10.0, -45.52, 4]
+        fields.loc[1] = ['SPT', 290, 349.39, -63.32, 5]
+        fields.loc[2] = ['COSMOS', 2786, 150.36, 2.84, 1]
+        fields.loc[3] = ['XMM-LSS', 2412, 34.39, -5.09, 2]
+        fields.loc[4] = ['CDFS', 1427, 53.00, -27.44, 3]
+        fields.loc[5] = ['ADFS1', 290, 63.59, -47.59, 6]
+        fields.loc[6] = ['ADFS2', 290, 58.97, -49.28, 7]
 
-    fields = np.rec.fromrecords(
-        r, names=['name', 'fieldId', 'RA', 'Dec', 'fieldnum'])
+        return fields
 
-    return fields
-
-
-def getName(fields, RA):
+def getName(df_fields, RA):
     """
     Function to get a field name corresponding to RA
 
     Parameters
     ----------
-    fields: numpy record array
+    df_fields: pandas df
      array of fields with the following columns:
      - name: name of the field
      - fieldId: Id of the field
@@ -1355,9 +1238,10 @@ def getName(fields, RA):
 
     """
 
-    idx = np.abs(fields['RA'] - RA).argmin()
+    _fields = df_fields.to_records(index=False)
+    _idx = np.abs(_fields['RA'] - RA).argmin()
 
-    return idx, fields[idx]['name']
+    return _idx, _fields[_idx]['name']
 
 
 def getVisitsBand(obs):

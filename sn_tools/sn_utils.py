@@ -24,7 +24,7 @@ class MultiProc:
         
         Parameters
         ----------------
-        toprocess: array (numpy or pandas df)
+        toprocess: pandas df
          data to process
         mainvar: str
          field used to split processes in toprocess
@@ -47,6 +47,10 @@ class MultiProc:
     def multi(self):
         """
         Method to perform multiprocessing
+
+        Returns
+        -----------
+        pandas df with processed data
 
         """
 
@@ -71,15 +75,17 @@ class MultiProc:
         for p in multiprocessing.active_children():
             p.join()
 
-        restot = None
+        restot = pd.DataFrame()
 
         # gather the results
         for key, vals in resultdict.items():
+            restot = pd.concat((restot,vals),sort=False)
+            """
             if restot is None:
                 restot = vals
             else:
                 restot = np.concatenate((restot, vals))
-
+            """
         return restot
 
     def process(self,toproc,params,j=0,output_q=None):
@@ -99,16 +105,12 @@ class MultiProc:
 
         """
 
-        metricTot = None
+        metricTot = pd.DataFrame()
 
         for val in toproc:
             tab = self.func(val, params)
-
             if tab is not None:
-                if metricTot is None:
-                    metricTot = tab
-                else:
-                    metricTot = np.concatenate((metricTot, tab))
+                metricTot = pd.concat((metricTot,tab),sort=False)
 
         if output_q is not None:
             return output_q.put({j: metricTot})
