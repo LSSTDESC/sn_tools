@@ -266,7 +266,7 @@ def season(obs, season_gap=80., mjdCol='observationStartMJD'):
 
     flag = np.argwhere(diff > season_gap)
     if len(flag) > 0:
-        seas = np.zeros((len(obs),))
+        seas = np.zeros((len(obs),),dtype=int)
         flag += 1
         seas[0:flag[0][0]] = 1
         for iflag in range(len(flag)-1):
@@ -274,7 +274,7 @@ def season(obs, season_gap=80., mjdCol='observationStartMJD'):
         seas[flag[-1][0]:] = len(flag)+1
         obs = rf.append_fields(obs, 'season', seas)
     else:
-        obs = rf.append_fields(obs, 'season', [1.]*len(obs))
+        obs = rf.append_fields(obs, 'season', [1]*len(obs))
 
     return obs
 
@@ -456,11 +456,11 @@ class ProcessArea:
 
                 # concatenate the results
                 for key in resfi.keys():
-                    if resdict[key] is not None:
+                    if resdict[key] is not None and resdict[key].size > 0:
                         if resfi[key] is None:
                             resfi[key] = resdict[key]
                         else:
-                            #print('here pal',resdict[key],resfi[key])
+                            #print('here pal',type(resdict[key]),type(resfi[key]))
                             resfi[key] = np.concatenate(
                                 (resfi[key], resdict[key]))
 
