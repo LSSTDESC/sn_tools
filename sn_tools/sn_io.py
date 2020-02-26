@@ -182,7 +182,7 @@ def convert_save(inputDir,dbName,metricName,outDir,fieldType='WFD',objtype='pand
 
     search_path = path
     if path is None:
-        search_path = '{}/*{}Metric_{}*'.format(inputDir,metricName,fieldType)
+        search_path = '{}/*{}Metric_{}*.hdf5'.format(inputDir,metricName,fieldType)
     print('search path',search_path)
     fileNames = glob.glob(search_path)
 
