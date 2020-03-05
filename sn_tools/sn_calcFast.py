@@ -11,12 +11,12 @@ import numpy.lib.recfunctions as rf
 
 
 class LCfast:
-    def __init__(self, reference_lc, x1, color, telescope, mjdCol, RaCol, DecCol,
+    def __init__(self, reference_lc, x1, color, telescope, mjdCol, RACol, DecCol,
                  filterCol, exptimeCol,
                  m5Col, seasonCol,snr_min,
                  lightOutput=True):
 
-        self.RaCol = RaCol
+        self.RACol = RACol
         self.DecCol = DecCol
         self.filterCol = filterCol
         self.mjdCol = mjdCol
@@ -83,10 +83,10 @@ class LCfast:
         ---------
         astropy table with:
         columns: band, flux, fluxerr, snr_m5,flux_e,zp,zpsys,time
-        metadata : SNID,Ra,Dec,DayMax,X1,Color,z
+        metadata : SNID,RA,Dec,DayMax,X1,Color,z
         """
 
-        ra = np.mean(obs[self.RaCol])
+        ra = np.mean(obs[self.RACol])
         dec = np.mean(obs[self.DecCol])
 
         if len(obs) == 0:
@@ -311,8 +311,8 @@ class LCfast:
         healpixIds = np.ma.array(
             np.tile(sel_obs['healpixID'].astype(int), (nvals, 1)), mask=~flag)
 
-        pixRas = np.ma.array(
-            np.tile(sel_obs['pixRa'], (nvals, 1)), mask=~flag)
+        pixRAs = np.ma.array(
+            np.tile(sel_obs['pixRA'], (nvals, 1)), mask=~flag)
 
         pixDecs = np.ma.array(
             np.tile(sel_obs['pixDec'], (nvals, 1)), mask=~flag)
@@ -341,7 +341,7 @@ class LCfast:
         lc['season'] = seasons[~seasons.mask]
         lc['season'] = lc['season'].astype(int)
         lc['healpixID'] = healpixIds[~healpixIds.mask]
-        lc['pixRa'] = pixRas[~pixRas.mask]
+        lc['pixRA'] = pixRAs[~pixRAs.mask]
         lc['pixDec'] = pixDecs[~pixDecs.mask]
         lc['z'] = z_vals
         lc['daymax'] = daymax_vals
@@ -567,8 +567,8 @@ class LCfast:
         healpixIds = np.ma.array(
             np.tile(sel_obs['healpixID'].astype(int), (nvals, 1)), mask=~flag)
 
-        pixRas = np.ma.array(
-            np.tile(sel_obs['pixRa'], (nvals, 1)), mask=~flag)
+        pixRAs = np.ma.array(
+            np.tile(sel_obs['pixRA'], (nvals, 1)), mask=~flag)
 
         pixDecs = np.ma.array(
             np.tile(sel_obs['pixDec'], (nvals, 1)), mask=~flag)
@@ -610,7 +610,7 @@ class LCfast:
             lc['season'] = seasons[~seasons.mask]
             lc['season'] = lc['season'].astype(int)
             lc['healpixID'] = healpixIds[~healpixIds.mask]
-            lc['pixRa'] = pixRas[~pixRas.mask]
+            lc['pixRA'] = pixRAs[~pixRAs.mask]
             lc['pixDec'] = pixDecs[~pixDecs.mask]
             lc['z'] = z_vals
             lc['daymax'] = daymax_vals
@@ -652,7 +652,7 @@ class CalcSN:
         # select only fields involved in the calculation
         # this would save some memory
         fields = []
-        for fi in ['season', 'healpixID', 'pixRa', 'pixDec', 'z',
+        for fi in ['season', 'healpixID', 'pixRA', 'pixDec', 'z',
                    'daymax', 'band', 'snr_m5', 'time', 'fluxerr', 'phase']:
             fields.append(fi)
 
@@ -697,7 +697,7 @@ class CalcSN:
     def selectLC(self, lc, params):
 
         restab = Table(
-            np.unique(lc[['season', 'healpixID', 'pixRa', 'pixDec', 'z', 'daymax']]))
+            np.unique(lc[['season', 'healpixID', 'pixRA', 'pixDec', 'z', 'daymax']]))
 
         valu = np.unique(lc['z', 'daymax'])
         diff = lc['daymax']-valu['daymax'][:, np.newaxis]
@@ -755,7 +755,7 @@ class CalcSN_df:
         # select only fields involved in the calculation
         # this would save some memory
         fields = []
-        for fi in ['season', 'healpixID', 'pixRa', 'pixDec', 'z',
+        for fi in ['season', 'healpixID', 'pixRA', 'pixDec', 'z',
                    'daymax', 'snr_m5', 'phase', 'x1', 'color']:
             fields.append(fi)
 
@@ -789,7 +789,7 @@ class CalcSN_df:
 
         tosum += ['N_aft', 'N_bef', 'N_phmin', 'N_phmax']
         sums = lc.groupby(['x1', 'color', 'season', 'healpixID',
-                           'pixRa', 'pixDec', 'z', 'daymax'])[tosum].sum()
+                           'pixRA', 'pixDec', 'z', 'daymax'])[tosum].sum()
 
         idx = sums['N_aft'] >= N_aft
         idx &= sums['N_bef'] >= N_bef
@@ -828,9 +828,9 @@ class CalcSN_df:
 
         df = groups.apply(lambda x : fillBad(x))
         """
-        #names = ['z','daymax','season', 'pixRa', 'pixDec', 'Cov_x0x0', 'Cov_x1x1','Cov_colorcolor']
+        #names = ['z','daymax','season', 'pixRA', 'pixDec', 'Cov_x0x0', 'Cov_x1x1','Cov_colorcolor']
         names = ['x1', 'color', 'z', 'daymax', 'season',
-                 'healpixID', 'pixRa', 'pixDec', 'Cov_colorcolor']
+                 'healpixID', 'pixRA', 'pixDec', 'Cov_colorcolor']
         names += ['N_aft', 'N_bef', 'N_phmin', 'N_phmax']
         gr = df.groupby(names)
         # print(gr.keys,list(gr.groups.keys()))
@@ -922,23 +922,23 @@ class CalcSN_df:
         df.loc[:, 'Cov_colorcolor'] = self.covColor(lc)
 
         """
-        gg = df.groupby(['x1','color','z','daymax','season', 'pixRa', 'pixDec']).apply(lambda x: sigma_x0_x1_color_grp(x,params=['x0','x1','daymax','color']))
+        gg = df.groupby(['x1','color','z','daymax','season', 'pixRA', 'pixDec']).apply(lambda x: sigma_x0_x1_color_grp(x,params=['x0','x1','daymax','color']))
 
         print(gg)
         """
         names = ['x1', 'color', 'z', 'daymax', 'season',
-                 'healpixID', 'pixRa', 'pixDec', 'Cov_colorcolor']
+                 'healpixID', 'pixRA', 'pixDec', 'Cov_colorcolor']
         names += ['N_aft', 'N_bef', 'N_phmin', 'N_phmax']
         grfi = df.groupby(names)
 
         """
         # for each group: estimate the sum
 
-        #sums = groups.sum().groupby(['z','daymax','season', 'pixRa', 'pixDec'])
+        #sums = groups.sum().groupby(['z','daymax','season', 'pixRA', 'pixDec'])
 
         gr = groups.apply(lambda x: sigma_x0_x1_color_grp(x,params=['x0','x1','color']))
 
-        names = ['z','daymax','season', 'pixRa', 'pixDec', 'Cov_x0x0', 'Cov_x1x1','Cov_colorcolor']
+        names = ['z','daymax','season', 'pixRA', 'pixDec', 'Cov_x0x0', 'Cov_x1x1','Cov_colorcolor']
         grfi = gr.groupby(names)
         """
 
@@ -949,7 +949,7 @@ class CalcSN_df:
     """
     def selectLC(self,lc, params):
         
-        restab = Table(np.unique(lc[['season','pixRa','pixDec','z','daymax']]))
+        restab = Table(np.unique(lc[['season','pixRA','pixDec','z','daymax']]))
     
         valu = np.unique(lc['z','daymax'])
         diff = lc['daymax']-valu['daymax'][:, np.newaxis]
@@ -1032,7 +1032,7 @@ class CalcSN_df_old:
         # select only fields involved in the calculation
         # this would save some memory
         fields = []
-        for fi in ['season', 'healpixID', 'pixRa', 'pixDec', 'z',
+        for fi in ['season', 'healpixID', 'pixRA', 'pixDec', 'z',
                    'daymax', 'snr_m5', 'phase', 'x1', 'color']:
             fields.append(fi)
 
@@ -1066,7 +1066,7 @@ class CalcSN_df_old:
 
         tosum += ['N_aft', 'N_bef', 'N_phmin', 'N_phmax']
         sums = lc.groupby(['x1', 'color', 'season', 'healpixID',
-                           'pixRa', 'pixDec', 'z', 'daymax'])[tosum].sum()
+                           'pixRA', 'pixDec', 'z', 'daymax'])[tosum].sum()
 
         idx = sums['N_aft'] >= N_aft
         idx &= sums['N_bef'] >= N_bef
@@ -1105,9 +1105,9 @@ class CalcSN_df_old:
 
         df = groups.apply(lambda x : fillBad(x))
         """
-        #names = ['z','daymax','season', 'pixRa', 'pixDec', 'Cov_x0x0', 'Cov_x1x1','Cov_colorcolor']
+        #names = ['z','daymax','season', 'pixRA', 'pixDec', 'Cov_x0x0', 'Cov_x1x1','Cov_colorcolor']
         names = ['x1', 'color', 'z', 'daymax', 'season',
-                 'healpixID', 'pixRa', 'pixDec', 'Cov_colorcolor']
+                 'healpixID', 'pixRA', 'pixDec', 'Cov_colorcolor']
         names += ['N_aft', 'N_bef', 'N_phmin', 'N_phmax']
         gr = df.groupby(names)
         # print(gr.keys,list(gr.groups.keys()))
@@ -1199,23 +1199,23 @@ class CalcSN_df_old:
         df.loc[:, 'Cov_colorcolor'] = self.covColor(lc)
 
         """
-        gg = df.groupby(['x1','color','z','daymax','season', 'pixRa', 'pixDec']).apply(lambda x: sigma_x0_x1_color_grp(x,params=['x0','x1','daymax','color']))
+        gg = df.groupby(['x1','color','z','daymax','season', 'pixRA', 'pixDec']).apply(lambda x: sigma_x0_x1_color_grp(x,params=['x0','x1','daymax','color']))
 
         print(gg)
         """
         names = ['x1', 'color', 'z', 'daymax', 'season',
-                 'healpixID', 'pixRa', 'pixDec', 'Cov_colorcolor']
+                 'healpixID', 'pixRA', 'pixDec', 'Cov_colorcolor']
         names += ['N_aft', 'N_bef', 'N_phmin', 'N_phmax']
         grfi = df.groupby(names)
 
         """
         # for each group: estimate the sum
 
-        #sums = groups.sum().groupby(['z','daymax','season', 'pixRa', 'pixDec'])
+        #sums = groups.sum().groupby(['z','daymax','season', 'pixRA', 'pixDec'])
 
         gr = groups.apply(lambda x: sigma_x0_x1_color_grp(x,params=['x0','x1','color']))
 
-        names = ['z','daymax','season', 'pixRa', 'pixDec', 'Cov_x0x0', 'Cov_x1x1','Cov_colorcolor']
+        names = ['z','daymax','season', 'pixRA', 'pixDec', 'Cov_x0x0', 'Cov_x1x1','Cov_colorcolor']
         grfi = gr.groupby(names)
         """
 
@@ -1226,7 +1226,7 @@ class CalcSN_df_old:
     """
     def selectLC(self,lc, params):
         
-        restab = Table(np.unique(lc[['season','pixRa','pixDec','z','daymax']]))
+        restab = Table(np.unique(lc[['season','pixRA','pixDec','z','daymax']]))
     
         valu = np.unique(lc['z','daymax'])
         diff = lc['daymax']-valu['daymax'][:, np.newaxis]
@@ -1270,7 +1270,7 @@ def calcSN_last(lc_all, params=['x0', 'x1', 'color'], j=-1, output_q=None):
 
     #print('go man',j,len(lc_all))
     fields = []
-    for fi in ['season', 'healpixID', 'pixRa', 'pixDec', 'z',
+    for fi in ['season', 'healpixID', 'pixRA', 'pixDec', 'z',
                'daymax', 'band', 'snr_m5', 'time', 'fluxerr', 'phase']:
         fields.append(fi)
 
@@ -1284,7 +1284,7 @@ def calcSN_last(lc_all, params=['x0', 'x1', 'color'], j=-1, output_q=None):
     # print('here',lc)
 
     restab = Table(
-        np.unique(lc[['season', 'healpixID', 'pixRa', 'pixDec', 'z', 'daymax']]))
+        np.unique(lc[['season', 'healpixID', 'pixRA', 'pixDec', 'z', 'daymax']]))
 
     valu = np.unique(lc['z', 'daymax'])
     diff = lc['daymax']-valu['daymax'][:, np.newaxis]
@@ -1385,7 +1385,7 @@ def calcSN_old(lc_all, params=['x0', 'x1', 'color'], j=-1, output_q=None):
 
     #print('go man',j,len(lc_all))
     fields = []
-    for fi in ['season', 'pixRa', 'pixDec', 'z',
+    for fi in ['season', 'pixRA', 'pixDec', 'z',
                'daymax', 'snr_m5', 'time', 'fluxerr', 'phase']:
         fields.append(fi)
 
@@ -1405,7 +1405,7 @@ def calcSN_old(lc_all, params=['x0', 'x1', 'color'], j=-1, output_q=None):
     store['df'] = df
     """
 
-    groups = df.groupby(['season', 'pixRa', 'pixDec', 'z', 'daymax'])
+    groups = df.groupby(['season', 'pixRA', 'pixDec', 'z', 'daymax'])
 
     # print(groups.head(5))
     groups = groups.apply(npoints)
@@ -1420,7 +1420,7 @@ def calcSN_old(lc_all, params=['x0', 'x1', 'color'], j=-1, output_q=None):
     group_bad = groups.loc[~idx]
 
     group_bad = group_bad.groupby(
-        ['season', 'pixRa', 'pixDec', 'z', 'daymax', 'N_bef', 'N_aft'])
+        ['season', 'pixRA', 'pixDec', 'z', 'daymax', 'N_bef', 'N_aft'])
     restab_bad = Table(rows=list(group_bad.groups.keys()),
                        names=group_bad.keys)
     for par in params:
@@ -1428,12 +1428,12 @@ def calcSN_old(lc_all, params=['x0', 'x1', 'color'], j=-1, output_q=None):
             Column([100.]*len(restab_bad), name='Cov_{}{}'.format(par, par)))
 
     group_good = group_good.groupby(
-        ['season', 'pixRa', 'pixDec', 'z', 'daymax', 'N_bef', 'N_aft'])
+        ['season', 'pixRA', 'pixDec', 'z', 'daymax', 'N_bef', 'N_aft'])
 
     group_good = group_good.apply(
         lambda x: sigma_x0_x1_color_grp(x, params=['x0', 'x1', 'color']))
 
-    groupfields = ['season', 'pixRa', 'pixDec',
+    groupfields = ['season', 'pixRA', 'pixDec',
                    'z', 'daymax', 'N_bef', 'N_aft']
     for par in params:
         groupfields.append('Cov_{}{}'.format(par, par))
@@ -1453,7 +1453,7 @@ def calcSN_old(lc_all, params=['x0', 'x1', 'color'], j=-1, output_q=None):
 
     print('oooo', group_good)
 
-    restab = Table(np.unique(lc[['season', 'pixRa', 'pixDec', 'z', 'daymax']]))
+    restab = Table(np.unique(lc[['season', 'pixRA', 'pixDec', 'z', 'daymax']]))
 
     """
     for band in 'ugrizy':

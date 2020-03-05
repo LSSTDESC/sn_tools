@@ -72,7 +72,7 @@ def sigma_x0_x1_color(resu,restab,params=['x0','x1','color']):
 #def sigma_x0_x1_color(lc,params=['x0','x1','color'], j=-1, output_q=None):
 
     """
-    restab = Table(np.unique(lc[['season','pixRa','pixDec','z','daymax']]))
+    restab = Table(np.unique(lc[['season','pixRA','pixDec','z','daymax']]))
           
     valu = np.unique(lc['z','daymax'])
     diff = lc['daymax']-valu['daymax'][:, np.newaxis]
@@ -188,7 +188,7 @@ def sigma_x0_x1_color_loop(lcList,params=['x0','x1','color']):
 
 def calc_info(lc,params=['x0','x1','color'], j=-1, output_q=None):
     
-    restab = Table(np.unique(lc[['season','pixRa','pixDec','z','daymax']]))
+    restab = Table(np.unique(lc[['season','pixRA','pixDec','z','daymax']]))
           
     valu = np.unique(lc['z','daymax'])
     diff = lc['daymax']-valu['daymax'][:, np.newaxis]
@@ -270,16 +270,16 @@ class LCtoSN:
         
         self.summary, self.lcName, self.keyfile = geth5Data(procId,inputDir)
 
-        print(np.unique(self.summary[['season','pixRa','pixDec']]))
+        print(np.unique(self.summary[['season','pixRA','pixDec']]))
 
-        list_sn = list(np.unique(self.summary[['season','pixRa','pixDec']]))
+        list_sn = list(np.unique(self.summary[['season','pixRA','pixDec']]))
 
         print('Number of supernovae to process',len(list_sn))
         self.process()
 
     def process(self):
 
-        groups = self.summary.group_by(['season','z','pixRa','pixDec'])
+        groups = self.summary.group_by(['season','z','pixRA','pixDec'])
         indices = groups.groups.indices
         ngroups = len(indices)-1
         delta = ngroups
@@ -353,7 +353,7 @@ class LCtoSN:
         all_lc = Table()
         x1 = np.unique(grp['x1'])[0]
         color = np.unique(grp['color'])[0]
-        pixRa = np.unique(grp['pixRa'])[0]
+        pixRA = np.unique(grp['pixRA'])[0]
         pixDec = np.unique(grp['pixDec'])[0]
         z = np.unique(grp['z'])[0]
    

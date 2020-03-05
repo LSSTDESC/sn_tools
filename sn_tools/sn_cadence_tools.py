@@ -13,7 +13,7 @@ from sklearn.datasets import make_blobs
 from sklearn.cluster import KMeans
 from sn_tools.sn_io import getObservations
 import pandas as pd
-from sn_tools.sn_obs import dataInside
+from sn_tools.sn_obs import DataInside
 
 class ReferenceData:
     """
@@ -108,7 +108,7 @@ class GenerateFakeObservations:
     """
 
     def __init__(self, config,
-                 mjdCol='observationStartMJD', RaCol='fieldRA',
+                 mjdCol='observationStartMJD', RACol='fieldRA',
                  DecCol='fieldDec', filterCol='filter', m5Col='fiveSigmaDepth',
                  exptimeCol='visitExposureTime', nexpCol='numExposures',
                  seasonCol='season', seeingEffCol='seeingFwhmEff', seeingGeomCol='seeingFwhmGeom',
@@ -119,7 +119,7 @@ class GenerateFakeObservations:
         self.mjdCol = mjdCol
         self.m5Col = m5Col
         self.filterCol = filterCol
-        self.RaCol = RaCol
+        self.RACol = RACol
         self.DecCol = DecCol
         self.exptimeCol = exptimeCol
         self.seasonCol = seasonCol
@@ -144,7 +144,7 @@ class GenerateFakeObservations:
         Returns
         ---------
         recordarray of observations with the fields:
-        MJD, Ra, Dec, band,m5,Nexp, ExpTime, Season
+        MJD, RA, Dec, band,m5,Nexp, ExpTime, Season
         accessible through self.Observations
 
         """
@@ -159,7 +159,7 @@ class GenerateFakeObservations:
         inter_season_gap = 100.
         seeingEff = dict(zip(bands, config['seeingEff']))
         seeingGeom = dict(zip(bands, config['seeingGeom']))
-        Ra = config['Ra']
+        RA = config['RA']
         Dec = config['Dec']
         rtot = []
         # for season in range(1, config['nseasons']+1):
@@ -194,8 +194,8 @@ class GenerateFakeObservations:
 
                     myarr = np.array(mjd, dtype=[(self.mjdCol, 'f8')])
                     myarr = rf.append_fields(myarr, 'night', night)
-                    myarr = rf.append_fields(myarr, [self.RaCol, self.DecCol, self.filterCol], [
-                        [Ra]*len(myarr), [Dec]*len(myarr), [band]*len(myarr)])
+                    myarr = rf.append_fields(myarr, [self.RACol, self.DecCol, self.filterCol], [
+                        [RA]*len(myarr), [Dec]*len(myarr), [band]*len(myarr)])
                     myarr = rf.append_fields(myarr, [self.m5Col, self.nexpCol, self.exptimeCol, self.seasonCol], [
                         [m5_coadded]*len(myarr), [Nvisits[band]]*len(myarr), [Nvisits[band]*Single_Exposure_Time[band]]*len(myarr), [season]*len(myarr)])
                     myarr = rf.append_fields(myarr, [self.seeingEffCol, self.seeingGeomCol], [
@@ -215,8 +215,8 @@ class GenerateFakeObservations:
                                           Exposure_Time[band])
 
                 myarr = np.array(mjd, dtype=[(self.mjdCol, 'f8')])
-                myarr = rf.append_fields(myarr, [self.RaCol, self.DecCol, self.filterCol], [
-                                         [Ra]*len(myarr), [Dec]*len(myarr), [band]*len(myarr)])
+                myarr = rf.append_fields(myarr, [self.RACol, self.DecCol, self.filterCol], [
+                                         [RA]*len(myarr), [Dec]*len(myarr), [band]*len(myarr)])
                 myarr = rf.append_fields(myarr, [self.m5Col, self.nexpCol, self.exptimeCol, self.seasonCol], [
                                          [m5_coadded]*len(myarr), [Nvisits[band]]*len(myarr), [Nvisits[band]*Exposure_Time[band]]*len(myarr), [season]*len(myarr)])
                 myarr = rf.append_fields(myarr, [self.seeingEffCol, self.seeingGeomCol], [
@@ -242,7 +242,7 @@ class GenerateFakeObservations:
         Returns
         ---------
         recordarray of observations with the fields:
-        MJD, Ra, Dec, band,m5,Nexp, ExpTime, Season
+        MJD, RA, Dec, band,m5,Nexp, ExpTime, Season
         accessible through self.Observations
 
         """
@@ -257,7 +257,7 @@ class GenerateFakeObservations:
         inter_season_gap = 300.
         seeingEff = dict(zip(bands, config['seeingEff']))
         seeingGeom = dict(zip(bands, config['seeingGeom']))
-        Ra = config['Ra']
+        RA = config['RA']
         Dec = config['Dec']
         rtot = []
         # for season in range(1, config['nseasons']+1):
@@ -276,8 +276,8 @@ class GenerateFakeObservations:
                                           Exposure_Time[band])
 
                 myarr = np.array(mjd, dtype=[(self.mjdCol, 'f8')])
-                myarr = rf.append_fields(myarr, [self.RaCol, self.DecCol, self.filterCol], [
-                                         [Ra]*len(myarr), [Dec]*len(myarr), [band]*len(myarr)])
+                myarr = rf.append_fields(myarr, [self.RACol, self.DecCol, self.filterCol], [
+                                         [RA]*len(myarr), [Dec]*len(myarr), [band]*len(myarr)])
                 myarr = rf.append_fields(myarr, [self.m5Col, self.nexpCol, self.exptimeCol, self.seasonCol], [
                                          [m5_coadded]*len(myarr), [Nvisits[band]]*len(myarr), [Nvisits[band]*Exposure_Time[band]]*len(myarr), [season]*len(myarr)])
                 myarr = rf.append_fields(myarr, [self.seeingEffCol, self.seeingGeomCol], [
@@ -868,8 +868,8 @@ class ClusterObs:
 
         """
         r = []
-        for (pixRa, pixDec) in self.data[[self.RA_name,self.Dec_name]]:
-            r.append([pixRa, pixDec])
+        for (pixRA, pixDec) in self.data[[self.RA_name,self.Dec_name]]:
+            r.append([pixRA, pixDec])
 
         points = np.array(r)
         """
@@ -1293,8 +1293,8 @@ def Match_DD(fields_DD,df):
     
     dfb = pd.DataFrame()
     for field in fields_DD:
-        dataSel = dataInside(
-            df.to_records(index=False), field['RA'], field['Dec'], 10., 10., 'pixRa', 'pixDec')
+        dataSel = DataInside(
+            df.to_records(index=False), field['RA'], field['Dec'], 10., 10., 'pixRA', 'pixDec')
         if dataSel is not None:
             dfSel = pd.DataFrame(np.copy(dataSel))
             dfSel['fieldname'] = field['name']

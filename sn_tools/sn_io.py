@@ -64,7 +64,7 @@ def getMetricValues(dirFile,dbName,metricName,fieldType,nside):
     fileNames = glob.glob(search_path)
 
     if fileNames:
-        #plt.plot(metricValues['pixRa'],metricValues['pixDec'],'ko')
+        #plt.plot(metricValues['pixRA'],metricValues['pixDec'],'ko')
         #plt.show()
         #get the values from the metrics
         metricValues = np.array(loopStack(fileNames,'astropyTable'))
@@ -72,7 +72,7 @@ def getMetricValues(dirFile,dbName,metricName,fieldType,nside):
         # analyze these values
         #tab = getVals(fields_DD, metricValues, dbName.ljust(adjl), nside)
         
-        #plt.plot(sel['pixRa'],sel['pixDec'],'ko')
+        #plt.plot(sel['pixRA'],sel['pixDec'],'ko')
         #plt.show()
     
         metricTot = append(metricTot,metricValues)
@@ -221,32 +221,32 @@ def remove_galactic_area(tab):
         c = c_gal.transform_to('icrs')
         rg.append(('Galactic plane', c.ra.degree, c.dec.degree))
             
-    resrg = np.rec.fromrecords(rg, names=['name','Ra','Dec'])
-    idx = (resrg['Ra']>=200)&(resrg['Ra']<290.)      
+    resrg = np.rec.fromrecords(rg, names=['name','RA','Dec'])
+    idx = (resrg['RA']>=200)&(resrg['RA']<290.)      
     
     resrg = resrg[idx]
 
-    interp_m = interp1d(resrg['Ra']-11.,resrg['Dec'],bounds_error=False,fill_value=0.)
-    interp_p = interp1d(resrg['Ra']+11.,resrg['Dec'],bounds_error=False,fill_value=0.)
+    interp_m = interp1d(resrg['RA']-11.,resrg['Dec'],bounds_error=False,fill_value=0.)
+    interp_p = interp1d(resrg['RA']+11.,resrg['Dec'],bounds_error=False,fill_value=0.)
     
     #ida = (tab['pixDec']<0.)&(tab['pixDec']>=-60.)
     #sel = tab[ida]
     sel = tab
 
     print('cut1',len(sel))
-    idx = (sel['pixRa']>190)&(sel['pixRa']<295.)
+    idx = (sel['pixRA']>190)&(sel['pixRA']<295.)
     sela = sel[~idx]
     selb = sel[idx]
     
-    selb.sort(order='pixRa')
+    selb.sort(order='pixRA')
     
-    valDec_m = interp_m(np.copy(selb['pixRa']))
+    valDec_m = interp_m(np.copy(selb['pixRA']))
     
     idt_m = (selb['pixDec']-valDec_m)>0.
     
     selm = selb[idt_m]
     
-    valDec_p = interp_p(np.copy(selb['pixRa']))
+    valDec_p = interp_p(np.copy(selb['pixRA']))
     
     idt_p = (selb['pixDec']-valDec_p)<0.
 
@@ -353,7 +353,7 @@ def getObservations(dbDir, dbName,dbExtens):
                   'filter': 'band',
                   'visitExposureTime': 'exptime',
                   'skyBrightness': 'sky',
-                  'fieldRA': 'Ra',
+                  'fieldRA': 'RA',
                   'fieldDec': 'Dec',}
 
         reader = Read_Sqlite(dbFullName)

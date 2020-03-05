@@ -11,11 +11,11 @@ import time
 import itertools
 import numpy.lib.recfunctions as rf
 
-def fieldType(obs, RaCol, DecCol):
+def fieldType(obs, RACol, DecCol):
         
     rDDF = []
-    for ra, dec in np.unique(obs[[RaCol, DecCol]]):
-        idx = np.abs(obs[RaCol]-ra) < 1.e-5
+    for ra, dec in np.unique(obs[[RACol, DecCol]]):
+        idx = np.abs(obs[RACol]-ra) < 1.e-5
         idx &= np.abs(obs[DecCol]-dec) < 1.e-5
         sel = obs[idx]
         if len(sel) >= 10:
@@ -24,9 +24,9 @@ def fieldType(obs, RaCol, DecCol):
     nddf = len(rDDF)
     rtype = np.array(['WFD']*len(obs))
     if len(rDDF) > 0:
-        RaDecDDF = np.rec.fromrecords(rDDF, names=[RaCol, DecCol])
-        for (ra,dec) in RaDecDDF[[RaCol, DecCol]]:
-            idx = np.argwhere((np.abs(obs[RaCol]-ra)<1.e-5)&(np.abs(obs[DecCol]-dec)<1.e-5))
+        RADecDDF = np.rec.fromrecords(rDDF, names=[RACol, DecCol])
+        for (ra,dec) in RADecDDF[[RACol, DecCol]]:
+            idx = np.argwhere((np.abs(obs[RACol]-ra)<1.e-5)&(np.abs(obs[DecCol]-dec)<1.e-5))
             rtype[idx] = 'DD'
             
     obs = rf.append_fields(obs,'fieldType',rtype)
@@ -158,7 +158,7 @@ class SnapNight:
             self.ax2.yaxis.tick_right()
             self.ax2.yaxis.set_label_position("right")
 
-        self.ax.set_xlabel('Ra [deg]')
+        self.ax.set_xlabel('RA [deg]')
         self.ax.set_ylabel('Dec [deg]')
         self.ax.set_xlim(0, 360.)
         self.ax.set_ylim(-90., 10.)
@@ -368,7 +368,7 @@ class CadenceMovie:
             self.ax2.yaxis.tick_right()
             self.ax2.yaxis.set_label_position("right")
 
-        self.ax.set_xlabel('Ra [deg]')
+        self.ax.set_xlabel('RA [deg]')
         self.ax.set_ylabel('Dec [deg]')
         self.ax.set_xlim(0, 360.)
         self.ax.set_ylim(-90., 10.)

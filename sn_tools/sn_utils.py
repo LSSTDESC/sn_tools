@@ -459,7 +459,7 @@ class Make_Files_for_Cadence_Metric:
         Returns
         ---------
         recordarray of LC:
-        MJD, Ra, Dec, band,m5,Nexp, ExpTime, Season
+        MJD, RA, Dec, band,m5,Nexp, ExpTime, Season
         recordarray of mag_to_flux values
         """
 

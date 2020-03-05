@@ -16,25 +16,27 @@ import time
 import h5py
 from astropy.table import Table
 import multiprocessing
+import glob
+import os
 
 
 def getPix(nside, fieldRA, fieldDec):
     """
-    Function returning pixRa, pixDec and healpixId
+    Function returning pixRA, pixDec and healpixId
 
     Parameters
     ---------------
     nside: int
       nside value for healpix
-    fieldRa: float
-      field Ra
+    fieldRA: float
+      field RA
     fieldDec: float
       field Dec
 
     Returns
     ----------
     healpixId: Id from healpix
-    pixRa: Ra from healpix
+    pixRA: RA from healpix
     pixDec: Dec from healpix
 
     """
@@ -44,14 +46,163 @@ def getPix(nside, fieldRA, fieldDec):
     coord = hp.pix2ang(nside,
                        healpixId, nest=True, lonlat=True)
 
-    pixRa = coord[0]
+    pixRA = coord[0]
     pixDec = coord[1]
 
-    return healpixId, pixRa, pixDec
+    return healpixId, pixRA, pixDec
 
+class pavingSky:
+    def __init__(self,minRA, maxRA, minDec, maxDec, radius_RA,radius_Dec):
+        """ class to perform a paving of the sky with rectangles
 
-def pavingSky(ramin, ramax, decmin, decmax, radius):
-    """ Function to perform a paving of the sky
+        Parameters
+        --------------
+        minRA: float
+         min ra of the region to pave
+        maxRA: float
+         max ra of the region to pave
+        minDec: float
+         min dec of the region to pave
+        maxDec: float
+         max dec of the region to pave
+         radius_RA: float
+          distance reference for the paving in RA; correspond to the length in RA.
+         radius_Dec: float
+          distance reference for the paving in Dec; correspond to the length in Dec.
+        """
+
+        self.RA = np.mean([minRA,maxRA])
+        self.Dec = np.mean([minDec,maxDec])
+        self.radius_RA = radius_RA
+        self.radius_Dec = radius_Dec
+
+        # define the polygon attached to this area
+        """
+        self.area_poly = areap(self.RA-radius_RA/2.,
+                               self.RA+radius_RA/2.,
+                               self.Dec-radius_Dec/2.,
+                               self.Dec+radius_Dec/2.)
+        """
+        self.area_poly = areap(minRA,maxRA,minDec,maxDec)
+        all_patches = self.getpatches(minRA, maxRA, minDec, maxDec)
+
+        self.patches = self.inside(all_patches)
+        
+    def getpatches(self, minRA, maxRA, minDec, maxDec):
+        """
+        Method to define rectangles patches over the area defined by (minRA,minDec, maxRA, maxDec)
+
+        Parameters
+        --------------
+        minRA: float
+            min RA value of the area
+        maxRA: float
+            max RA value of the area
+        minDec: float
+            min Dec value of the area
+        maxDec: float
+            max Dec value of the area
+        
+        Returns
+        ----------
+        numpy array with the following cols:
+        RA, Dec: coordinate of the patch center
+        radius_RA, _Dec: diag distance in RA and Dec
+
+        """
+        n_ra = int((maxRA-minRA)/self.radius_RA)
+        radius_RA = (maxRA-minRA)/n_ra
+
+        n_dec = int((maxDec-minDec)/self.radius_Dec)
+        radius_Dec = (maxDec-minDec)/n_dec
+        rastep = self.radius_RA
+        decstep = self.radius_Dec/2.
+        decrefs = np.arange(minDec, maxDec, decstep)
+        shift = self.radius_RA/2.
+
+        ras = np.arange(minRA,maxRA+radius_RA,radius_RA)
+        decs = np.arange(minDec,maxDec+radius_Dec,radius_Dec)
+
+        r=[]
+        for ra in ras:
+            for dec in decs:
+                ramax = ra+radius_RA
+                decmax = dec+radius_Dec
+                ramean = np.mean([ra,ramax])
+                decmean =  np.mean([dec,decmax])
+                r.append((ramean, decmean, radius_RA,radius_Dec))
+                
+        #r = []
+        """
+        for i in range(len(decrefs)):
+            shift_i = shift*(i % 2)
+            for ra in list(np.arange(minRA-shift_i, maxRA+shift_i+rastep, rastep)):
+                r.append((ra, decrefs[i], self.radius_RA,self.radius_Dec))
+        """
+        """
+        for i in range(len(decrefs)):
+            for ra in list(np.arange(minRA, maxRA+rastep, rastep)):
+                r.append((ra, decrefs[i], self.radius_RA,self.radius_Dec))
+        """
+    
+        return np.rec.fromrecords(r, names=['RA','Dec','radius_RA','radius_Dec'])
+        
+    def inside(self, areas):
+        """
+        Method to select patches located (center) inside the area
+        
+        Parameters
+        --------------
+        areas: numpy array with 
+            RA, Dec: coordinate of the patch center
+            radius_RA, _Dec: diag distance in RA and Dec
+
+        Returns
+        ----------
+        numpy array of patches (same struct as input) matching the area
+    
+        """
+           
+        poly_orig = geometry.Polygon(self.area_poly)
+        poly_origb = affinity.scale(poly_orig, xfact=1.1, yfact=1.1)
+        idf = shapely.vectorized.contains(poly_origb, areas['RA'],areas['Dec'])
+
+        return areas[idf]
+        
+    def plot(self):
+        """
+        Method to plot/check the result of the class
+
+        On the plot should be visible the initial area (red edges) with diamonds (blue edges)
+        whose centers (black point) are located inside the initial area
+
+        """
+        
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
+        
+        pf = PolygonPatch(self.area_poly, facecolor=(
+            0, 0, 0, 0), edgecolor='red')
+        ax.add_patch(pf)
+
+        for val in self.patches:
+
+            #polyb = areap_diamond(val['RA'],val['Dec'],val['radius_RA'],val['radius_Dec'])
+            minRA = val['RA']-val['radius_RA']/2.
+            maxRA = val['RA']+val['radius_RA']/2.
+            minDec = val['Dec']-val['radius_Dec']/2.
+            maxDec = val['Dec']+val['radius_Dec']/2.
+            polyb = areap(minRA,maxRA,minDec,maxDec)
+            pfb = PolygonPatch(polyb, facecolor=(
+                0, 0, 0, 0), edgecolor='blue')
+            ax.add_patch(pfb)
+            ax.plot(val['RA'],val['Dec'],'k.')
+
+        plt.show()
+
+    
+def pavingSky_old(ramin, ramax, decmin, decmax, radius):
+    """ Function to perform a paving of the sky with hexagons
 
     Parameters
     --------------
@@ -69,7 +220,7 @@ def pavingSky(ramin, ramax, decmin, decmax, radius):
 
     Returns
     -----------
-    tab: record array of the center position (Ra,Dec) and the radius
+    tab: record array of the center position (RA,Dec) and the radius
     """
     ramin = ramin+radius*np.sqrt(3.)/2.
     decstep = 1.5*radius
@@ -77,107 +228,313 @@ def pavingSky(ramin, ramax, decmin, decmax, radius):
     shift = radius*np.sqrt(3.)/2.
     decrefs = np.arange(decmax, decmin, -decstep)
     r = []
-    # this is to pave the sky loopin on Ra, same Dec
+    # this is to pave the sky loopin on RA, same Dec
     for i in range(len(decrefs)):
         shift_i = shift*(i % 2)
         for ra in list(np.arange(ramin-shift_i, ramax, rastep)):
             r.append((ra, decrefs[i], radius))
 
-    res = np.rec.fromrecords(r, names=['Ra', 'Dec', 'radius'])
+    res = np.rec.fromrecords(r, names=['RA', 'Dec', 'radius'])
     return res
 
 
-def area(minRa, maxRa, minDec, maxDec):
+def area(minRA, maxRA, minDec, maxDec):
+    """
+    Method to make a dict of coordinates
 
-    return dict(zip(['minRa', 'maxRa', 'minDec', 'maxDec'], [minRa, maxRa, minDec, maxDec]))
+    Parameters
+    --------------
+    minRA: float
+      min RA
+    maxRA: float
+      maxRA
+    minDec: float
+     min Dec
+    maxDec: float
+      max Dec
+
+    Returns
+    ----------
+    dict with keys corresponding to abovemantioned values
+
+    """
+    
+    return dict(zip(['minRA', 'maxRA', 'minDec', 'maxDec'], [minRA, maxRA, minDec, maxDec]))
 
 
-def areap(minRa, maxRa, minDec, maxDec):
+def areap(minRA, maxRA, minDec, maxDec):
+    """
+    Method to make a polygon out of coordinates
 
-    poly = [[minRa, minDec], [minRa, maxDec], [maxRa, maxDec], [maxRa, minDec]]
+    Parameters
+    --------------
+    minRA: float
+      min RA
+    maxRA: float
+      maxRA
+    minDec: float
+     min Dec
+    maxDec: float
+      max Dec
+
+    Returns
+    ----------
+    geometry.Polygon
+
+    """
+    poly = [[minRA, minDec], [minRA, maxDec], [maxRA, maxDec], [maxRA, minDec]]
+
+    return geometry.Polygon(poly)
+
+def areap_diamond(RA, Dec, radius_RA, radius_Dec):
+    """
+    Method defining a diamond
+
+    Parameters
+    ---------------
+    RA: float
+      RA of the center of the diamond
+    Dec: float
+      Dec of the center of the diamond  
+    radius_RA: float
+      diag value in RA
+    radius_Dec: float
+      diag value in Dec
+
+    Returns
+    ----------
+    geometry.Polygon of the diamond
+
+    """
+
+    minRA = RA-radius_RA/2.
+    maxRA = RA+radius_RA/2.
+    minDec = Dec-radius_Dec/2.
+    maxDec = Dec+radius_Dec/2.
+    
+    poly = [[minRA, Dec], [RA, maxDec], [maxRA, Dec], [RA, minDec]]
 
     return geometry.Polygon(poly)
 
 
-def dataInside(data, Ra, Dec, widthRa, widthDec, RaCol='fieldRa', DecCol='fieldDec', ax=None):
+class DataInside:
+    def __init__(self,data, RA, Dec, widthRA, widthDec, RACol='fieldRA', DecCol='fieldDec'):
+        """
+        class to select data points (RA,Dec) inside and area
+        defined by the center (RA,Dec) and two width (widthRA, widthDec)
 
-    #time_ref = time.time()
-    minRa = Ra-widthRa
-    maxRa = Ra+widthRa
+        Parameters
+        --------------
+        data: array of data
+         should contains cols named RACol and DecCol
+        RA: float
+         RA center of the region to consider
+        Dec: float
+         Dec center of the region to consider
+        widthRA: float
+         RA width of the region to consider
+        widthDec: float
+         Dec width of the region to consider
+       RACol: str, opt
+        name of the col with RA infos (default:'fieldRA')
+       DecCol: str, opt
+        name of the col with Dec infos (default:'fieldDec')
 
-    minDec = Dec-widthDec
-    maxDec = Dec+widthDec
+        """
+        self.RACol = RACol
+        self.DecCol = DecCol
 
-    # Create area from these
-    # Ra is in [0.,360.]
-    # special treatement near Ra~0
+        minRA = RA-widthRA
+        maxRA = RA+widthRA
 
-    areaList = []
-    if ax is not None:
-        areapList = []
+        minDec = Dec-widthDec
+        maxDec = Dec+widthDec
 
-    if maxRa >= 360.:
-        # in that case two areas necessary
-        #print('hello poly',minRa,360., minDec, maxDec,0.0, maxRa-360., minDec, maxDec)
-        areaList.append(area(minRa, 360., minDec, maxDec))
-        areaList.append(area(0.0, maxRa-360., minDec, maxDec))
+        self.areas = self.getAreas(RA,Dec, minRA, maxRA, minDec, maxDec)
+        
+        self.data = self.selData(data,self.areas)
+        
+    def getAreas(self, RA,Dec,minRA, maxRA, minDec, maxDec):
+        """
+        Method to get areas (geometry.Polygon) corresponding to a region
+        centered in (RA,Dec) with min, max RA and Dec
+
+        Parameters
+        --------------
+         RA: float
+         RA center of the region to consider
+        Dec: float
+         Dec center of the region to consider
+         minRA: float
+          RA min of the region to consider
+        maxRA: float
+          RA max of the region to consider
+        maxDec: float
+         Dec max of the region to consider
+
+        Returns
+        ---------
+        list of dict with the following keys:
+          minRA, maxRA, minDec, maxDec
+
+        """ 
+        # Create area from these
+        # RA is in [0.,360.]
+        # special treatement near RA~0
+        ax = None
+        
+        areaList = []
         if ax is not None:
-            areapList.append(areap(minRa, 360., minDec, maxDec))
-            areapList.append(areap(0.0, maxRa-360., minDec, maxDec))
-    else:
-        if minRa < 0.:
+            areapList = []
+
+        if maxRA >= 360.:
             # in that case two areas necessary
-            areaList.append(area(minRa+360., 360., minDec, maxDec))
-            areaList.append(area(-1.e-8, maxRa, minDec, maxDec))
-            #areapList.append(areap(minRa+360., 360., minDec, maxDec))
-            #areapList.append(areap(-1.e-8, maxRa, minDec, maxDec))
+            areaList.append(area(minRA, 360., minDec, maxDec))
+            areaList.append(area(0.0, maxRA-360., minDec, maxDec))
         else:
-            areaList.append(area(minRa, maxRa, minDec, maxDec))
-            #areapList.append(areap(minRa, maxRa, minDec, maxDec))
-    #print('dti a',time.time()-time_ref)
-    #time_ref = time.time()
-    if ax is not None:
-        for poly in areapList:
-            pf = PolygonPatch(poly, facecolor=(
-                0, 0, 0, 0), edgecolor='red')
-            ax.add_patch(pf)
-        ax.plot(data[RaCol], data[DecCol], 'ko')
-
-    # select data inside this area
-    """
-    dataSel = None
-    x = data[RaCol]
-    y = data[DecCol]
-    for poly in areaList:
-        idf = shapely.vectorized.contains(poly, x, y)
-        if len(data[idf]) > 0.:
-            if dataSel is None:
-                dataSel = data[idf]
+            if minRA < 0.:
+                # in that case two areas necessary
+                areaList.append(area(minRA+360., 360., minDec, maxDec))
+                areaList.append(area(-1.e-8, maxRA, minDec, maxDec))
             else:
-                dataSel = np.concatenate((dataSel, data[idf]))
-    print('dti b',time.time()-time_ref)
-    """
-    #time_ref = time.time()
+                areaList.append(area(minRA, maxRA, minDec, maxDec))
 
-    dataSel = None
-    for areal in areaList:
-        idf = (data[RaCol] >= areal['minRa']) & (data[RaCol] <= areal['maxRa'])
-        idf &= (data[DecCol] >= areal['minDec']) & (
-            data[DecCol] <= areal['maxDec'])
+        return areaList
+
+    def selData(self, data, areaList):
+        """
+        Method selecting data located (in (RA,Dec)) inside a list of areas
+
+        Parameters
+        --------------
+        data: array
+          array of data
+        areaList: list of areas
+           list of areas to consider
+
+        Returns
+        ----------
+        Data inside the regions defined in areaList
+
+        """
+        
+        dataSel = None
+        for areal in areaList:
+            data_inside = self.inData(data,areal)
+            if data_inside is not None:
+                if dataSel is None:
+                    dataSel = data_inside
+                else:
+                    dataSel = np.concatenate((dataSel, data_inside))
+
+        return dataSel
+
+    def inData(self, data,area):
+        """
+        Method selecting data located (in (RA,Dec)) inside a list of areas
+
+        Parameters
+        --------------
+        data: array
+          array of data
+        area: area
+         dict with the following keys:
+           minRA, maxRA, minDec, maxDec
+           
+        Returns
+        ----------
+        Data inside the region defined by area
+
+        """
+        diff_add = 0.
+
+        
+        idf = data[self.RACol]-area['minRA']>=-diff_add
+        idf &= data[self.RACol]-area['maxRA']<=diff_add
+        idf &= data[self.DecCol]-area['minDec']>=-diff_add
+        idf &= data[self.DecCol]-area['maxDec']<=diff_add
+
+        return data[idf]
+    
+    def inData_old(self, data, area):
+        """
+        Method selecting data located (in (RA,Dec)) inside a list of areas
+
+        Parameters
+        --------------
+        data: array
+          array of data
+        area: area
+         dict with the following keys:
+           minRA, maxRA, minDec, maxDec
+           
+        Returns
+        ----------
+        Data inside the region defined by area
+
+        """
+        idf = (data[self.RACol] >= area['minRA']) & (data[self.RACol] <= area['maxRA'])
+        idf &= (data[self.DecCol] >= area['minDec']) & (
+            data[self.DecCol] <= area['maxDec'])
+
         if len(data[idf]) > 0.:
-            if dataSel is None:
-                dataSel = data[idf]
-            else:
-                dataSel = np.concatenate((dataSel, data[idf]))
+            return data[idf]
+        return None
 
-    # print('datasel',areaList,dataSel)
-    #print('dti c',time.time()-time_ref,dataSel)
+    def plot(self,ax):
+        """
+        Method to plot the result of the class:
 
-    return dataSel
+        - area selected (red edges)
+        - data selected (black points)
+
+        Parameters
+        --------------
+        ax: axes.Axes (matplotlib)
+          axis to plot the results
+        
+        """
+        
+        #import matplotlib.pyplot as plt
+        #fig, ax = plt.subplots()
+
+        ax.plot(self.data[self.RACol],self.data[self.DecCol],'ko')
+
+        for val in self.areas:
+            polyb = areap(val['minRA'],val['maxRA'],val['minDec'],val['maxDec'])
+            pfb = PolygonPatch(polyb, facecolor=(0, 0, 0, 0), edgecolor='red')
+            ax.add_patch(pfb)
+        
+        #plt.show()
 
 
 def proj_gnomonic_plane(lamb0, phi1, lamb, phi):
+    """
+    Method to perform a gnomonic projection
+    on a plane of points of the celestial sphere
 
+    The formulas coded here are taken from:
+    Map Projections - A working manual
+    US Geological Survey - Professional paper 1395
+    by John P.Snyder - 1987
+
+    Parameters
+    --------------
+    lambd0:  float
+      latitude of the tangent point of the projection (Dec) 
+    phi1: float
+      longitude of the tangent point of the projection (RA)
+    lambd:  float
+      latitude of the point to project (Dec)
+    phi: float
+      longitude of the point to project (RA)
+
+    Returns
+    ----------
+    x,y: coordinates of the projected point
+
+    """
+    
     cosc = np.sin(phi1)*np.sin(phi)
     cosc += np.cos(phi1)*np.cos(phi)*np.cos(lamb-lamb0)
 
@@ -230,11 +587,11 @@ def fillCorresp(tab, corres, vara, varb):
         corres[vara] = varb
 
 
-def pixelate(data, nside, RaCol='Ra', DecCol='Dec'):
+def pixelate(data, nside, RACol='RA', DecCol='Dec'):
 
     res = data.copy()
     npix = hp.nside2npix(nside)
-    table = hp.ang2vec(res[RaCol], res[DecCol], lonlat=True)
+    table = hp.ang2vec(res[RACol], res[DecCol], lonlat=True)
 
     healpixs = hp.vec2pix(
         nside, table[:, 0], table[:, 1], table[:, 2], nest=True)
@@ -244,7 +601,7 @@ def pixelate(data, nside, RaCol='Ra', DecCol='Dec'):
     sfd = SFDQuery()
     ebv = sfd(coords)
     res = rf.append_fields(res, 'healpixID', healpixs)
-    res = rf.append_fields(res, 'pixRa', coord[0])
+    res = rf.append_fields(res, 'pixRA', coord[0])
     res = rf.append_fields(res, 'pixDec', coord[1])
     res = rf.append_fields(res, 'ebv', ebv)
 
@@ -252,7 +609,25 @@ def pixelate(data, nside, RaCol='Ra', DecCol='Dec'):
 
 
 def season(obs, season_gap=80., mjdCol='observationStartMJD'):
+    """
+    Method to estimate seasons
 
+    Parameters
+    --------------
+    obs: numpy array
+      array of observations
+    season_gap: float, opt
+       minimal gap required to define a season (default: 80 days)
+    mjdCol: str, opt
+      col name for MJD infos (default: observationStartMJD)
+
+    Returns
+    ----------
+    original numpy array with season appended
+
+    """
+
+    # check wether season has already been estimated
     if 'season' in obs.dtype.names:
         return obs
 
@@ -281,6 +656,29 @@ def season(obs, season_gap=80., mjdCol='observationStartMJD'):
 
 def LSSTPointing(xc, yc, angle_rot=0., area=None, maxbound=None):
     """
+    Method to build a focal plane for LSST
+
+    Parameters
+    ---------------
+
+    xc: float
+       x-position of the center FP (RA)
+    yc: float
+       y-position of the center FP (Dec)
+    angle_rot: float, opt
+      angle of rotation of the FP (default: 0.)
+    area: float
+      area for the FP (default: None)
+    maxbound: float
+      ???? (default: None)
+    Returns
+    ----------
+    LSST FP (geometry.Polygon)
+
+    """
+
+    
+    """
     arr = [[3, 0], [12, 0], [12, 1], [13, 1], [13, 2], [14, 2], [14, 3], [15, 3],
            [15, 12], [14, 12], [14, 13], [13, 13], [
                13, 14], [12, 14], [12, 15],
@@ -302,17 +700,21 @@ def LSSTPointing(xc, yc, angle_rot=0., area=None, maxbound=None):
         if val[1] > 0.:
             arrcp.append([val[0], -val[1]])
 
-    # symmetri II: x -> -x
+    # symmetry II: x -> -x
     arr = list(arrcp)
     for val in arrcp[::-1]:
         if val[0] > 0.:
             arr.append([-val[0], val[1]])
 
+    # build polygon
     poly_orig = geometry.Polygon(arr)
+
+    # set area
     if area is not None:
         poly_orig = affinity.scale(poly_orig, xfact=np.sqrt(
             area/poly_orig.area), yfact=np.sqrt(area/poly_orig.area))
 
+    #set rotation angle
     rotated_poly = affinity.rotate(poly_orig, angle_rot)
 
     return affinity.translate(rotated_poly,
@@ -320,16 +722,436 @@ def LSSTPointing(xc, yc, angle_rot=0., area=None, maxbound=None):
                               yoff=yc-rotated_poly.centroid.y)
 
 
-class ProcessArea:
-    def __init__(self, nside, RaCol, DecCol, num, outDir, dbName, saveData):
+class DataToPixels:
+    def __init__(self, nside, RACol, DecCol,num, outDir, dbName, obsIdCol='observationId', saveData=False):
+        """
+        class to match observations to sky pixels
+
+        Parameters
+        ---------------
+        nside: int
+          nside parameter for healpix tessalation
+        RACol: str
+          name of the RA field
+        DecCol: str
+          name of the Dec field      
+        num: int
+          index (related to multiprocessing)
+        outDir: str
+           output dir path
+        dbName: str
+           observing strategy name
+        obsIdCol: str, opt
+          observation Id column
+        saveData: bool, opt
+           to save (True) the data or not (False) (default: False)
+
+
+        """
+
+        # load parameters
         self.nside = nside
+        self.RACol = RACol
+        self.DecCol = DecCol
+        self.obsIdCol = obsIdCol
+        self.num = num
+        self.outDir = outDir
+
+        self.dbName = dbName
+        self.saveData = saveData
+
+        # get the LSST focal plane scale factor
+        # corresponding to a sphere radius equal to one
+        # (which is the default for gnomonic projections here)
+
+        fov = 9.62*(np.pi/180.)**2  # LSST fov in sr
+        theta = 2.*np.arcsin(np.sqrt(fov/(4.*np.pi)))
+
+        # if theta >= np.pi/2.:
+        #    theta -= np.pi/2.
+        #print('theta', theta, np.rad2deg(theta))
+        self.fpscale = np.tan(theta)
+        
+    def __call__(self, data, RA, Dec, widthRA, widthDec, ipoint, nodither=False, display=False):
         """
-        self.Ra = Ra
-        self.Dec = Dec
-        self.widthRa = widthRa
-        self.widthDec = widthDec
+        call method: this is where the processing is.
+
+        Parameters
+        --------------
+        data: numpy array
+          data to process
+        metricList: list(metric)
+           list of metric to process
+        RA: float
+           RA position (center of the area to process)
+        Dec: float
+           Dec position (center of the area to process)
+        widthRA: float
+          width in RA of the area to process
+        widthDec: float
+          width in Dec of the area to process
+        ipoint: int
+        nodither: bool,opt
+          to remove dithering (default: False)
+        display: bool, opt
+          to display matching FP/observations in "real time" (default: False)
+
         """
-        self.RaCol = RaCol
+        
+        # display: (RA,Dec) distribution of the data
+        if display:
+            import matplotlib.pyplot as plt
+            fig, ax = plt.subplots()
+            ax.plot(data[self.RACol], data[self.DecCol], 'ko')
+            plt.show()
+
+        # select data inside an area centered in (RA,Dec) with width (widthRA+1,widthDec+1)
+        dataSel = DataInside(data, RA, Dec, widthRA+1., widthDec+1.,
+                             RACol=self.RACol, DecCol=self.DecCol)
+        
+        # display: (RA,Dec) distribution of the selected data (ie inside the area)
+        #if display:
+        #    dataSel.plot()
+        # Possible to remove DD dithering here
+ 
+        self.observations = np.copy(dataSel.data)
+        if dataSel is not None:
+            
+            # This is usually to test impact of dithering on DDF
+            if nodither:
+                dataSel[self.RACol] = np.mean(dataSel[self.RACol])
+                dataSel[self.DecCol] = np.mean(dataSel[self.DecCol])
+                
+            # mv to panda df
+            dataset = pd.DataFrame(np.copy(dataSel.data))
+
+            print('passed')
+            # get central pixel ID
+            healpixID = hp.ang2pix(self.nside, RA,
+                                   Dec, nest=True, lonlat=True)
+
+            # get nearby pixels
+            vec = hp.pix2vec(self.nside, healpixID, nest=True)
+            self.healpixIDs = hp.query_disc(
+                self.nside, vec, 3.*np.deg2rad(widthRA), inclusive=False, nest=True)
+
+            # get pixel coordinates
+            coords = hp.pix2ang(self.nside, self.healpixIDs, nest=True, lonlat=True)
+            self.pixRA, self.pixDec = coords[0], coords[1]
+
+
+            # display (RA,Dec) of pixels
+            if display:
+                print('number of pixels here', len(self.pixRA))
+                import matplotlib.pyplot as plt
+                fig, ax = plt.subplots()
+                ax.plot(self.pixRA, self.pixDec, 'r*')
+                dataSel.plot(ax)
+                plt.show()
+
+            # make groups by (RA,dec)
+            dataset = dataset.round({self.RACol: 4, self.DecCol: 4})
+            groups = dataset.groupby([self.RACol, self.DecCol])
+
+            # display matching pixels/observations
+            if display:
+                import matplotlib.pylab as plt
+                for name, group in groups:
+                    fig, ax = plt.subplots()
+                    print('matching pixels')
+                    self.match(group, healpixIDs, pixRA, pixDec, name)
+                    # ax.plot(dataset[self.RACol],dataset[self.DecCol],'bs',mfc='None')
+                    plt.show()
+
+            # process pixels with data
+            # match pixels to data
+            time_ref = time.time()
+            matched_pixels = groups.apply(
+                lambda x: self.match(x, self.healpixIDs, self.pixRA, self.pixDec)).reset_index()
+
+            print(matched_pixels)
+            print('after matching', time.time()-time_ref,
+                  len(matched_pixels['healpixID'].unique()))
+
+            return matched_pixels
+            
+    def match(self, grp, healpixIDs, pixRA, pixDec):
+        """
+        Method to match a set of pixels to a grp of observations
+
+        Parameters
+        ---------------
+        grp: pandas grp
+           observations
+        healpixIDs: list(int)
+          pixels IDs
+        pixRA: list(float)
+          pixel RAs
+        pixDec: list(float)
+          pixel Decs
+
+        Returns:
+        ----------
+        pandas df with the following cols:
+        fieldRA, fieldDec: RA and Dec of observations (FP center)
+        healpixID,pixRA,pixDec: pixels lying inside LSST FP centered in (fieldRA, fieldDec)
+
+        """
+
+        
+        # print('hello', grp.columns)
+        pixRA_rad = np.deg2rad(pixRA)
+        pixDec_rad = np.deg2rad(pixDec)
+
+        # convert data position in rad
+        pRA = np.median(grp[self.RACol])
+        pDec = np.median(grp[self.DecCol])
+        pRA_rad = np.deg2rad(pRA)
+        pDec_rad = np.deg2rad(pDec)
+
+        # gnomonic projection of pixels on the focal plane
+        #x, y = proj_gnomonic_plane(pRA_rad, pDec_rad, pixRA_rad, pixDec_rad)
+        x, y = proj_gnomonic_plane(pDec_rad, pRA_rad, pixDec_rad, pixRA_rad)
+        
+        # get LSST FP with the good scale
+        fpnew = LSSTPointing(0., 0., maxbound=self.fpscale)
+
+        # print(shapely.vectorized.contains(
+        #    fpnew, x, y), self.fpscale, fpnew.area)
+
+        idf = shapely.vectorized.contains(fpnew, x, y)
+
+        pixID_matched = list(healpixIDs[idf])
+        pixRA_matched = list(pixRA[idf])
+        pixDec_matched = list(pixDec[idf])
+
+        df_pix = pd.DataFrame({'healpixID': pixID_matched,
+                               'pixRA': pixRA_matched,
+                               'pixDec': pixDec_matched})
+
+        return df_pix
+        
+    def plot(self, pixels):
+        """
+         Method to plot matching results
+         For each observation, the LSST FP is drawn as well as the center of matched pixels
+        
+         """
+        
+        import matplotlib.pyplot as plt
+        print(np.unique(pixels[[self.RACol,self.DecCol]],axis=0))
+        for vv in np.unique(pixels[[self.RACol,self.DecCol]],axis=0):
+            fig, ax = plt.subplots()
+            # plot all the pixels candidate for matching
+            ax.plot(self.pixRA, self.pixDec,'ko', mfc='None')
+            fpnew = LSSTPointing(vv[0],vv[1], area=9.6)
+            pf = PolygonPatch(fpnew, facecolor=(0, 0, 0, 0), edgecolor='red')
+            ax.add_patch(pf)
+            idf = np.abs(pixels[self.RACol]-vv[0])<1.e-5
+            idf &= np.abs(pixels[self.DecCol]-vv[1])<1.e-5
+            ax.plot(pixels[idf]['pixRA'],pixels[idf]['pixDec'],'r*')
+            
+            plt.show()
+
+
+class ProcessPixels:
+    def __init__(self, metricList,ipoint,outDir='',dbName='',RACol='fieldRA', DecCol='fieldDec', saveData=False):
+        """
+        class to process metrics on a set of data corresponding to pixels
+
+        Parameters
+        --------------
+        metricList: list(metrics)
+          list of sn_metrics to process
+        ipoint: int
+         internal parameter 
+        outDir: str, opt
+          output directory (default: '')
+        dbName: str,
+          observing strategy name (default: '')
+        RACol: str, opt
+          RA name (default: ='fieldRA')
+       DecCol: str, opt
+          Dec name (default: ='fieldDec')
+       saveData: bool,opt
+         to save the data (or not) (default: False)
+
+        """
+        
+        self.metricList = metricList
+        self.RACol = RACol
+        self.DecCol = DecCol
+        self.saveData = saveData
+        self.outDir = outDir
+        self.dbName = dbName
+        self.num = ipoint
+        
+        # data will be save so clean the output directory first
+        if self.saveData:
+            self.clean()
+
+
+    def clean(self):
+        """
+        Method to clean potential existing output files
+
+        """
+        
+        for metric in self.metricList:
+            listf = glob.glob('{}/*_{}_{}*'.format(self.outDir, metric.name, self.num))
+            if len(listf) > 0:
+                for val in listf:
+                    os.system('rm {}'.format(val))
+            
+        
+    def __call__(self, pixels,observations,ip):
+        """
+        Main processing here
+
+        Parameters
+        --------------
+        pixels: pandas df
+          containing list of pixels (healpixID, pixRA, pixDec) with corresponding observations (self.RACol, self.DecCol)
+        observations: array
+           array of observations (from the scheduler)
+        ip: int,
+          internal parameter
+
+
+        """
+        # metric results are stored in a dict
+        self.resfi = {}
+        for metric in self.metricList:
+            self.resfi[metric.name] = None
+
+        data = pd.DataFrame(observations)
+            
+        # run the metrics on those pixels
+        ipix = -1 # counter to estimate when to dump
+        isave = -1 # counter to estimate how many dumps
+        for vv in pixels['healpixID'].unique():
+            time_ref = time.time()
+            ipix += 1
+            idf = pixels['healpixID'] == vv
+            selpix = pixels[idf]       
+            #print('selection',selpix)
+            dataPixels = self.getData(data,selpix)
+            #print('data',dataPixels)
+            self.runMetrics(dataPixels)
+            #print('pixel processed',time.time()-time_ref)
+            if self.saveData and ipix >=50:
+                isave += 1
+                self.dump(ip,isave)
+                ipix = -1
+
+        if ipix >= 0 and self.saveData:
+            isave += 1
+            self.dump(ip,isave)
+            ipix = -1
+            
+    def getData(self,data,selpix):
+        """
+        Method to select data from a list
+
+        Parameters
+        ---------------
+        data: pandas df
+          observations to select; Should contain at least self.RACol and self.DecCol cols
+        selpix: pandas df
+          data used for selection. Should contain at least self.RACol and self.DecCol cols
+
+        Returns
+        ----------
+        dataPixel: pandas df of selected observations
+
+        """
+        idfb = [((data[self.RACol] - lat)**2 + (data[self.DecCol] - lon)**2).idxmin() for index,lat, lon in selpix[[self.RACol,self.DecCol]].itertuples()]
+        dataPixel = data.iloc[idfb]
+        return dataPixel
+        
+    def runMetrics(self, dataPixel):
+        """
+        Method to run the metrics on the data
+
+        Parameters
+        --------------
+        dataPixel: array
+          set of data used as input to the metric
+
+        """
+        
+        resdict = {}
+        # run the metrics on these data
+        if len(dataPixel)<=5:
+            return
+        for metric in self.metricList:
+            resdict[metric.name] = metric.run(season(dataPixel.to_records(index=False)))
+
+        # concatenate the results
+        for key in self.resfi.keys():
+            if resdict[key] is not None and resdict[key].size > 0:
+                if self.resfi[key] is None:
+                    self.resfi[key] = resdict[key]
+                else:
+                    #print('here pal',type(resdict[key]),type(resfi[key]))
+                    self.resfi[key] = np.concatenate((self.resfi[key], resdict[key]))
+
+    def dump(self,ipoint,isave):
+        """
+        Method to dump results in hdf5 file
+
+        Parameters
+        --------------
+        ipoint: int
+         internal parameter
+        isave: int
+          number of dumps for this file
+
+        """
+
+        for key, vals in self.resfi.items():
+            outName = '{}/{}_{}_{}.hdf5'.format(self.outDir,
+                                                 self.dbName, key, self.num)
+            if vals is not None:
+                df = pd.DataFrame.from_records(vals)
+                tab = Table.from_pandas(df)
+                keyhdf = 'metric_{}_{}_{}'.format(self.num, ipoint, isave)
+                print('dumping',keyhdf)
+                tab.write(outName, keyhdf, append=True, compression=True)
+
+        #reset the metric after dumping
+        for metric in self.metricList:
+            self.resfi[metric.name] = None
+
+
+class ProcessArea:
+    def __init__(self, nside, RACol, DecCol, num, outDir, dbName, saveData=False):
+        """
+        class to process (ie apply a metric) a given part of the sky
+
+        Parameters
+        ---------------
+        nside: int
+          nside parameter for healpix tessalation
+        RACol: str
+          name of the RA field
+        DecCol: str
+          name of the Dec field      
+        num: int
+          index (related to multiprocessing)
+        outDir: str
+           output dir path
+        dbName: str
+           observing strategy name
+        saveData: bool, opt
+           to save (True) the data or not (False) (default: False)
+
+
+        """
+
+        # load parameters
+        self.nside = nside
+        self.RACol = RACol
         self.DecCol = DecCol
         self.num = num
         self.outDir = outDir
@@ -339,7 +1161,7 @@ class ProcessArea:
 
         # get the LSST focal plane scale factor
         # corresponding to a sphere radius equal to one
-        # (which is the default for gnomonic projections here
+        # (which is the default for gnomonic projections here)
 
         fov = 9.62*(np.pi/180.)**2  # LSST fov in sr
         theta = 2.*np.arcsin(np.sqrt(fov/(4.*np.pi)))
@@ -349,78 +1171,108 @@ class ProcessArea:
         #print('theta', theta, np.rad2deg(theta))
         self.fpscale = np.tan(theta)
 
-    def __call__(self, data, metricList, Ra, Dec, widthRa, widthDec, ipoint, nodither, display=False):
+    def __call__(self, data, metricList, RA, Dec, widthRA, widthDec, ipoint, nodither=False, display=False):
+        """
+        call method: this is where the processing is.
 
+        Parameters
+        --------------
+        data: numpy array
+          data to process
+        metricList: list(metric)
+           list of metric to process
+        RA: float
+           RA position (center of the area to process)
+        Dec: float
+           Dec position (center of the area to process)
+        widthRA: float
+          width in RA of the area to process
+        widthDec: float
+          width in Dec of the area to process
+        ipoint: int
+        nodither: bool,opt
+          to remove dithering (default: False)
+        display: bool, opt
+          to display matching FP/observations in "real time" (default: False)
+
+        """
+
+        # metric results are stored in a dic
         resfi = {}
         for metric in metricList:
             resfi[metric.name] = None
         # select data inside the area
 
+       
+        # display: (RA,Dec) distribution of the data
         if display:
-            import matplotlib.pylab as plt
+            import matplotlib.pyplot as plt
             fig, ax = plt.subplots()
-            ax.plot(data[self.RaCol], data[self.DecCol], 'ko')
+            ax.plot(data[self.RACol], data[self.DecCol], 'ko')
             plt.show()
 
-        # select data inside an area centered in (Ra,Dec) with width (widthRa+1,widthDec+1)
-
-        dataSel = dataInside(data, Ra, Dec, widthRa+1., widthDec+1.,
-                             RaCol=self.RaCol, DecCol=self.DecCol)
-
-        if display:
-            import matplotlib.pylab as plt
-            fig, ax = plt.subplots()
-            ax.plot(dataSel[self.RaCol], dataSel[self.DecCol], 'ko')
-            plt.show()
-
+        
+        # select data inside an area centered in (RA,Dec) with width (widthRA+1,widthDec+1)
+        dataSel = DataInside(data, RA, Dec, widthRA+1., widthDec+1.,
+                             RACol=self.RACol, DecCol=self.DecCol)
+        
+        # display: (RA,Dec) distribution of the selected data (ie inside the area)
+        #if display:
+        #    dataSel.plot()
         # Possible to remove DD dithering here
-        # This is just to test impact of dithering on DDF
-
+        # This is usually to test impact of dithering on DDF
         if nodither:
-            dataSel[self.RaCol] = np.mean(dataSel[self.RaCol])
+            dataSel[self.RACol] = np.mean(dataSel[self.RACol])
             dataSel[self.DecCol] = np.mean(dataSel[self.DecCol])
 
         if dataSel is not None:
 
             # mv to panda df
-            dataset = pd.DataFrame(np.copy(dataSel))
+            dataset = pd.DataFrame(np.copy(dataSel.data))
 
+            print('passed')
             # get central pixel ID
-            healpixID = hp.ang2pix(self.nside, Ra,
+            healpixID = hp.ang2pix(self.nside, RA,
                                    Dec, nest=True, lonlat=True)
 
             # get nearby pixels
             vec = hp.pix2vec(self.nside, healpixID, nest=True)
             healpixIDs = hp.query_disc(
-                self.nside, vec, np.deg2rad(widthRa), inclusive=False, nest=True)
+                self.nside, vec, 3.*np.deg2rad(widthRA), inclusive=False, nest=True)
 
             # get pixel coordinates
             coords = hp.pix2ang(self.nside, healpixIDs, nest=True, lonlat=True)
-            pixRa, pixDec = coords[0], coords[1]
+            pixRA, pixDec = coords[0], coords[1]
 
+
+            # display (RA,Dec) of pixels
             if display:
-                print('number of pixels here', len(pixRa))
+                print('number of pixels here', len(pixRA))
                 import matplotlib.pyplot as plt
-                plt.plot(pixRa, pixDec, 'ko')
+                fig, ax = plt.subplots()
+                ax.plot(pixRA, pixDec, 'r*')
+                dataSel.plot(ax)
                 plt.show()
 
-            # make groups by (Ra,dec)
-            dataset = dataset.round({self.RaCol: 4, self.DecCol: 4})
-            groups = dataset.groupby([self.RaCol, self.DecCol])
+            # make groups by (RA,dec)
+            dataset = dataset.round({self.RACol: 4, self.DecCol: 4})
+            groups = dataset.groupby([self.RACol, self.DecCol])
 
+            # display matching pixels/observations
             if display:
                 import matplotlib.pylab as plt
                 for name, group in groups:
                     fig, ax = plt.subplots()
-                    self.match(group, healpixIDs, pixRa, pixDec, name, ax=ax)
-                    # ax.plot(dataset[self.RaCol],dataset[self.DecCol],'bs',mfc='None')
+                    print('matching pixels')
+                    self.match(group, healpixIDs, pixRA, pixDec, name, ax=ax)
+                    # ax.plot(dataset[self.RACol],dataset[self.DecCol],'bs',mfc='None')
                     plt.show()
 
             # process pixels with data
             # match pixels to data
             time_ref = time.time()
             matched_pixels = groups.apply(
-                lambda x: self.match(x, healpixIDs, pixRa, pixDec)).reset_index()
+                lambda x: self.match(x, healpixIDs, pixRA, pixDec)).reset_index()
 
             print('after matching', time.time()-time_ref,
                   len(matched_pixels['healpixID'].unique()))
@@ -438,12 +1290,12 @@ class ProcessArea:
                 ipix += 1
 
                 dataPixel = dataset.iloc[thematch['index'].tolist()].copy()
-
-                pixRa = thematch['pixRa'].unique()
+                
+                pixRA = thematch['pixRA'].unique()
                 pixDec = thematch['pixDec'].unique()
 
                 dataPixel.loc[:, 'healpixID'] = healpixID
-                dataPixel.loc[:, 'pixRa'] = pixRa[0]
+                dataPixel.loc[:, 'pixRA'] = pixRA[0]
                 dataPixel.loc[:, 'pixDec'] = pixDec[0]
 
                 resdict = {}
@@ -549,70 +1401,25 @@ class ProcessArea:
         tab = Table.from_pandas(df)
         keyhdf = 'metric_{}_{}_{}'.format(self.num, ipoint, isave)
         tab.write(outName, keyhdf, append=True, compression=True)
-    """
-    def dump_old(self,resfi,nodither,key,ipoint,isave):
-
-        outName = '{}/{}{}_{}_{}.hdf5'.format(self.outDir,
-                                              self.dbName, nodither, key, self.num)
-
-        for key, vals in resfi.items():
-            if vals is not None:
-                    # print(vals)
-                    # print(vals.dtype)
-                    #df = pd.DataFrame.from_records(vals)
-
-                    keyhdf =  'metric_{}_{}_{}_{}'.format(self.num,ipoint,isave,key)
-                    print('rrr',keyhdf)
-                    #print('here',df)
-                    #with pd.HDFStore(outName) as store:
-                    #    store.append('df', df, data_columns= True)
-                    #df.to_hdf(outName,key=keyhdf,mode='a',complevel=9)
-                    #df.to_hdf(outName,keyhdf,append=True)
-                    #store = pd.io.pytables.HDFStore(outName)
-                    #store[keyhdf] = df
-                    #with pd.get_store(outName) as store:
-                    #    store.append('foo',df)
-                    # little trick here because of astropy table string format pb
-                    # when converted from numpy array
-                    df = pd.DataFrame.from_records(vals)
-                    tab = Table.from_pandas(df)
-                    tab.write(outName,keyhdf,append=True,compression=True)
-
-    def match(self, grp, healpixIDs, pixRa, pixDec,name=None,ax=None):
-    =======
-                keyhdf = 'metric_{}_{}_{}'.format(self.num, ipoint, isave)
-                # print('here',df)
-                # with pd.HDFStore(outName) as store:
-                #    store.append('df', df, data_columns= True)
-                # df.to_hdf(outName,key=keyhdf,mode='a',complevel=9)
-                # df.to_hdf(outName,keyhdf,append=True)
-                #store = pd.io.pytables.HDFStore(outName)
-                #store[keyhdf] = df
-                # with pd.get_store(outName) as store:
-                #    store.append('foo',df)
-                # little trick here because of astropy table string format pb
-                # when converted from numpy array
-                df = pd.DataFrame.from_records(vals)
-                tab = Table.from_pandas(df)
-                tab.write(outName, keyhdf, append=True, compression=True)
-    """
-
-    def match(self, grp, healpixIDs, pixRa, pixDec, name=None, ax=None):
+   
+    def match(self, grp, healpixIDs, pixRA, pixDec, name=None, ax=None):
 
         # print('hello', grp.columns)
-        pixRa_rad = np.deg2rad(pixRa)
+        pixRA_rad = np.deg2rad(pixRA)
         pixDec_rad = np.deg2rad(pixDec)
 
         # convert data position in rad
-        pRa = np.median(grp[self.RaCol])
+        pRA = np.median(grp[self.RACol])
         pDec = np.median(grp[self.DecCol])
-        pRa_rad = np.deg2rad(pRa)
+        pRA_rad = np.deg2rad(pRA)
         pDec_rad = np.deg2rad(pDec)
 
         # gnomonic projection of pixels on the focal plane
-        x, y = proj_gnomonic_plane(pRa_rad, pDec_rad, pixRa_rad, pixDec_rad)
-
-        # print(x, y)
+        #x, y = proj_gnomonic_plane(pRA_rad, pDec_rad, pixRA_rad, pixDec_rad)
+        x, y = proj_gnomonic_plane(pDec_rad, pRA_rad, pixDec_rad, pixRA_rad)
+        
+        #print('after gnomonic')
+        #print(x, y)
         # get LSST FP with the good scale
         fpnew = LSSTPointing(0., 0., maxbound=self.fpscale)
 
@@ -628,13 +1435,13 @@ class ProcessArea:
             ax.add_patch(pf)
         """
         """
-        x = np.rad2deg(x)+pRa
+        x = np.rad2deg(x)+pRA
         y = np.rad2deg(y)+pDec
 
         if ax is not None:
             ax.plot(x, y, 'ks')
         # points inside the focal plane
-        fp = LSSTPointing(pRa, pDec, area=9.6)
+        fp = LSSTPointing(pRA, pDec, area=9.6)
         idf = shapely.vectorized.contains(fp, x, y)
         print(idf)
 
@@ -646,7 +1453,7 @@ class ProcessArea:
         """
         if idf:
             grp = group.copy()
-            for val in ['healpixID', 'pixRa', 'pixDec']:
+            for val in ['healpixID', 'pixRA', 'pixDec']:
                 grp.loc[:, val] = np.copy(pixel[val])
         """
         """
@@ -656,17 +1463,18 @@ class ProcessArea:
         """
 
         pixID_matched = list(healpixIDs[idf])
-        pixRa_matched = list(pixRa[idf])
+        pixRA_matched = list(pixRA[idf])
         pixDec_matched = list(pixDec[idf])
 
         if ax is not None:
-            ax.plot(pixRa, pixDec, 'ko', mfc='None')
-            ax.plot(pixRa[idf], pixDec[idf], 'r*')
-            fpnew = LSSTPointing(pRa, pDec, area=9.6)
+            ax.plot(pixRA, pixDec, 'ko', mfc='None')
+            ax.plot(pixRA[idf], pixDec[idf], 'r*')
+            fpnew = LSSTPointing(pRA, pDec, area=9.6)
             pf = PolygonPatch(fpnew, facecolor=(0, 0, 0, 0), edgecolor='red')
             ax.add_patch(pf)
-            print('matching', grp[self.RaCol, self.DecCol, 'filter'], pixID_matched, len(
-                pixID_matched), pixRa_matched, pixDec_matched)
+            print('printing here')
+            print('matching', grp[[self.RACol, self.DecCol, 'filter']], pixID_matched, len(
+                pixID_matched), pixRA_matched, pixDec_matched)
 
         if name is not None:
             names = [name]*len(pixID_matched)
@@ -682,7 +1490,7 @@ class ProcessArea:
         #arr_index = np.reshape(arr_index,(len(arr_index),1))
         # print('hhh',arr_index)
         df_pix = pd.DataFrame({'healpixID': pixID_matched,
-                               'pixRa': pixRa_matched,
+                               'pixRA': pixRA_matched,
                                'pixDec': pixDec_matched,
                                'groupName': names})
 
@@ -709,28 +1517,28 @@ class ProcessArea:
 
         grp = pd.concat([grp]*len(pixID_matched), ignore_index=True)
         grp.loc[:, 'healpixID'] = pixID_matched
-        grp.loc[:, 'pixRa'] = pixRa_matched
+        grp.loc[:, 'pixRA'] = pixRA_matched
         grp.loc[:, 'pixDec'] = pixDec_matched
 
 
 class ObsPixel:
 
-    def __init__(self, nside, data, RaCol='Ra', DecCol='Dec'):
+    def __init__(self, nside, data, RACol='RA', DecCol='Dec'):
         self.nside = nside
         self.data = data
-        self.RaCol = RaCol
+        self.RACol = RACol
         self.DecCol = DecCol
         # self.hppix = HEALPix(nside=self.nside, order='nested')
 
     def matchFast(self, pixel, ax=None):
 
         time_ref = time.time()
-        data = self.pointingsAreaFast(pixel['pixRa'], pixel['pixDec'], 3.)
+        data = self.pointingsAreaFast(pixel['pixRA'], pixel['pixDec'], 3.)
 
         if ax is not None:
-            val = np.unique(np.unique(data[[self.RaCol, self.DecCol]]))
+            val = np.unique(np.unique(data[[self.RACol, self.DecCol]]))
 
-            ax.plot(val[self.RaCol], val[self.DecCol], 'ko')
+            ax.plot(val[self.RACol], val[self.DecCol], 'ko')
 
         print('pointing', time.time()-time_ref)
         if data is None:
@@ -738,33 +1546,33 @@ class ObsPixel:
 
         dataset = pd.DataFrame(np.copy(data))
         if ax is not None:
-            ax.plot(pixel['pixRa'], pixel['pixDec'], 'r*')
-            ax.plot(dataset[self.RaCol], dataset[self.DecCol], 'bo')
-        # for (pRa,pDec) in np.unique(dataset[[self.RaCol,self.DecCol]]):
-        groups = dataset.groupby([self.RaCol, self.DecCol])
+            ax.plot(pixel['pixRA'], pixel['pixDec'], 'r*')
+            ax.plot(dataset[self.RACol], dataset[self.DecCol], 'bo')
+        # for (pRA,pDec) in np.unique(dataset[[self.RACol,self.DecCol]]):
+        groups = dataset.groupby([self.RACol, self.DecCol])
 
         time_ref = time.time()
         print('ngroups', len(groups))
         seldata = None
         for name, group in groups:
-            pRa = np.mean(group[self.RaCol])
+            pRA = np.mean(group[self.RACol])
             pDec = np.mean(group[self.DecCol])
 
             # convert data position in rad
-            pRa_rad = np.deg2rad(pRa)
+            pRA_rad = np.deg2rad(pRA)
             pDec_rad = np.deg2rad(pDec)
 
             # gnomonic projection of pixels on the focal plane
-            x, y = proj_gnomonic_plane(pRa_rad, pDec_rad, np.deg2rad(
-                pixel['pixRa']), np.deg2rad(pixel['pixDec']))
+            x, y = proj_gnomonic_plane(pRA_rad, pDec_rad, np.deg2rad(
+                pixel['pixRA']), np.deg2rad(pixel['pixDec']))
 
-            x = np.rad2deg(x)+pRa
+            x = np.rad2deg(x)+pRA
             y = np.rad2deg(y)+pDec
 
             if ax is not None:
                 ax.plot(x, y, 'ks')
             # points inside the focal planes
-            fp = LSSTPointing(pRa, pDec, 0.)
+            fp = LSSTPointing(pRA, pDec, 0.)
             idf = shapely.vectorized.contains(fp, x, y)
             # print(idf)
             if ax is not None:
@@ -773,7 +1581,7 @@ class ObsPixel:
                 ax.add_patch(pf)
             if idf:
                 grp = group.copy()
-                for val in ['healpixID', 'pixRa', 'pixDec']:
+                for val in ['healpixID', 'pixRA', 'pixDec']:
                     grp.loc[:, val] = np.copy(pixel[val])
 
                 if seldata is None:
@@ -788,23 +1596,23 @@ class ObsPixel:
 
         # get pixels around
         healpixID_around = self.hppix.cone_search_lonlat(
-            pixel['pixRa'] * u.deg, pixel['pixDec'] * u.deg, radius=3*u.deg)
+            pixel['pixRA'] * u.deg, pixel['pixDec'] * u.deg, radius=3*u.deg)
 
-        # convert to (Ra,Dec)
+        # convert to (RA,Dec)
         coordpix = hp.pix2ang(self.nside, healpixID_around,
                               nest=True, lonlat=True)
-        pixelsRa, pixelsDec = coordpix[0], coordpix[1]
+        pixelsRA, pixelsDec = coordpix[0], coordpix[1]
 
-        ax.plot(pixelsRa, pixelsDec, 'rs')
+        ax.plot(pixelsRA, pixelsDec, 'rs')
         # get the center of the pixels map
 
-        center_Ra = np.mean(pixelsRa)
+        center_RA = np.mean(pixelsRA)
         center_Dec = np.mean(pixelsDec)
 
         # get the data around this center
-        print('center', center_Ra, center_Dec, pixel['pixRa'], pixel['pixDec'])
+        print('center', center_RA, center_Dec, pixel['pixRA'], pixel['pixDec'])
 
-        dataset = self.pointingsAreaFast(pixel['pixRa'], pixel['pixDec'], 3.)
+        dataset = self.pointingsAreaFast(pixel['pixRA'], pixel['pixDec'], 3.)
         if dataset is None:
             return None
 
@@ -812,22 +1620,22 @@ class ObsPixel:
         # check which pixel is inside the focal plane
         # after gnomonic projection
 
-        for (pRa, pDec) in np.unique(dataset[[self.RaCol, self.DecCol]]):
+        for (pRA, pDec) in np.unique(dataset[[self.RACol, self.DecCol]]):
 
             # convert data position in rad
-            pRa_rad = np.deg2rad(pRa)
+            pRA_rad = np.deg2rad(pRA)
             pDec_rad = np.deg2rad(pDec)
 
             # gnomonic projection of pixels
-            x, y = proj_gnomonic_plane(pRa_rad, pDec_rad, np.deg2rad(
-                pixelsRa), np.deg2rad(pixelsDec))
+            x, y = proj_gnomonic_plane(pRA_rad, pDec_rad, np.deg2rad(
+                pixelsRA), np.deg2rad(pixelsDec))
 
-            x = np.rad2deg(x)+pRa
+            x = np.rad2deg(x)+pRA
             y = np.rad2deg(y)+pDec
 
             ax.plot(x, y, 'ks')
             # points inside the focal plane
-            fp = LSSTPointing(pRa, pDec, 0.)
+            fp = LSSTPointing(pRA, pDec, 0.)
             idf = shapely.vectorized.contains(fp, x, y)
             print('matching', pixel['healpixID'], healpixID_around[idf])
             if ax is not None:
@@ -838,25 +1646,25 @@ class ObsPixel:
     def pointingsAreaFast(self, pixRA, pixDec, width):
 
         # Warning here
-        # Ra is in [0,360.]
+        # RA is in [0,360.]
         # Special care near 0 and 360...
 
-        Ramin = pixRA-width
-        Ramax = pixRA+width
+        RAmin = pixRA-width
+        RAmax = pixRA+width
         Decmin = pixDec-width
         Decmax = pixDec+width
 
         areas = []
-        # print('there man',Ramin,Ramax,Decmin,Decmax)
-        if Ramin < 0:
-            areas.append([0., Ramax, Decmin, Decmax])
-            areas.append([Ramin+360., 0., Decmin, Decmax])
+        # print('there man',RAmin,RAmax,Decmin,Decmax)
+        if RAmin < 0:
+            areas.append([0., RAmax, Decmin, Decmax])
+            areas.append([RAmin+360., 0., Decmin, Decmax])
         else:
-            if Ramax > 360.:
-                areas.append([0., Ramax-360., Decmin, Decmax])
-                areas.append([Ramin, 0., Decmin, Decmax])
+            if RAmax > 360.:
+                areas.append([0., RAmax-360., Decmin, Decmax])
+                areas.append([RAmin, 0., Decmin, Decmax])
             else:
-                areas.append([Ramin, Ramax, Decmin, Decmax])
+                areas.append([RAmin, RAmax, Decmin, Decmax])
 
         # print('areas',areas)
 
@@ -878,23 +1686,23 @@ class ObsPixel:
 
         # print('looking at',pixid,pixRA,pixDec,area)
 
-        Ramin = area[0]
-        Ramax = area[1]
+        RAmin = area[0]
+        RAmax = area[1]
         Decmin = area[2]
         Decmax = area[3]
 
-        # print('there man',Ramin,Ramax,Decmin,Decmax)
-        # print('mmmm',np.min(self.data[self.RaCol]),
-        # np.max(self.data[self.RaCol]),np.min(self.data[self.DecCol]),
+        # print('there man',RAmin,RAmax,Decmin,Decmax)
+        # print('mmmm',np.min(self.data[self.RACol]),
+        # np.max(self.data[self.RACol]),np.min(self.data[self.DecCol]),
         # np.max(self.data[self.DecCol]))
 
-        if Ramax < 1.e-3:
-            idx = (self.data[self.RaCol] >= Ramin)
+        if RAmax < 1.e-3:
+            idx = (self.data[self.RACol] >= RAmin)
 
         else:
             # print('booh')
-            idx = self.data[self.RaCol] >= Ramin
-            idx &= self.data[self.RaCol] <= Ramax
+            idx = self.data[self.RACol] >= RAmin
+            idx &= self.data[self.RACol] <= RAmax
 
         idx &= self.data[self.DecCol] >= Decmin
         idx &= self.data[self.DecCol] <= Decmax
@@ -905,17 +1713,17 @@ class ObsPixel:
             return None
         """
         res = rf.append_fields(res, 'healpixID', [pixid]*len(res))
-        res = rf.append_fields(res, 'pixRa', [pixRA]*len(res))
+        res = rf.append_fields(res, 'pixRA', [pixRA]*len(res))
         res = rf.append_fields(res, 'pixDec', [pixDec]*len(res))
         """
         return res
 
 
 class ObsPixel_old:
-    def __init__(self, nside, data, scanzone=None, RaCol='Ra', DecCol='Dec'):
+    def __init__(self, nside, data, scanzone=None, RACol='RA', DecCol='Dec'):
         self.nside = nside
         self.data = data
-        self.RaCol = RaCol
+        self.RACol = RACol
         self.DecCol = DecCol
 
         self.hppix = HEALPix(nside=self.nside, order='nested')
@@ -930,11 +1738,11 @@ class ObsPixel_old:
         lon = lon.to(u.deg).value
         lat = lat.to(u.deg).value
         coordpix = hp.pix2ang(self.nside, healpixID, nest=True, lonlat=True)
-        pixRa, pixDec = coordpix[0], coordpix[1]
-        focalplanes = self.pointingsAreaFast(healpixID, pixRa, pixDec, 3.)
+        pixRA, pixDec = coordpix[0], coordpix[1]
+        focalplanes = self.pointingsAreaFast(healpixID, pixRA, pixDec, 3.)
 
         for val in focalplanes:
-            lsstpoly = LSSTPointing(val[self.RaCol], val[self.DecCol])
+            lsstpoly = LSSTPointing(val[self.RACol], val[self.DecCol])
             xp = lsstpoly.exterior.coords.xy[0]
             yp = lsstpoly.exterior.coords.xy[1]
             print(hp.query_polygon(self.nside, [xp, yp, [0.0]*len(xp)]))
@@ -950,16 +1758,16 @@ class ObsPixel_old:
         lat = lat.to(u.deg).value
 
         coordpix = hp.pix2ang(self.nside, healpixID, nest=True, lonlat=True)
-        pixRa, pixDec = coordpix[0], coordpix[1]
+        pixRA, pixDec = coordpix[0], coordpix[1]
         vertices = np.vstack([lon.ravel(), lat.ravel()]).transpose()
         poly = geometry.Polygon(vertices)
-        focalplanes = self.pointingsAreaFast(healpixID, pixRa, pixDec, 3.)
+        focalplanes = self.pointingsAreaFast(healpixID, pixRA, pixDec, 3.)
         print('pixel area', poly.area)
 
         # print(self.scanzone.centroid.x,self.scanzone.centroid.y)
         polyscan = affinity.translate(
-            self.scanzone, xoff=pixRa-self.scanzone.centroid.x, yoff=pixDec-self.scanzone.centroid.y)
-        # check wether this polyscan goes beyond 360. in Ra
+            self.scanzone, xoff=pixRA-self.scanzone.centroid.x, yoff=pixDec-self.scanzone.centroid.y)
+        # check wether this polyscan goes beyond 360. in RA
         ramax = np.max(polyscan.exterior.coords.xy[0])
 
         polyscan_b = None
@@ -979,7 +1787,7 @@ class ObsPixel_old:
         if focalplanes is not None:
             for polyl in polylist:
                 idf = shapely.vectorized.contains(
-                    polyl, focalplanes[self.RaCol], focalplanes[self.DecCol])
+                    polyl, focalplanes[self.RACol], focalplanes[self.DecCol])
                 if len(focalplanes[idf]) > 0:
                     if finalData is None:
                         finalData = np.copy(focalplanes[idf])
@@ -1000,13 +1808,13 @@ class ObsPixel_old:
                     polyscan_b, facecolor='#fffffe', edgecolor='red')
                 ax.add_patch(p)
             if focalplanes is not None:
-                ax.plot(focalplanes[idf][self.RaCol],
+                ax.plot(focalplanes[idf][self.RACol],
                         focalplanes[idf][self.DecCol], 'gs')
-                ax.plot(focalplanes[self.RaCol],
+                ax.plot(focalplanes[self.RACol],
                         focalplanes[self.DecCol], 'r*')
             ax.plot(polyscan.exterior.coords.xy[0],
                     polyscan.exterior.coords.xy[1], 'k.')
-            ax.set_xlabel('Ra [deg]')
+            ax.set_xlabel('RA [deg]')
             ax.set_ylabel('Dec [deg]')
 
         return finalData
@@ -1014,25 +1822,25 @@ class ObsPixel_old:
     def pointingsAreaFast(self, pixid, pixRA, pixDec, width):
 
         # Warning here
-        # Ra is in [0,360.]
+        # RA is in [0,360.]
         # Special care near 0 and 360...
 
-        Ramin = pixRA-width
-        Ramax = pixRA+width
+        RAmin = pixRA-width
+        RAmax = pixRA+width
         Decmin = pixDec-width
         Decmax = pixDec+width
 
         areas = []
-        # print('there man',Ramin,Ramax,Decmin,Decmax)
-        if Ramin < 0:
-            areas.append([0., Ramax, Decmin, Decmax])
-            areas.append([Ramin+360., 0., Decmin, Decmax])
+        # print('there man',RAmin,RAmax,Decmin,Decmax)
+        if RAmin < 0:
+            areas.append([0., RAmax, Decmin, Decmax])
+            areas.append([RAmin+360., 0., Decmin, Decmax])
         else:
-            if Ramax > 360.:
-                areas.append([0., Ramax-360., Decmin, Decmax])
-                areas.append([Ramin, 0., Decmin, Decmax])
+            if RAmax > 360.:
+                areas.append([0., RAmax-360., Decmin, Decmax])
+                areas.append([RAmin, 0., Decmin, Decmax])
             else:
-                areas.append([Ramin, Ramax, Decmin, Decmax])
+                areas.append([RAmin, RAmax, Decmin, Decmax])
 
         # print('areas',areas)
 
@@ -1054,23 +1862,23 @@ class ObsPixel_old:
 
         # print('looking at',pixid,pixRA,pixDec,area)
 
-        Ramin = area[0]
-        Ramax = area[1]
+        RAmin = area[0]
+        RAmax = area[1]
         Decmin = area[2]
         Decmax = area[3]
 
-        # print('there man',Ramin,Ramax,Decmin,Decmax)
-        # print('mmmm',np.min(self.data[self.RaCol]),
-        # np.max(self.data[self.RaCol]),np.min(self.data[self.DecCol]),
+        # print('there man',RAmin,RAmax,Decmin,Decmax)
+        # print('mmmm',np.min(self.data[self.RACol]),
+        # np.max(self.data[self.RACol]),np.min(self.data[self.DecCol]),
         # np.max(self.data[self.DecCol]))
 
-        if Ramax < 1.e-3:
-            idx = (self.data[self.RaCol] >= Ramin)
+        if RAmax < 1.e-3:
+            idx = (self.data[self.RACol] >= RAmin)
 
         else:
             # print('booh')
-            idx = self.data[self.RaCol] >= Ramin
-            idx &= self.data[self.RaCol] <= Ramax
+            idx = self.data[self.RACol] >= RAmin
+            idx &= self.data[self.RACol] <= RAmax
 
         idx &= self.data[self.DecCol] >= Decmin
         idx &= self.data[self.DecCol] <= Decmax
@@ -1080,7 +1888,7 @@ class ObsPixel_old:
         if len(res) == 0:
             return None
         res = rf.append_fields(res, 'healpixID', [pixid]*len(res))
-        res = rf.append_fields(res, 'pixRa', [pixRA]*len(res))
+        res = rf.append_fields(res, 'pixRA', [pixRA]*len(res))
         res = rf.append_fields(res, 'pixDec', [pixDec]*len(res))
 
         return res
@@ -1090,37 +1898,37 @@ class ObsPixel_old:
 
 
 class OverlapGnomonic:
-    def __init__(self, nside, dRa=0., dDec=0.):
+    def __init__(self, nside, dRA=0., dDec=0.):
 
         self.nside = nside
         self.hppix = HEALPix(nside=nside, order='nested', frame='icrs')
-        self.dRa = dRa
+        self.dRA = dRA
         self.dDec = dDec
 
     def overlap_pixlist(self, pixelList, pointing, ax=None):
 
-        pRa = pointing[0]
+        pRA = pointing[0]
         pDec = pointing[1]
 
-        pRa_rad = np.deg2rad(pointing[0])
+        pRA_rad = np.deg2rad(pointing[0])
         pDec_rad = np.deg2rad(pointing[1])
 
-        x, y = proj_gnomonic_plane(pRa_rad, pDec_rad, np.deg2rad(
-            pixelList['pixRa']), np.deg2rad(pixelList['pixDec']))
-        x = np.rad2deg(x)+pRa
+        x, y = proj_gnomonic_plane(pRA_rad, pDec_rad, np.deg2rad(
+            pixelList['pixRA']), np.deg2rad(pixelList['pixDec']))
+        x = np.rad2deg(x)+pRA
         y = np.rad2deg(y)+pDec
 
-        fp = LSSTPointing(pRa, pDec, 0.)
+        fp = LSSTPointing(pRA, pDec, 0.)
         idf = shapely.vectorized.contains(fp, x, y)
         print(pixelList[idf])
 
         for pixel in pixelList:
-            pixRa, pixDec, poly, polyb = self.polypix(pixel['healpixID'])
+            pixRA, pixDec, poly, polyb = self.polypix(pixel['healpixID'])
             # gnomonic proj
-            pixRa_rad = np.deg2rad(pixRa)
+            pixRA_rad = np.deg2rad(pixRA)
             pixDec_rad = np.deg2rad(pixDec)
             x, y = proj_gnomonic_plane(
-                pRa_rad, pDec_rad, np.deg2rad(pixRa), np.deg2rad(pixDec))
+                pRA_rad, pDec_rad, np.deg2rad(pixRA), np.deg2rad(pixDec))
             # print('pixarea',poly.area,hp.nside2pixarea(self.nside,degrees=True))
             if ax is not None:
                 p = PolygonPatch(poly, facecolor='#fffffe', edgecolor='black')
@@ -1129,9 +1937,9 @@ class OverlapGnomonic:
                 # ax.add_patch(polyb)
                 print(x, y)
                 p = Point(x, y)
-                ax.plot(np.rad2deg(x)+pRa, np.rad2deg(y)+pDec, 'ks')
+                ax.plot(np.rad2deg(x)+pRA, np.rad2deg(y)+pDec, 'ks')
 
-        fp = LSSTPointing(pRa, pDec, 0.)
+        fp = LSSTPointing(pRA, pDec, 0.)
         # print('Pointing area',fp.area)
         if ax is not None:
             pf = PolygonPatch(fp, facecolor=(0, 0, 0, 0), edgecolor='red')
@@ -1145,7 +1953,7 @@ class OverlapGnomonic:
         lat = lat.to(u.deg).value
 
         coordpix = hp.pix2ang(self.nside, healpixID, nest=True, lonlat=True)
-        pixRa, pixDec = coordpix[0], coordpix[1]
+        pixRA, pixDec = coordpix[0], coordpix[1]
         vertices = np.vstack([lon.ravel(), lat.ravel()]).transpose()
         # verticesb = hp.boundaries(self.nside,healpixID,1,True)
 
@@ -1162,15 +1970,15 @@ class OverlapGnomonic:
         polyb = Polygon(vertices, closed=True,
                         edgecolor='blue', facecolor='none')
         print(self.nside, self.hppix.pixel_area, healpixID, poly.area)
-        return pixRa, pixDec, poly, polyb
+        return pixRA, pixDec, poly, polyb
 
 
 class GetOverlap:
-    def __init__(self, nside, dRa=0., dDec=0.):
+    def __init__(self, nside, dRA=0., dDec=0.):
 
         self.nside = nside
         self.hppix = HEALPix(nside=nside, order='nested', frame='icrs')
-        self.dRa = dRa
+        self.dRA = dRA
         self.dDec = dDec
 
     def polypix(self, healpixID=10):
@@ -1181,7 +1989,7 @@ class GetOverlap:
         lat = lat.to(u.deg).value
 
         coordpix = hp.pix2ang(self.nside, healpixID, nest=True, lonlat=True)
-        pixRa, pixDec = coordpix[0], coordpix[1]
+        pixRA, pixDec = coordpix[0], coordpix[1]
         vertices = np.vstack([lon.ravel(), lat.ravel()]).transpose()
         # verticesb = hp.boundaries(self.nside,healpixID,1,True)
 
@@ -1198,12 +2006,12 @@ class GetOverlap:
         polyb = Polygon(vertices, closed=True,
                         edgecolor='blue', facecolor='none')
         print(self.nside, self.hppix.pixel_area, healpixID, poly.area)
-        return pixRa, pixDec, poly, polyb
+        return pixRA, pixDec, poly, polyb
 
     def overlap_pixlist(self, pixelList, pointing, ax=None):
 
         for healpixID in pixelList:
-            pixRa, pixDec, poly, polyb = self.polypix(healpixID)
+            pixRA, pixDec, poly, polyb = self.polypix(healpixID)
             # print('pixarea',poly.area,hp.nside2pixarea(self.nside,degrees=True))
             if ax is not None:
                 p = PolygonPatch(poly, facecolor='#fffffe', edgecolor='black')
@@ -1217,37 +2025,37 @@ class GetOverlap:
             pf = PolygonPatch(fp, facecolor=(0, 0, 0, 0), edgecolor='red')
             ax.add_patch(pf)
 
-    def overlap(self, healpixID=100, pointingRa=None, pointingDec=None, ax=None):
+    def overlap(self, healpixID=100, pointingRA=None, pointingDec=None, ax=None):
 
         # get initial pixel
-        pixRa, pixDec, poly = self.polypix(healpixID)
+        pixRA, pixDec, poly = self.polypix(healpixID)
 
-        if PointingRa is None:
-            fpRa = pixRa+self.dRa
+        if PointingRA is None:
+            fpRA = pixRA+self.dRA
             fpDec = pixDec+self.dDec
         else:
-            fpRa = pointingRa+self.dRa
+            fpRA = pointingRA+self.dRA
             fpDec = pointingDec+self.dDec
 
         # define a focal plane centered on this pixel
-        fp = LSSTPointing(fpRa, fpDec, 0.)
+        fp = LSSTPointing(fpRA, fpDec, 0.)
 
         # get nearby pixels
         healpixID_around = self.hppix.cone_search_lonlat(
-            pixRa * u.deg, pixDec * u.deg, radius=3 * u.deg)
+            pixRA * u.deg, pixDec * u.deg, radius=3 * u.deg)
         coordpix = hp.pix2ang(self.nside, healpixID_around,
                               nest=True, lonlat=True)
         # coords = SkyCoord(coordpix[0], coordpix[1], unit='deg')
         # print(coordpix[0])
         arr = np.array(healpixID_around, dtype=[('healpixID', 'i8')])
-        arr = rf.append_fields(arr, 'pixRa', coordpix[0])
+        arr = rf.append_fields(arr, 'pixRA', coordpix[0])
         arr = rf.append_fields(arr, 'pixDec', coordpix[1])
 
         res = []
 
         for val in arr:
 
-            pRa, pDec, poly = self.polypix(val['healpixID'])
+            pRA, pDec, poly = self.polypix(val['healpixID'])
             pixArea = poly.area
             print(pixArea)
             xpoly = poly.exterior.coords.xy[0]
@@ -1258,11 +2066,11 @@ class GetOverlap:
                 pf = PolygonPatch(fp, facecolor='#fffffe', edgecolor='red')
                 ax.add_patch(pf)
             overlap = poly.intersection(fp).area/pixArea
-            res.append((self.nside, val['healpixID'], val['pixRa'], val['pixDec'],
-                        overlap, fpRa, fpDec, val['pixRa']-fpRa, val['pixDec']-fpDec, pixArea))
+            res.append((self.nside, val['healpixID'], val['pixRA'], val['pixDec'],
+                        overlap, fpRA, fpDec, val['pixRA']-fpRA, val['pixDec']-fpDec, pixArea))
 
         resrec = np.rec.fromrecords(res, names=[
-            'nside', 'healpixID', 'pixRa', 'pixDec', 'overlap', 'fpRa', 'fpDec', 'DRa', 'DDec', 'pixArea'])
+            'nside', 'healpixID', 'pixRA', 'pixDec', 'overlap', 'fpRA', 'fpDec', 'DRA', 'DDec', 'pixArea'])
 
         return resrec
 
@@ -1281,7 +2089,7 @@ class GetShape:
         lon = lon.to(u.deg).value
         lat = lat.to(u.deg).value
         coordpix = hp.pix2ang(self.nside, healpixID, nest=True, lonlat=True)
-        pixRa, pixDec = coordpix[0], coordpix[1]
+        pixRA, pixDec = coordpix[0], coordpix[1]
         vertices = np.vstack([lon.ravel(), lat.ravel()]).transpose()
         # print(vertices)
         poly = geometry.Polygon(vertices)
@@ -1292,9 +2100,9 @@ class GetShape:
             p = PolygonPatch(poly, facecolor='#fffffe', edgecolor='red')
             ax.add_patch(p)
             width = 3.
-            ax.set_xlim([pixRa-width, pixRa+width])
+            ax.set_xlim([pixRA-width, pixRA+width])
             ax.set_ylim([pixDec-width, pixDec+width])
-            ax.set_xlabel('Ra [deg]')
+            ax.set_xlabel('RA [deg]')
             ax.set_ylabel('Dec [deg]')
 
         return scanzone
@@ -1303,25 +2111,25 @@ class GetShape:
 
         xpoly = poly.exterior.coords.xy[0]
         ypoly = poly.exterior.coords.xy[1]
-        pixRa = np.mean(xpoly)
+        pixRA = np.mean(xpoly)
         pixDec = np.mean(ypoly)
         pixArea = poly.area
 
         # print('allo',pixArea)
-        dRa = 5.
+        dRA = 5.
         dDec = 5.
 
-        RaVals = np.arange(pixRa-dRa, pixRa+dRa, 0.1)
+        RAVals = np.arange(pixRA-dRA, pixRA+dRA, 0.1)
         DecVals = np.arange(pixDec-dDec, pixDec+dDec, 0.1)
         r = []
-        for Ra in RaVals:
+        for RA in RAVals:
             for Dec in DecVals:
-                fp = LSSTPointing(Ra, Dec, 0.)
+                fp = LSSTPointing(RA, Dec, 0.)
                 area = poly.intersection(fp).area/fp.area
                 area = poly.intersection(fp).area/pixArea
-                # print('alors',Ra,Dec,area)
+                # print('alors',RA,Dec,area)
                 if area >= self.overlap:
-                    r.append((Ra, Dec, area))
+                    r.append((RA, Dec, area))
 
         if len(r) > 0.:
             shape = np.rec.fromrecords(r, names=['x', 'y', 'area'])
@@ -1353,14 +2161,14 @@ class GetShape:
             p = PolygonPatch(poly, facecolor='#fffffe', edgecolor='red')
             ax.add_patch(p)
             width = 3.
-            pixRa = np.mean(xpoly)
+            pixRA = np.mean(xpoly)
             pixDec = np.mean(ypoly)
 
             p = PolygonPatch(polyshape, edgecolor='blue')
             ax.add_patch(p)
-            ax.set_xlim([pixRa-width, pixRa+width])
+            ax.set_xlim([pixRA-width, pixRA+width])
             ax.set_ylim([pixDec-width, pixDec+width])
-            ax.set_xlabel('Ra [deg]')
+            ax.set_xlabel('RA [deg]')
             ax.set_ylabel('Dec [deg]')
 
         return polyshape
@@ -1418,7 +2226,7 @@ def getFields(observations, fieldType='WFD', fieldIds=None, nside=64):
                         obser = getFields_fromId(observations, fieldIds)
                     else:
                         obser = getFields_fromId(observations, [0])
-                    return pixelate(obser, nside, RaCol='fieldRA', DecCol='fieldDec')
+                    return pixelate(obser, nside, RACol='fieldRA', DecCol='fieldDec')
 
                 else:
                     """
@@ -1427,7 +2235,7 @@ def getFields(observations, fieldType='WFD', fieldIds=None, nside=64):
                     DD except by selecting pixels with a large number of visits
                     """
                     pixels = pixelate(observations, nside,
-                                      RaCol='fieldRA', DecCol='fieldDec')
+                                      RACol='fieldRA', DecCol='fieldDec')
 
                     df = pd.DataFrame(np.copy(pixels))
 
