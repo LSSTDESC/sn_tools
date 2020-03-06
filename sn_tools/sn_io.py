@@ -361,5 +361,5 @@ def getObservations(dbDir, dbName,dbExtens):
         observations = reader.get_data(cols=None, sql='',
                                        to_degrees=False,
                                        new_col_names=keymap)
-    
+   
     return observations

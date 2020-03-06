@@ -804,7 +804,7 @@ class DataToPixels:
             fig, ax = plt.subplots()
             ax.plot(data[self.RACol], data[self.DecCol], 'ko')
             plt.show()
-
+        
         # select data inside an area centered in (RA,Dec) with width (widthRA+1,widthDec+1)
         dataSel = DataInside(data, RA, Dec, widthRA+1., widthDec+1.,
                              RACol=self.RACol, DecCol=self.DecCol)
@@ -812,20 +812,21 @@ class DataToPixels:
         # display: (RA,Dec) distribution of the selected data (ie inside the area)
         #if display:
         #    dataSel.plot()
-        # Possible to remove DD dithering here
- 
+        
+        #print(test)
+        
         self.observations = np.copy(dataSel.data)
+
         if dataSel is not None:
-            
-            # This is usually to test impact of dithering on DDF
-            if nodither:
-                dataSel[self.RACol] = np.mean(dataSel[self.RACol])
-                dataSel[self.DecCol] = np.mean(dataSel[self.DecCol])
-                
             # mv to panda df
             dataset = pd.DataFrame(np.copy(dataSel.data))
-
-            print('passed')
+            
+            # Possible to remove DD dithering here
+            # This is usually to test impact of dithering on DDF
+            if nodither:
+                dataset[self.RACol] = np.mean(dataset[self.RACol])
+                dataset[self.DecCol] = np.mean(dataset[self.DecCol])
+            
             # get central pixel ID
             healpixID = hp.ang2pix(self.nside, RA,
                                    Dec, nest=True, lonlat=True)
@@ -853,6 +854,7 @@ class DataToPixels:
             dataset = dataset.round({self.RACol: 4, self.DecCol: 4})
             groups = dataset.groupby([self.RACol, self.DecCol])
 
+            """
             # display matching pixels/observations
             if display:
                 import matplotlib.pylab as plt
@@ -862,17 +864,27 @@ class DataToPixels:
                     self.match(group, healpixIDs, pixRA, pixDec, name)
                     # ax.plot(dataset[self.RACol],dataset[self.DecCol],'bs',mfc='None')
                     plt.show()
-
+            """
             # process pixels with data
             # match pixels to data
             time_ref = time.time()
             matched_pixels = groups.apply(
                 lambda x: self.match(x, self.healpixIDs, self.pixRA, self.pixDec)).reset_index()
 
-            print(matched_pixels)
+            
+            #print(matched_pixels)
+            #print(matched_pixels.groupby(['healpixID']).size())
             print('after matching', time.time()-time_ref,
                   len(matched_pixels['healpixID'].unique()))
+            #print('per pixel',matched_pixels.groupby(['healpixID']).size())
+            #print(test)
 
+            """
+            import matplotlib.pyplot as plt
+            plt.plot(self.observations[self.RACol],self.observations[self.DecCol],'ko')
+            plt.plot(matched_pixels[self.RACol],matched_pixels[self.DecCol],'r*')
+            plt.show()
+            """
             return matched_pixels
             
     def match(self, grp, healpixIDs, pixRA, pixDec):
@@ -925,10 +937,25 @@ class DataToPixels:
         pixRA_matched = list(pixRA[idf])
         pixDec_matched = list(pixDec[idf])
 
+        names = [grp.name]*len(pixID_matched)
         df_pix = pd.DataFrame({'healpixID': pixID_matched,
                                'pixRA': pixRA_matched,
-                               'pixDec': pixDec_matched})
+                               'pixDec': pixDec_matched,
+                               'groupName': names})
 
+        
+        n_index = len(grp.index.values)
+
+        arr_index = grp.index.values
+
+        n_pix = len(df_pix)
+        if n_pix > 1:
+            arr_index = arr_index.repeat(n_pix)
+        if n_index > 1:
+            df_pix = df_pix.append([df_pix]*(n_index-1), ignore_index=True)
+
+        df_pix.loc[:, 'index'] = arr_index
+        
         return df_pix
         
     def plot(self, pixels):
@@ -1035,8 +1062,10 @@ class ProcessPixels:
             idf = pixels['healpixID'] == vv
             selpix = pixels[idf]       
             #print('selection',selpix)
-            dataPixels = self.getData(data,selpix)
-            #print('data',dataPixels)
+            #dataPixels = self.getData(data,selpix)
+            dataPixels = data.iloc[selpix['index'].tolist()].copy()
+            for val in ['healpixID','pixRA','pixDec']:
+                dataPixels[val] = selpix[val].values
             self.runMetrics(dataPixels)
             #print('pixel processed',time.time()-time_ref)
             if self.saveData and ipix >=50:
@@ -1065,8 +1094,12 @@ class ProcessPixels:
         dataPixel: pandas df of selected observations
 
         """
-        idfb = [((data[self.RACol] - lat)**2 + (data[self.DecCol] - lon)**2).idxmin() for index,lat, lon in selpix[[self.RACol,self.DecCol]].itertuples()]
-        dataPixel = data.iloc[idfb]
+        #idfb = [((data[self.RACol] - lat)**2 + (data[self.DecCol] - lon)**2).idxmin() for index,lat, lon in selpix[[self.RACol,self.DecCol]].itertuples()]
+        dataPixel = pd.DataFrame()
+        for index, row in selpix.iterrows():
+            idfb = np.abs(data[self.RACol] -row[self.RACol])<1.e-5
+            idfb &= np.abs(data[self.DecCol] -row[self.DecCol])<1.e-5
+            dataPixel = pd.concat((dataPixel,data[idfb]),sort=False)
         return dataPixel
         
     def runMetrics(self, dataPixel):
@@ -1116,7 +1149,7 @@ class ProcessPixels:
                 df = pd.DataFrame.from_records(vals)
                 tab = Table.from_pandas(df)
                 keyhdf = 'metric_{}_{}_{}'.format(self.num, ipoint, isave)
-                print('dumping',keyhdf)
+                #print('dumping',keyhdf)
                 tab.write(outName, keyhdf, append=True, compression=True)
 
         #reset the metric after dumping
@@ -1230,7 +1263,6 @@ class ProcessArea:
             # mv to panda df
             dataset = pd.DataFrame(np.copy(dataSel.data))
 
-            print('passed')
             # get central pixel ID
             healpixID = hp.ang2pix(self.nside, RA,
                                    Dec, nest=True, lonlat=True)
@@ -1747,7 +1779,6 @@ class ObsPixel_old:
             yp = lsstpoly.exterior.coords.xy[1]
             print(hp.query_polygon(self.nside, [xp, yp, [0.0]*len(xp)]))
 
-        print(test)
         return None
 
     def matchFast(self, healpixID, ax=None):
