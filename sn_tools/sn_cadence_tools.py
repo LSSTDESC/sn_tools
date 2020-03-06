@@ -1292,11 +1292,12 @@ def Match_DD(fields_DD,df):
     """""
     
     dfb = pd.DataFrame()
-    for field in fields_DD:
+    #for field in fields_DD:
+    for index, field in fields_DD.iterrows():
         dataSel = DataInside(
             df.to_records(index=False), field['RA'], field['Dec'], 10., 10., 'pixRA', 'pixDec')
         if dataSel is not None:
-            dfSel = pd.DataFrame(np.copy(dataSel))
+            dfSel = pd.DataFrame(np.copy(dataSel.data))
             dfSel['fieldname'] = field['name']
             dfSel['fieldId'] = field['fieldId']
             dfSel['RA'] = field['RA']
