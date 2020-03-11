@@ -18,7 +18,50 @@ from astropy.table import Table
 import multiprocessing
 import glob
 import os
-from sn_tools.sn_cadence_tools import DDFields,ClusterObs
+from sn_tools.sn_clusters import ClusterObs
+
+def DDFields(DDfile=None):
+    """
+    Function to define DD fields
+    The definitions are hardcoded for the moment
+    Should move to an input file
+
+    Parameters
+    ----------------
+    DDfile: str, opt
+      csv file with DD infos
+
+
+    Returns
+    ---------
+
+    fields: pandas DataFrame 
+      df with the following columns:
+     - name: name of the field
+     - fieldId: Id of the field
+     - RA: RA of the field
+     - Dec: Dec of the field
+     - fieldnum: field number
+
+
+    """
+
+    if DDfile is not None:
+        fields = pd.read_csv(DDfile)
+        return fields
+    else:
+        fields = pd.DataFrame(columns=['name', 'fieldId', 'RA', 'Dec', 'fieldnum'])
+
+        fields.loc[0] = ['ELAIS', 744, 10.0, -45.52, 4]
+        fields.loc[1] = ['SPT', 290, 349.39, -63.32, 5]
+        fields.loc[2] = ['COSMOS', 2786, 150.36, 2.84, 1]
+        fields.loc[3] = ['XMM-LSS', 2412, 34.39, -5.09, 2]
+        fields.loc[4] = ['CDFS', 1427, 53.00, -27.44, 3]
+        fields.loc[5] = ['ADFS1', 290, 63.59, -47.59, 6]
+        fields.loc[6] = ['ADFS2', 290, 58.97, -49.28, 7]
+
+        return fields
+
 
 def patchObs(observations, fieldType,
                      dbName,nside,RAmin,RAmax,Decmin,Decmax,
