@@ -985,8 +985,7 @@ def LSSTPointing_circular(xc, yc, angle_rot=0., area=None, maxbound=None):
 
 class DataToPixels:
     def __init__(self, nside, RACol, DecCol,num, outDir, dbName,
-                 obsIdCol='observationId', saveData=False,
-                 LSST_RA=-30.244639, LSST_Dec=-70.749417):
+                 obsIdCol='observationId'):
         """
         class to match observations to sky pixels
 
@@ -1016,14 +1015,11 @@ class DataToPixels:
         self.nside = nside
         self.RACol = RACol
         self.DecCol = DecCol
-        self.LSST_RA = LSST_RA
-        self.LSST_Dec = LSST_Dec
         self.obsIdCol = obsIdCol
         self.num = num
         self.outDir = outDir
 
         self.dbName = dbName
-        self.saveData = saveData
 
         # get the LSST focal plane scale factor
         # corresponding to a sphere radius equal to one
@@ -1061,6 +1057,11 @@ class DataToPixels:
         display: bool, opt
           to display matching FP/observations in "real time" (default: False)
 
+        Returns:
+        -----------
+        matched_pixels: pandas df
+          array with matched healpix infos and obs infos
+
         """
         
         # display: (RA,Dec) distribution of the data
@@ -1079,8 +1080,6 @@ class DataToPixels:
         # display: (RA,Dec) distribution of the selected data (ie inside the area)
         #if display:
         #    dataSel.plot()
-        
-        #print(test)
         
         self.observations = None
 
