@@ -18,7 +18,104 @@ from astropy.table import Table
 import multiprocessing
 import glob
 import os
+from sn_tools.sn_cadence_tools import DDFields,ClusterObs
 
+def patchObs(observations, fieldType,
+                     dbName,nside,RAmin,RAmax,Decmin,Decmax,
+             RACol, DecCol,
+             display=False):
+    """
+    Method to grab informations and patches in the sky
+
+    Parameters
+    --------------
+    observations: numpy array
+      array of observations
+    fieldType: str
+      type of field to consider: DD, WFD or Fake
+    dbName: str
+      name of observing strategy
+    nside: int
+       nside parameter for healpix
+    RAmin: float
+      min RA of the sky area to consider (WFD only)
+    RAmax: float
+      max RA of the sky area to consider (WFD only)
+   Decmin: float
+      min Dec of the sky area to consider (WFD only)
+    Decmax: float
+      max Dec of the sky area to consider (WFD only)
+    RACol: str
+      RA column name in obs
+    DecCol: str
+      Dec column name in obs
+    display: bool
+      to plot patches (WFD only)
+
+    Returns
+    ----------
+    observations: numpy array
+      numpy array with observations
+    patches: pandas df
+      patches coordinates on the sky
+
+    """
+
+    
+    radius = 5.
+
+    if fieldType == 'DD':
+        nclusters = 5
+        if 'euclid' in dbName:
+            nclusters = 6
+
+        print(np.unique(observations['fieldId']))
+        fieldIds = [290, 744, 1427, 2412, 2786]
+        observations = getFields(
+            observations, fieldType, fieldIds, nside)
+
+        print('before cluster', len(observations),observations.dtype)
+        # get clusters out of these obs
+        radius = 10.
+
+        DD = DDFields()
+        clusters = ClusterObs(
+            observations, nclusters=nclusters, dbName=dbName,fields=DD).clusters
+
+        #clusters = rf.append_fields(clusters, 'radius', [radius]*len(clusters))
+        clusters['radius'] = radius
+        #areas = rf.rename_fields(clusters, {'RA': 'RA'})
+        areas = clusters.rename(columns={'RA': 'RA'})
+        patches = pd.DataFrame(areas)
+        patches['width_RA'] = radius
+        patches['width_Dec'] = radius
+        patches = patches.rename(columns={"width_RA": "radius_RA", "width_Dec": "radius_Dec"})
+    
+    else:
+        if fieldType == 'WFD':
+            observations = getFields(observations, 'WFD')
+            minDec = Decmin
+            maxDec = Decmax
+            if minDec == -1.0 and maxDec == -1.0:
+                # in that case min and max dec are given by obs strategy
+                minDec = np.min(observations['fieldDec'])-radius
+                maxDec = np.max(observations['fieldDec'])+radius
+            areas = pavingSky(RAmin, RAmax, minDec, maxDec, radius,radius)
+            print(observations.dtype)
+            if display:
+                areas.plot()
+
+        if fieldType == 'Fake':
+            # in that case: only one (RA,Dec)
+            radius = 0.1
+            RA = np.unique(observations[RACol])[0]
+            Dec = np.unique(observations[DecCol])[0]
+            areas = pavingSky(RA-radius/2., RA+radius/2., Dec -
+                              radius/2., Dec+radius/2., radius,radius)
+
+        patches = pd.DataFrame(areas.patches)
+
+    return observations, patches
 
 def getPix(nside, fieldRA, fieldDec):
     """
@@ -75,7 +172,7 @@ class pavingSky:
         self.Dec = np.mean([minDec,maxDec])
         self.radius_RA = radius_RA
         self.radius_Dec = radius_Dec
-
+        
         # define the polygon attached to this area
         """
         self.area_poly = areap(self.RA-radius_RA/2.,
@@ -125,27 +222,14 @@ class pavingSky:
 
         r=[]
         for ra in ras:
+            ramax = ra+radius_RA
+            ramean = np.mean([ra,ramax])
             for dec in decs:
-                ramax = ra+radius_RA
                 decmax = dec+radius_Dec
-                ramean = np.mean([ra,ramax])
                 decmean =  np.mean([dec,decmax])
-                r.append((ramean, decmean, radius_RA,radius_Dec))
-                
-        #r = []
-        """
-        for i in range(len(decrefs)):
-            shift_i = shift*(i % 2)
-            for ra in list(np.arange(minRA-shift_i, maxRA+shift_i+rastep, rastep)):
-                r.append((ra, decrefs[i], self.radius_RA,self.radius_Dec))
-        """
-        """
-        for i in range(len(decrefs)):
-            for ra in list(np.arange(minRA, maxRA+rastep, rastep)):
-                r.append((ra, decrefs[i], self.radius_RA,self.radius_Dec))
-        """
+                r.append((ramean, decmean, radius_RA,radius_Dec,ra,ramax,dec,decmax))
     
-        return np.rec.fromrecords(r, names=['RA','Dec','radius_RA','radius_Dec'])
+        return np.rec.fromrecords(r, names=['RA','Dec','radius_RA','radius_Dec','minRA','maxRA','minDec','maxDec'])
         
     def inside(self, areas):
         """
@@ -521,13 +605,13 @@ def proj_gnomonic_plane(lamb0, phi1, lamb, phi):
     Parameters
     --------------
     lambd0:  float
-      latitude of the tangent point of the projection (Dec) 
+      longitude of the tangent point of the projection (RA) 
     phi1: float
-      longitude of the tangent point of the projection (RA)
+      latitude of the tangent point of the projection (Dec)
     lambd:  float
-      latitude of the point to project (Dec)
-    phi: float
       longitude of the point to project (RA)
+    phi: float
+      latitude of the point to project (Dec)
 
     Returns
     ----------
@@ -551,6 +635,33 @@ def proj_gnomonic_plane(lamb0, phi1, lamb, phi):
 
 def proj_gnomonic_sphere(lamb0, phi, x, y):
 
+    """
+    Method to perform a gnomonic projection
+    on a sphere of points of a plane.
+
+    The formulas coded here are taken from:
+    Map Projections - A working manual
+    US Geological Survey - Professional paper 1395
+    by John P.Snyder - 1987
+
+    Parameters
+    --------------
+    lambd0:  float
+      longitude  of the tangent point of the projection (RA) 
+    phi1: float
+      latitude of the tangent point of the projection (Dec)
+    x:  float
+       x position of the point
+    y: float
+      y position of the point
+
+    Returns
+    ----------
+    lamb, phi1: coordinates of the projected point on the sphere
+     lamb: latitude of the point (Dec)
+     phi1:  longitude of the point(RA)
+
+    """
     rho = (x**2+y**2)**0.5
     c = np.arctan(rho)
     print('c', rho, c, np.rad2deg(c))
@@ -566,8 +677,19 @@ def proj_gnomonic_sphere(lamb0, phi, x, y):
 
 
 def renameFields(tab):
+    """
+    Method to rename fields
 
-    # print(tab.dtype)
+    Parameters
+    --------------
+    tab: array
+      original array of data
+
+    Returns
+    ---------
+    array of data with modified field names
+
+    """
     corresp = {}
 
     fillCorresp(tab, corresp, 'mjd', 'observationStartMJD')
@@ -577,18 +699,58 @@ def renameFields(tab):
     fillCorresp(tab, corresp, 'exptime', 'visitExposureTime')
     fillCorresp(tab, corresp, 'nexp', 'numExposures')
 
-    # print('alors',corresp)
     return rf.rename_fields(tab, corresp)
 
 
 def fillCorresp(tab, corres, vara, varb):
+    """
+    Method to fill a dict used to change colnams of a nupy array
+    
+    Parameters
+    --------------
+    tab: array
+      original array of data
+    corresp: dict 
+      keys: string, items: string
+    vara: str
+     colname in tab to change
+    varb: str
+     new colname to replace vara
 
+    Returns
+    ---------
+    dict with str as keys and items
+      correspondence vara<-> varb
+
+    """
+    
     if vara in tab.dtype.names and varb not in tab.dtype.names:
         corres[vara] = varb
 
 
 def pixelate(data, nside, RACol='RA', DecCol='Dec'):
+    """
+    Method to pixelate the sky
 
+    Parameters
+    --------------
+    data: array
+      data to use for pixelation
+    nside: int
+      nside parameter for healpix
+    RACol: str, opt
+      name of the RA col in data to use (default: RA)
+     DecCol: str, opt
+      name of the Dec col in data to use (default: Dec)  
+
+    Returns
+    ----------
+    initial array with the following infos added:
+     healpixID,pixRA,pixDec: pixel ID, RA and Dec (from healpix)
+    ebv: E(B-V)
+
+    """
+    
     res = data.copy()
     npix = hp.nside2npix(nside)
     table = hp.ang2vec(res[RACol], res[DecCol], lonlat=True)
@@ -721,9 +883,67 @@ def LSSTPointing(xc, yc, angle_rot=0., area=None, maxbound=None):
                               xoff=xc-rotated_poly.centroid.x,
                               yoff=yc-rotated_poly.centroid.y)
 
+def LSSTPointing_circular(xc, yc, angle_rot=0., area=None, maxbound=None):
+    """
+    Method to build a focal plane for LSST
+
+    Parameters
+    ---------------
+
+    xc: float
+       x-position of the center FP (RA)
+    yc: float
+       y-position of the center FP (Dec)
+    angle_rot: float, opt
+      angle of rotation of the FP (default: 0.)
+    area: float
+      area for the FP (default: None)
+    maxbound: float
+      ???? (default: None)
+    Returns
+    ----------
+    LSST FP (geometry.Polygon)
+
+    """
+
+    #
+    arr = []
+
+    for x in np.arange(0.,1.001,0.001):
+        y = np.sqrt(1.-x*x)
+        arr.append([x,y])
+
+    # symmetry I: y -> -y
+    arrcp = list(arr)
+    for val in arr[::-1]:
+        if val[1] >= 0.:
+            arrcp.append([val[0], -val[1]])
+    
+    # symmetry II: x -> -x
+    arr = list(arrcp)
+    for val in arrcp[::-1]:
+        if val[0] > 0.:
+            arr.append([-val[0], val[1]])
+            
+    # build polygon
+    poly_orig = geometry.Polygon(arr)
+
+    # set area
+    if area is not None:
+        poly_orig = affinity.scale(poly_orig, xfact=np.sqrt(
+            area/poly_orig.area), yfact=np.sqrt(area/poly_orig.area))
+
+    #set rotation angle
+    rotated_poly = affinity.rotate(poly_orig, angle_rot)
+
+    return affinity.translate(rotated_poly,
+                              xoff=xc-rotated_poly.centroid.x,
+                              yoff=yc-rotated_poly.centroid.y)
 
 class DataToPixels:
-    def __init__(self, nside, RACol, DecCol,num, outDir, dbName, obsIdCol='observationId', saveData=False):
+    def __init__(self, nside, RACol, DecCol,num, outDir, dbName,
+                 obsIdCol='observationId', saveData=False,
+                 LSST_RA=-30.244639, LSST_Dec=-70.749417):
         """
         class to match observations to sky pixels
 
@@ -753,6 +973,8 @@ class DataToPixels:
         self.nside = nside
         self.RACol = RACol
         self.DecCol = DecCol
+        self.LSST_RA = LSST_RA
+        self.LSST_Dec = LSST_Dec
         self.obsIdCol = obsIdCol
         self.num = num
         self.outDir = outDir
@@ -806,6 +1028,8 @@ class DataToPixels:
             plt.show()
         
         # select data inside an area centered in (RA,Dec) with width (widthRA+1,widthDec+1)
+
+        print('searching data inside',RA,Dec,widthRA,widthDec)
         dataSel = DataInside(data, RA, Dec, widthRA+1., widthDec+1.,
                              RACol=self.RACol, DecCol=self.DecCol)
         
@@ -815,7 +1039,7 @@ class DataToPixels:
         
         #print(test)
         
-        self.observations = np.copy(dataSel.data)
+        self.observations = None
 
         if dataSel is not None:
             # mv to panda df
@@ -826,7 +1050,9 @@ class DataToPixels:
             if nodither:
                 dataset[self.RACol] = np.mean(dataset[self.RACol])
                 dataset[self.DecCol] = np.mean(dataset[self.DecCol])
-            
+                
+            self.observations = dataset
+
             # get central pixel ID
             healpixID = hp.ang2pix(self.nside, RA,
                                    Dec, nest=True, lonlat=True)
@@ -854,37 +1080,14 @@ class DataToPixels:
             dataset = dataset.round({self.RACol: 4, self.DecCol: 4})
             groups = dataset.groupby([self.RACol, self.DecCol])
 
-            """
-            # display matching pixels/observations
-            if display:
-                import matplotlib.pylab as plt
-                for name, group in groups:
-                    fig, ax = plt.subplots()
-                    print('matching pixels')
-                    self.match(group, healpixIDs, pixRA, pixDec, name)
-                    # ax.plot(dataset[self.RACol],dataset[self.DecCol],'bs',mfc='None')
-                    plt.show()
-            """
-            # process pixels with data
             # match pixels to data
             time_ref = time.time()
             matched_pixels = groups.apply(
                 lambda x: self.match(x, self.healpixIDs, self.pixRA, self.pixDec)).reset_index()
 
-            
-            #print(matched_pixels)
-            #print(matched_pixels.groupby(['healpixID']).size())
             print('after matching', time.time()-time_ref,
                   len(matched_pixels['healpixID'].unique()))
-            #print('per pixel',matched_pixels.groupby(['healpixID']).size())
-            #print(test)
-
-            """
-            import matplotlib.pyplot as plt
-            plt.plot(self.observations[self.RACol],self.observations[self.DecCol],'ko')
-            plt.plot(matched_pixels[self.RACol],matched_pixels[self.DecCol],'r*')
-            plt.show()
-            """
+            
             return matched_pixels
             
     def match(self, grp, healpixIDs, pixRA, pixDec):
@@ -922,12 +1125,23 @@ class DataToPixels:
         pDec_rad = np.deg2rad(pDec)
 
         # gnomonic projection of pixels on the focal plane
-        #x, y = proj_gnomonic_plane(pRA_rad, pDec_rad, pixRA_rad, pixDec_rad)
-        x, y = proj_gnomonic_plane(pDec_rad, pRA_rad, pixDec_rad, pixRA_rad)
-        
-        # get LSST FP with the good scale
-        fpnew = LSSTPointing(0., 0., maxbound=self.fpscale)
+        x, y = proj_gnomonic_plane(pRA_rad, pDec_rad, pixRA_rad, pixDec_rad)
+        #x, y = proj_gnomonic_plane(np.deg2rad(self.LSST_RA-pRA),np.deg2rad(self.LSST_Dec-pDec), pixRA_rad, pixDec_rad)
 
+        # get LSST FP with the good scale
+        #pnew = LSSTPointing(0., 0., area=np.pi*self.fpscale**2)
+        fpnew = LSSTPointing(0., 0., maxbound=self.fpscale)
+        #fpnew = LSSTPointing(np.deg2rad(self.LSST_RA-pRA),np.deg2rad(self.LSST_Dec-pDec),area=np.pi*self.fpscale**2)
+        #maxbound=self.fpscale)
+
+        """
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
+        ax.plot(x,y,'ko')
+        pf = PolygonPatch(fpnew, facecolor=(0, 0, 0, 0), edgecolor='red')
+        ax.add_patch(pf)
+        plt.show()
+        """
         # print(shapely.vectorized.contains(
         #    fpnew, x, y), self.fpscale, fpnew.area)
 
@@ -937,13 +1151,14 @@ class DataToPixels:
         pixRA_matched = list(pixRA[idf])
         pixDec_matched = list(pixDec[idf])
 
-        names = [grp.name]*len(pixID_matched)
+        #names = [grp.name]*len(pixID_matched)
         df_pix = pd.DataFrame({'healpixID': pixID_matched,
                                'pixRA': pixRA_matched,
-                               'pixDec': pixDec_matched,
-                               'groupName': names})
+                               'pixDec': pixDec_matched,})
+                               #'groupName': names})
 
-        
+        return df_pix
+        """
         n_index = len(grp.index.values)
 
         arr_index = grp.index.values
@@ -957,7 +1172,7 @@ class DataToPixels:
         df_pix.loc[:, 'index'] = arr_index
         
         return df_pix
-        
+        """ 
     def plot(self, pixels):
         """
          Method to plot matching results
@@ -974,6 +1189,10 @@ class DataToPixels:
             fpnew = LSSTPointing(vv[0],vv[1], area=9.6)
             pf = PolygonPatch(fpnew, facecolor=(0, 0, 0, 0), edgecolor='red')
             ax.add_patch(pf)
+            #compare with a circular FP
+            fpnew_c = LSSTPointing_circular(vv[0],vv[1], area=9.6)
+            pfc = PolygonPatch(fpnew_c, facecolor=(0, 0, 0, 0), edgecolor='red')
+            ax.add_patch(pfc)
             idf = np.abs(pixels[self.RACol]-vv[0])<1.e-5
             idf &= np.abs(pixels[self.DecCol]-vv[1])<1.e-5
             ax.plot(pixels[idf]['pixRA'],pixels[idf]['pixDec'],'r*')
@@ -1052,20 +1271,22 @@ class ProcessPixels:
             self.resfi[metric.name] = None
 
         data = pd.DataFrame(observations)
-            
+        
         # run the metrics on those pixels
         ipix = -1 # counter to estimate when to dump
         isave = -1 # counter to estimate how many dumps
+        print('number of pixels',len(pixels),len(pixels['healpixID'].unique()))
         for vv in pixels['healpixID'].unique():
             time_ref = time.time()
             ipix += 1
             idf = pixels['healpixID'] == vv
-            selpix = pixels[idf]       
-            #print('selection',selpix)
-            #dataPixels = self.getData(data,selpix)
-            dataPixels = data.iloc[selpix['index'].tolist()].copy()
+            selpix = pixels[idf]
+            dataPixels = self.getData(data,selpix)
+            
+            #dataPixels = data.iloc[selpix['index'].tolist()].copy()
+            
             for val in ['healpixID','pixRA','pixDec']:
-                dataPixels[val] = selpix[val].values
+                dataPixels[val] = selpix[val].unique().tolist()*len(dataPixels)
             self.runMetrics(dataPixels)
             #print('pixel processed',time.time()-time_ref)
             if self.saveData and ipix >=50:
@@ -1097,8 +1318,8 @@ class ProcessPixels:
         #idfb = [((data[self.RACol] - lat)**2 + (data[self.DecCol] - lon)**2).idxmin() for index,lat, lon in selpix[[self.RACol,self.DecCol]].itertuples()]
         dataPixel = pd.DataFrame()
         for index, row in selpix.iterrows():
-            idfb = np.abs(data[self.RACol] -row[self.RACol])<1.e-5
-            idfb &= np.abs(data[self.DecCol] -row[self.DecCol])<1.e-5
+            idfb = np.abs(data[self.RACol] -row[self.RACol])<1.e-4
+            idfb &= np.abs(data[self.DecCol] -row[self.DecCol])<1.e-4
             dataPixel = pd.concat((dataPixel,data[idfb]),sort=False)
         return dataPixel
         
@@ -1119,6 +1340,7 @@ class ProcessPixels:
             return
         for metric in self.metricList:
             resdict[metric.name] = metric.run(season(dataPixel.to_records(index=False)))
+            #print('running',len(resdict[metric.name]))
 
         # concatenate the results
         for key in self.resfi.keys():
@@ -1453,7 +1675,7 @@ class ProcessArea:
         #print('after gnomonic')
         #print(x, y)
         # get LSST FP with the good scale
-        fpnew = LSSTPointing(0., 0., maxbound=self.fpscale)
+        fpnew = LSSTPointing_circular(0., 0., maxbound=self.fpscale)
 
         # print(shapely.vectorized.contains(
         #    fpnew, x, y), self.fpscale, fpnew.area)
