@@ -1073,7 +1073,7 @@ class DataToPixels:
         
         # select data inside an area centered in (RA,Dec) with width (widthRA+1,widthDec+1)
 
-        print('searching data inside',RA,Dec,widthRA,widthDec)
+        #print('searching data inside',RA,Dec,widthRA,widthDec)
         dataSel = DataInside(data, RA, Dec, widthRA+1., widthDec+1.,
                              RACol=self.RACol, DecCol=self.DecCol)
         
@@ -1083,54 +1083,57 @@ class DataToPixels:
         
         self.observations = None
 
-        if dataSel is not None:
-            # mv to panda df
-            dataset = pd.DataFrame(np.copy(dataSel.data))
+        #print('there man',len(dataSel.data))
+        if len(dataSel.data)==0:
+            return None
+        
+        # mv to panda df
+        dataset = pd.DataFrame(np.copy(dataSel.data))
             
-            # Possible to remove DD dithering here
-            # This is usually to test impact of dithering on DDF
-            if nodither:
-                dataset[self.RACol] = np.mean(dataset[self.RACol])
-                dataset[self.DecCol] = np.mean(dataset[self.DecCol])
+        # Possible to remove DD dithering here
+        # This is usually to test impact of dithering on DDF
+        if nodither:
+            dataset[self.RACol] = np.mean(dataset[self.RACol])
+            dataset[self.DecCol] = np.mean(dataset[self.DecCol])
                 
-            self.observations = dataset
+        self.observations = dataset
 
-            # get central pixel ID
-            healpixID = hp.ang2pix(self.nside, RA,
-                                   Dec, nest=True, lonlat=True)
+        # get central pixel ID
+        healpixID = hp.ang2pix(self.nside, RA,
+                               Dec, nest=True, lonlat=True)
 
-            # get nearby pixels
-            vec = hp.pix2vec(self.nside, healpixID, nest=True)
-            self.healpixIDs = hp.query_disc(
-                self.nside, vec, 3.*np.deg2rad(widthRA), inclusive=False, nest=True)
+        # get nearby pixels
+        vec = hp.pix2vec(self.nside, healpixID, nest=True)
+        self.healpixIDs = hp.query_disc(
+            self.nside, vec, 3.*np.deg2rad(widthRA), inclusive=False, nest=True)
 
-            # get pixel coordinates
-            coords = hp.pix2ang(self.nside, self.healpixIDs, nest=True, lonlat=True)
-            self.pixRA, self.pixDec = coords[0], coords[1]
+        # get pixel coordinates
+        coords = hp.pix2ang(self.nside, self.healpixIDs, nest=True, lonlat=True)
+        self.pixRA, self.pixDec = coords[0], coords[1]
 
 
-            # display (RA,Dec) of pixels
-            if display:
-                print('number of pixels here', len(self.pixRA))
-                import matplotlib.pyplot as plt
-                fig, ax = plt.subplots()
-                ax.plot(self.pixRA, self.pixDec, 'r*')
-                dataSel.plot(ax)
-                plt.show()
+        # display (RA,Dec) of pixels
+        if display:
+            print('number of pixels here', len(self.pixRA))
+            import matplotlib.pyplot as plt
+            fig, ax = plt.subplots()
+            ax.plot(self.pixRA, self.pixDec, 'r*')
+            dataSel.plot(ax)
+            plt.show()
 
-            # make groups by (RA,dec)
-            dataset = dataset.round({self.RACol: 4, self.DecCol: 4})
-            groups = dataset.groupby([self.RACol, self.DecCol])
+        # make groups by (RA,dec)
+        dataset = dataset.round({self.RACol: 4, self.DecCol: 4})
+        groups = dataset.groupby([self.RACol, self.DecCol])
 
-            # match pixels to data
-            time_ref = time.time()
-            matched_pixels = groups.apply(
-                lambda x: self.match(x, self.healpixIDs, self.pixRA, self.pixDec)).reset_index()
+        # match pixels to data
+        time_ref = time.time()
+        matched_pixels = groups.apply(
+            lambda x: self.match(x, self.healpixIDs, self.pixRA, self.pixDec)).reset_index()
 
-            print('after matching', time.time()-time_ref,
-                  len(matched_pixels['healpixID'].unique()))
+        print('after matching', time.time()-time_ref,
+              len(matched_pixels['healpixID'].unique()))
             
-            return matched_pixels
+        return matched_pixels
             
     def match(self, grp, healpixIDs, pixRA, pixDec):
         """
@@ -1318,20 +1321,22 @@ class ProcessPixels:
         ipix = -1 # counter to estimate when to dump
         isave = -1 # counter to estimate how many dumps
         print('number of pixels',len(pixels),len(pixels['healpixID'].unique()))
-        for vv in pixels['healpixID'].unique():
-            time_ref = time.time()
+        for ipixel,vv in enumerate(pixels['healpixID'].unique()):
+            #print('processing pixel',ipixel,vv)
+            #time_ref = time.time()
             ipix += 1
             idf = pixels['healpixID'] == vv
             selpix = pixels[idf]
             dataPixels = self.getData(data,selpix)
-            
+            #print('got datapixels',time.time()-time_ref,selpix)
             #dataPixels = data.iloc[selpix['index'].tolist()].copy()
             
             for val in ['healpixID','pixRA','pixDec']:
                 dataPixels[val] = selpix[val].unique().tolist()*len(dataPixels)
+            #time_ref = time.time()
             self.runMetrics(dataPixels)
             #print('pixel processed',time.time()-time_ref)
-            if self.saveData and ipix >=50:
+            if self.saveData and ipix >=20:
                 isave += 1
                 self.dump(ip,isave)
                 ipix = -1
@@ -1359,12 +1364,20 @@ class ProcessPixels:
         """
         #idfb = [((data[self.RACol] - lat)**2 + (data[self.DecCol] - lon)**2).idxmin() for index,lat, lon in selpix[[self.RACol,self.DecCol]].itertuples()]
         dataPixel = pd.DataFrame()
+        dataset = pd.DataFrame(data)
+
+        dataset = dataset.round({self.RACol: 4, self.DecCol: 4})
+        ido = dataset[self.RACol].isin(selpix[self.RACol])
+        ido &= dataset[self.DecCol].isin(selpix[self.DecCol])
+
+        return dataset[ido]
+        """
         for index, row in selpix.iterrows():
             idfb = np.abs(data[self.RACol] -row[self.RACol])<1.e-4
             idfb &= np.abs(data[self.DecCol] -row[self.DecCol])<1.e-4
             dataPixel = pd.concat((dataPixel,data[idfb]),sort=False)
         return dataPixel
-        
+        """
     def runMetrics(self, dataPixel):
         """
         Method to run the metrics on the data
