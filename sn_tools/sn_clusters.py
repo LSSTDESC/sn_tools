@@ -1,5 +1,6 @@
 from sklearn.datasets import make_blobs
 from sklearn.cluster import KMeans
+import numpy as np
 
 class ClusterObs:
 

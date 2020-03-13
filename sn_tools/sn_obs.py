@@ -736,7 +736,7 @@ def renameFields(tab):
     corresp = {}
 
     fillCorresp(tab, corresp, 'mjd', 'observationStartMJD')
-    fillCorresp(tab, corresp, 'Ra', 'fieldRA')
+    fillCorresp(tab, corresp, 'RA', 'fieldRA')
     fillCorresp(tab, corresp, 'Dec', 'fieldDec')
     fillCorresp(tab, corresp, 'band', 'filter')
     fillCorresp(tab, corresp, 'exptime', 'visitExposureTime')
