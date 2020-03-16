@@ -14,6 +14,7 @@ import pandas as pd
 from sn_tools.sn_obs import DataInside
 from sn_tools.sn_clusters import ClusterObs
 
+
 class ReferenceData:
     """
     class to handle light curve of SN
@@ -799,11 +800,8 @@ class TemplateData_x1color(object):
 """
 
 
-
-
-
 class AnaOS:
-    def __init__(self, dbDir, dbName, dbExtens, nclusters,fields):
+    def __init__(self, dbDir, dbName, dbExtens, nclusters, fields):
         """
         class to analyze an observing strategy
         The idea here is to disentangle WFD and DD obs
@@ -827,7 +825,7 @@ class AnaOS:
          fields to consider for matching
 
         """
-         
+
         self.dbDir = dbDir
         self.dbName = dbName
         self.dbExtens = dbExtens
@@ -843,15 +841,15 @@ class AnaOS:
 
         # load observations
         observations = self.load_obs()
- 
+
         # WDF obs
         obs_WFD = getFields(observations, 'WFD')
         df['WFD'] = len(obs_WFD)
-        df_bands = pd.DataFrame(obs_WFD).groupby(['filter']).size().to_frame('count').reset_index()
+        df_bands = pd.DataFrame(obs_WFD).groupby(
+            ['filter']).size().to_frame('count').reset_index()
         for index, row in df_bands.iterrows():
             df['WFD_{}'.format(row['filter'])] = row['count']
         df['WFD_all'] = df_bands['count'].sum()
-
 
         # DDF obs
         nside = 128
@@ -865,28 +863,29 @@ class AnaOS:
             return None
 
         # get the number of visits per band
-        df_bands = pd.DataFrame(np.copy(obs_DD)).groupby(['filter']).size().to_frame('count').reset_index()
+        df_bands = pd.DataFrame(np.copy(obs_DD)).groupby(
+            ['filter']).size().to_frame('count').reset_index()
         for index, row in df_bands.iterrows():
             df['DD_{}'.format(row['filter'])] = row['count']
         df['DD_all'] = df_bands['count'].sum()
-         
+
         # make clusters
-        self.clus = ClusterObs(obs_DD, self.nclusters, self.dbName,self.fields)
+        self.clus = ClusterObs(obs_DD, self.nclusters,
+                               self.dbName, self.fields)
         clusters = self.clus.clusters
-        
+
         for index, row in clusters.iterrows():
-            self._fill_field(df,row['fieldName'],row)
+            self._fill_field(df, row['fieldName'], row)
 
         # check whether all fields are there if not set 0 to missing fields
 
         for index, row in self.fields.iterrows():
             if row['name'] not in df.columns:
-                self._fill_field(df,row['name'])
-
+                self._fill_field(df, row['name'])
 
         return df
 
-    def _fill_field(self, df,fieldName, ddc=None):
+    def _fill_field(self, df, fieldName, ddc=None):
         """
         Method to fill infos from clusters
 
@@ -904,13 +903,13 @@ class AnaOS:
 
 
         """
-        df.loc[:,fieldName] = ddc['Nvisits'] if ddc is not None else 0
+        df.loc[:, fieldName] = ddc['Nvisits'] if ddc is not None else 0
         for band in 'ugrizy':
-            df.loc[:,'{}_{}'.format(fieldName,band)] = ddc['Nvisits_{}'.format(band)] if ddc is not None else 0
-        for val in ['area','width_RA','width_Dec']:
-            df.loc[:,'{}_{}'.format(fieldName,val)] = ddc[val] if ddc is not None else 0
-        
-
+            df.loc[:, '{}_{}'.format(fieldName, band)] = ddc['Nvisits_{}'.format(
+                band)] if ddc is not None else 0
+        for val in ['area', 'width_RA', 'width_Dec']:
+            df.loc[:, '{}_{}'.format(fieldName, val)
+                   ] = ddc[val] if ddc is not None else 0
 
     def load_obs(self):
         """
@@ -991,12 +990,14 @@ class AnaOS:
             # print('hello',xp,yp,label,io)
             # ab  = ax[xp][yp].plot(RA,Dec,marker='o',color=color[io],label=label)
             print(RA, Dec)
-            ax[xp][yp].plot(RA, Dec, marker='.', color=color[io], lineStyle='None')
+            ax[xp][yp].plot(RA, Dec, marker='.',
+                            color=color[io], lineStyle='None')
 
             # lista.append(ab)
             # listb.append(label)
 
-            ell = Ellipse((val['RA'],val['Dec']),val['width_RA'],val['width_Dec'],facecolor='none',edgecolor='black')
+            ell = Ellipse((val['RA'], val['Dec']), val['width_RA'],
+                          val['width_Dec'], facecolor='none', edgecolor='black')
             print(val['RA'], val['Dec'], val['width_RA'], val['width_Dec'])
             ax[xp][yp].add_patch(ell)
 
@@ -1018,84 +1019,24 @@ class AnaOS:
 
         # plt.legend(lista,listb,loc='center left', bbox_to_anchor=(1, 2.0),ncol=1,fontsize=12)
 
-def getName(df_fields, RA):
-    """
-    Function to get a field name corresponding to RA
 
-    Parameters
-    ----------
-    df_fields: pandas df
-     array of fields with the following columns:
-     - name: name of the field
-     - fieldId: Id of the field
-     - RA: RA of the field
-     - Dec: Dec of the field
-     - fieldnum: field number
-
-    Returns
-    -------
-    idx: int
-     idx (row number) of the matching field
-    name: str
-     name of the matching field
-
-    """
-
-    _fields = df_fields.to_records(index=False)
-    _idx = np.abs(_fields['RA'] - RA).argmin()
-
-    return _idx, _fields[_idx]['name']
-
-
-def getVisitsBand(obs):
-    """
-    Function to estimate the number of visits per band
-    for a set of observations
-
-    Parameters
-    ----------
-    obs: numpy record array
-     array of observations
-
-    Returns
-    -------
-    Nvisits: dict
-     dict with bands as keys and number of visits as values
-
-    """
-
-    bands = 'ugrizy'
-    Nvisits = {}
-
-    if 'filter' in obs.dtype.names:
-        Nvisits['all'] = 0
-        for band in bands:
-            ib = obs['filter'] == band
-            Nvisits[band] = len(obs[ib])
-            Nvisits['all'] += len(obs[ib])
-    else:
-        for b in bands:
-            Nvisits[b] = 0
-
-    return Nvisits
-  
-def Match_DD(fields_DD,df):
+def Match_DD(fields_DD, df):
     """
     Method to match df data to DD fields
-    
+
     Parameters
     ---------------
     df: pandas df
      data (results from a metric) to match to DD fields
-    
+
     Returns
     ----------
     pandas df with matched DD information added.
-    
+
     """""
-    
+
     dfb = pd.DataFrame()
-    #for field in fields_DD:
+    # for field in fields_DD:
     for index, field in fields_DD.iterrows():
         dataSel = DataInside(
             df.to_records(index=False), field['RA'], field['Dec'], 10., 10., 'pixRA', 'pixDec')

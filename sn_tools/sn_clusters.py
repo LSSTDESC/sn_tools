@@ -1,10 +1,12 @@
 from sklearn.datasets import make_blobs
 from sklearn.cluster import KMeans
 import numpy as np
+import pandas as pd
+
 
 class ClusterObs:
 
-    def __init__(self, data, nclusters, dbName, fields,RA_name='fieldRA', Dec_name='fieldDec'):
+    def __init__(self, data, nclusters, dbName, fields, RA_name='fieldRA', Dec_name='fieldDec'):
         """
         class to identify clusters of points in (RA,Dec)
 
@@ -22,7 +24,7 @@ class ClusterObs:
          field name for the RA (default=fieldRA)
         Dec_name: str, opt
          field name for the Dec (default=fieldDec)
-        
+
         """
 
         # grab necessary infos
@@ -116,7 +118,7 @@ class ClusterObs:
         rcluster = pd.DataFrame()
         dfcluster = pd.DataFrame()
         for io in range(nclusters):
-            
+
             RA = self.points[self.clus == io, 0]
             Dec = self.points[self.clus == io, 1]
 
@@ -134,7 +136,7 @@ class ClusterObs:
             mean_Dec = np.mean(Dec)
             area = np.pi*(max_RA-min_RA)*(max_Dec-min_Dec)/4.
             idx, fieldName = getName(self.fields, mean_RA)
-           
+
             dfclus.loc[:, 'fieldName'] = fieldName
             dfclus.loc[:, 'clusId'] = int(io)
             dfcluster = pd.concat([dfcluster, dfclus], sort=False)
@@ -146,13 +148,75 @@ class ClusterObs:
             rclus.loc[:, 'width_RA'] = max_RA-min_RA
             rclus.loc[:, 'width_Dec'] = max_Dec-min_Dec
             rclus.loc[:, 'area'] = area
-            rclus.loc[:, 'dbName'] =self.dbName
+            rclus.loc[:, 'dbName'] = self.dbName
             rclus.loc[:, 'fieldName'] = fieldName
             rclus.loc[:, 'Nvisits'] = int(Nvisits['all'])
 
             for key, vals in Nvisits.items():
-                rclus.loc[:,'Nvisits_{}'.format(key)] = int(vals)
+                rclus.loc[:, 'Nvisits_{}'.format(key)] = int(vals)
 
             rcluster = pd.concat((rcluster, rclus))
 
         return rcluster, dfcluster
+
+
+def getVisitsBand(obs):
+    """
+    Function to estimate the number of visits per band
+    for a set of observations
+
+    Parameters
+    ----------
+    obs: numpy record array
+     array of observations
+
+    Returns
+    -------
+    Nvisits: dict
+     dict with bands as keys and number of visits as values
+
+    """
+
+    bands = 'ugrizy'
+    Nvisits = {}
+
+    if 'filter' in obs.dtype.names:
+        Nvisits['all'] = 0
+        for band in bands:
+            ib = obs['filter'] == band
+            Nvisits[band] = len(obs[ib])
+            Nvisits['all'] += len(obs[ib])
+    else:
+        for b in bands:
+            Nvisits[b] = 0
+
+    return Nvisits
+
+
+def getName(df_fields, RA):
+    """
+    Function to get a field name corresponding to RA
+
+    Parameters
+    ----------
+    df_fields: pandas df
+     array of fields with the following columns:
+     - name: name of the field
+     - fieldId: Id of the field
+     - RA: RA of the field
+     - Dec: Dec of the field
+     - fieldnum: field number
+
+    Returns
+    -------
+    idx: int
+     idx (row number) of the matching field
+    name: str
+     name of the matching field
+
+    """
+
+    _fields = df_fields.to_records(index=False)
+    _idx = np.abs(_fields['RA'] - RA).argmin()
+
+    return _idx, _fields[_idx]['name']
