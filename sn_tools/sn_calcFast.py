@@ -580,9 +580,6 @@ class LCfast:
         for key, vals in Derivative_for_Fisher.items():
             Fisher_Mat[key] = np.ma.array(vals, mask=~flag)
 
-
-            
-
         # Store in a panda dataframe
         lc = pd.DataFrame()
 
@@ -620,7 +617,8 @@ class LCfast:
                 lc['flux_5'] = self.reference_lc.mag_to_flux_e_sec[band](
                     lc['m5'])
             for key, vals in Fisher_Mat.items():
-                lc['F_{}'.format(key)] = vals[~vals.mask]/(lc['fluxerr']**2)
+                lc.loc[:,'F_{}'.format(key)] = vals[~vals.mask]/(lc['fluxerr'].values**2)
+                #lc.loc[:, 'F_{}'.format(key)] = 999.
             lc.loc[:, 'x1'] = self.x1
             lc.loc[:, 'color'] = self.color
             
