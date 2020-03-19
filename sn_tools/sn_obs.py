@@ -20,6 +20,7 @@ import glob
 import os
 from sn_tools.sn_clusters import ClusterObs
 
+
 def DDFields(DDfile=None):
     """
     Function to define DD fields
@@ -50,7 +51,8 @@ def DDFields(DDfile=None):
         fields = pd.read_csv(DDfile)
         return fields
     else:
-        fields = pd.DataFrame(columns=['name', 'fieldId', 'RA', 'Dec', 'fieldnum'])
+        fields = pd.DataFrame(
+            columns=['name', 'fieldId', 'RA', 'Dec', 'fieldnum'])
 
         fields.loc[0] = ['ELAIS', 744, 10.0, -45.52, 4]
         fields.loc[1] = ['SPT', 290, 349.39, -63.32, 5]
@@ -64,7 +66,7 @@ def DDFields(DDfile=None):
 
 
 def patchObs(observations, fieldType,
-                     dbName,nside,RAmin,RAmax,Decmin,Decmax,
+             dbName, nside, RAmin, RAmax, Decmin, Decmax,
              RACol, DecCol,
              display=False):
     """
@@ -104,7 +106,6 @@ def patchObs(observations, fieldType,
 
     """
 
-    
     radius = 5.
 
     if fieldType == 'DD':
@@ -117,13 +118,13 @@ def patchObs(observations, fieldType,
         observations = getFields(
             observations, fieldType, fieldIds, nside)
 
-        print('before cluster', len(observations),observations.dtype)
+        print('before cluster', len(observations), observations.dtype)
         # get clusters out of these obs
         radius = 10.
 
         DD = DDFields()
         clusters = ClusterObs(
-            observations, nclusters=nclusters, dbName=dbName,fields=DD).clusters
+            observations, nclusters=nclusters, dbName=dbName, fields=DD).clusters
 
         #clusters = rf.append_fields(clusters, 'radius', [radius]*len(clusters))
         clusters['radius'] = radius
@@ -132,8 +133,9 @@ def patchObs(observations, fieldType,
         patches = pd.DataFrame(areas)
         patches['width_RA'] = radius
         patches['width_Dec'] = radius
-        patches = patches.rename(columns={"width_RA": "radius_RA", "width_Dec": "radius_Dec"})
-    
+        patches = patches.rename(
+            columns={"width_RA": "radius_RA", "width_Dec": "radius_Dec"})
+
     else:
         if fieldType == 'WFD':
             observations = getFields(observations, 'WFD')
@@ -143,7 +145,7 @@ def patchObs(observations, fieldType,
                 # in that case min and max dec are given by obs strategy
                 minDec = np.min(observations['fieldDec'])-radius
                 maxDec = np.max(observations['fieldDec'])+radius
-            areas = pavingSky(RAmin, RAmax, minDec, maxDec, radius,radius)
+            areas = pavingSky(RAmin, RAmax, minDec, maxDec, radius, radius)
             print(observations.dtype)
             if display:
                 areas.plot()
@@ -154,11 +156,12 @@ def patchObs(observations, fieldType,
             RA = np.unique(observations[RACol])[0]
             Dec = np.unique(observations[DecCol])[0]
             areas = pavingSky(RA-radius/2., RA+radius/2., Dec -
-                              radius/2., Dec+radius/2., radius,radius)
+                              radius/2., Dec+radius/2., radius, radius)
 
         patches = pd.DataFrame(areas.patches)
 
     return observations, patches
+
 
 def getPix(nside, fieldRA, fieldDec):
     """
@@ -191,8 +194,9 @@ def getPix(nside, fieldRA, fieldDec):
 
     return healpixId, pixRA, pixDec
 
+
 class pavingSky:
-    def __init__(self,minRA, maxRA, minDec, maxDec, radius_RA,radius_Dec):
+    def __init__(self, minRA, maxRA, minDec, maxDec, radius_RA, radius_Dec):
         """ class to perform a paving of the sky with rectangles
 
         Parameters
@@ -211,11 +215,11 @@ class pavingSky:
           distance reference for the paving in Dec; correspond to the length in Dec.
         """
 
-        self.RA = np.mean([minRA,maxRA])
-        self.Dec = np.mean([minDec,maxDec])
+        self.RA = np.mean([minRA, maxRA])
+        self.Dec = np.mean([minDec, maxDec])
         self.radius_RA = radius_RA
         self.radius_Dec = radius_Dec
-        
+
         # define the polygon attached to this area
         """
         self.area_poly = areap(self.RA-radius_RA/2.,
@@ -223,11 +227,11 @@ class pavingSky:
                                self.Dec-radius_Dec/2.,
                                self.Dec+radius_Dec/2.)
         """
-        self.area_poly = areap(minRA,maxRA,minDec,maxDec)
+        self.area_poly = areap(minRA, maxRA, minDec, maxDec)
         all_patches = self.getpatches(minRA, maxRA, minDec, maxDec)
 
         self.patches = self.inside(all_patches)
-        
+
     def getpatches(self, minRA, maxRA, minDec, maxDec):
         """
         Method to define rectangles patches over the area defined by (minRA,minDec, maxRA, maxDec)
@@ -242,7 +246,7 @@ class pavingSky:
             min Dec value of the area
         maxDec: float
             max Dec value of the area
-        
+
         Returns
         ----------
         numpy array with the following cols:
@@ -260,24 +264,25 @@ class pavingSky:
         decrefs = np.arange(minDec, maxDec, decstep)
         shift = self.radius_RA/2.
 
-        ras = np.arange(minRA,maxRA+radius_RA,radius_RA)
-        decs = np.arange(minDec,maxDec+radius_Dec,radius_Dec)
+        ras = np.arange(minRA, maxRA+radius_RA, radius_RA)
+        decs = np.arange(minDec, maxDec+radius_Dec, radius_Dec)
 
-        r=[]
+        r = []
         for ra in ras:
             ramax = ra+radius_RA
-            ramean = np.mean([ra,ramax])
+            ramean = np.mean([ra, ramax])
             for dec in decs:
                 decmax = dec+radius_Dec
-                decmean =  np.mean([dec,decmax])
-                r.append((ramean, decmean, radius_RA,radius_Dec,ra,ramax,dec,decmax))
-    
-        return np.rec.fromrecords(r, names=['RA','Dec','radius_RA','radius_Dec','minRA','maxRA','minDec','maxDec'])
-        
+                decmean = np.mean([dec, decmax])
+                r.append((ramean, decmean, radius_RA,
+                          radius_Dec, ra, ramax, dec, decmax))
+
+        return np.rec.fromrecords(r, names=['RA', 'Dec', 'radius_RA', 'radius_Dec', 'minRA', 'maxRA', 'minDec', 'maxDec'])
+
     def inside(self, areas):
         """
         Method to select patches located (center) inside the area
-        
+
         Parameters
         --------------
         areas: numpy array with 
@@ -287,15 +292,16 @@ class pavingSky:
         Returns
         ----------
         numpy array of patches (same struct as input) matching the area
-    
+
         """
-           
+
         poly_orig = geometry.Polygon(self.area_poly)
         poly_origb = affinity.scale(poly_orig, xfact=1.1, yfact=1.1)
-        idf = shapely.vectorized.contains(poly_origb, areas['RA'],areas['Dec'])
+        idf = shapely.vectorized.contains(
+            poly_origb, areas['RA'], areas['Dec'])
 
         return areas[idf]
-        
+
     def plot(self):
         """
         Method to plot/check the result of the class
@@ -304,10 +310,10 @@ class pavingSky:
         whose centers (black point) are located inside the initial area
 
         """
-        
+
         import matplotlib.pyplot as plt
         fig, ax = plt.subplots()
-        
+
         pf = PolygonPatch(self.area_poly, facecolor=(
             0, 0, 0, 0), edgecolor='red')
         ax.add_patch(pf)
@@ -319,15 +325,15 @@ class pavingSky:
             maxRA = val['RA']+val['radius_RA']/2.
             minDec = val['Dec']-val['radius_Dec']/2.
             maxDec = val['Dec']+val['radius_Dec']/2.
-            polyb = areap(minRA,maxRA,minDec,maxDec)
+            polyb = areap(minRA, maxRA, minDec, maxDec)
             pfb = PolygonPatch(polyb, facecolor=(
                 0, 0, 0, 0), edgecolor='blue')
             ax.add_patch(pfb)
-            ax.plot(val['RA'],val['Dec'],'k.')
+            ax.plot(val['RA'], val['Dec'], 'k.')
 
         plt.show()
 
-    
+
 def pavingSky_old(ramin, ramax, decmin, decmax, radius):
     """ Function to perform a paving of the sky with hexagons
 
@@ -385,7 +391,7 @@ def area(minRA, maxRA, minDec, maxDec):
     dict with keys corresponding to abovemantioned values
 
     """
-    
+
     return dict(zip(['minRA', 'maxRA', 'minDec', 'maxDec'], [minRA, maxRA, minDec, maxDec]))
 
 
@@ -413,6 +419,7 @@ def areap(minRA, maxRA, minDec, maxDec):
 
     return geometry.Polygon(poly)
 
+
 def areap_diamond(RA, Dec, radius_RA, radius_Dec):
     """
     Method defining a diamond
@@ -438,14 +445,14 @@ def areap_diamond(RA, Dec, radius_RA, radius_Dec):
     maxRA = RA+radius_RA/2.
     minDec = Dec-radius_Dec/2.
     maxDec = Dec+radius_Dec/2.
-    
+
     poly = [[minRA, Dec], [RA, maxDec], [maxRA, Dec], [RA, minDec]]
 
     return geometry.Polygon(poly)
 
 
 class DataInside:
-    def __init__(self,data, RA, Dec, widthRA, widthDec, RACol='fieldRA', DecCol='fieldDec'):
+    def __init__(self, data, RA, Dec, widthRA, widthDec, RACol='fieldRA', DecCol='fieldDec'):
         """
         class to select data points (RA,Dec) inside and area
         defined by the center (RA,Dec) and two width (widthRA, widthDec)
@@ -477,11 +484,11 @@ class DataInside:
         minDec = Dec-widthDec
         maxDec = Dec+widthDec
 
-        self.areas = self.getAreas(RA,Dec, minRA, maxRA, minDec, maxDec)
-        
-        self.data = self.selData(data,self.areas)
-        
-    def getAreas(self, RA,Dec,minRA, maxRA, minDec, maxDec):
+        self.areas = self.getAreas(RA, Dec, minRA, maxRA, minDec, maxDec)
+
+        self.data = self.selData(data, self.areas)
+
+    def getAreas(self, RA, Dec, minRA, maxRA, minDec, maxDec):
         """
         Method to get areas (geometry.Polygon) corresponding to a region
         centered in (RA,Dec) with min, max RA and Dec
@@ -504,12 +511,12 @@ class DataInside:
         list of dict with the following keys:
           minRA, maxRA, minDec, maxDec
 
-        """ 
+        """
         # Create area from these
         # RA is in [0.,360.]
         # special treatement near RA~0
         ax = None
-        
+
         areaList = []
         if ax is not None:
             areapList = []
@@ -544,10 +551,10 @@ class DataInside:
         Data inside the regions defined in areaList
 
         """
-        
+
         dataSel = None
         for areal in areaList:
-            data_inside = self.inData(data,areal)
+            data_inside = self.inData(data, areal)
             if data_inside is not None:
                 if dataSel is None:
                     dataSel = data_inside
@@ -556,7 +563,7 @@ class DataInside:
 
         return dataSel
 
-    def inData(self, data,area):
+    def inData(self, data, area):
         """
         Method selecting data located (in (RA,Dec)) inside a list of areas
 
@@ -567,7 +574,7 @@ class DataInside:
         area: area
          dict with the following keys:
            minRA, maxRA, minDec, maxDec
-           
+
         Returns
         ----------
         Data inside the region defined by area
@@ -575,14 +582,13 @@ class DataInside:
         """
         diff_add = 0.
 
-        
-        idf = data[self.RACol]-area['minRA']>=-diff_add
-        idf &= data[self.RACol]-area['maxRA']<=diff_add
-        idf &= data[self.DecCol]-area['minDec']>=-diff_add
-        idf &= data[self.DecCol]-area['maxDec']<=diff_add
+        idf = data[self.RACol]-area['minRA'] >= -diff_add
+        idf &= data[self.RACol]-area['maxRA'] <= diff_add
+        idf &= data[self.DecCol]-area['minDec'] >= -diff_add
+        idf &= data[self.DecCol]-area['maxDec'] <= diff_add
 
         return data[idf]
-    
+
     def inData_old(self, data, area):
         """
         Method selecting data located (in (RA,Dec)) inside a list of areas
@@ -594,13 +600,14 @@ class DataInside:
         area: area
          dict with the following keys:
            minRA, maxRA, minDec, maxDec
-           
+
         Returns
         ----------
         Data inside the region defined by area
 
         """
-        idf = (data[self.RACol] >= area['minRA']) & (data[self.RACol] <= area['maxRA'])
+        idf = (data[self.RACol] >= area['minRA']) & (
+            data[self.RACol] <= area['maxRA'])
         idf &= (data[self.DecCol] >= area['minDec']) & (
             data[self.DecCol] <= area['maxDec'])
 
@@ -608,7 +615,7 @@ class DataInside:
             return data[idf]
         return None
 
-    def plot(self,ax):
+    def plot(self, ax):
         """
         Method to plot the result of the class:
 
@@ -619,20 +626,21 @@ class DataInside:
         --------------
         ax: axes.Axes (matplotlib)
           axis to plot the results
-        
+
         """
-        
+
         #import matplotlib.pyplot as plt
         #fig, ax = plt.subplots()
 
-        ax.plot(self.data[self.RACol],self.data[self.DecCol],'ko')
+        ax.plot(self.data[self.RACol], self.data[self.DecCol], 'ko')
 
         for val in self.areas:
-            polyb = areap(val['minRA'],val['maxRA'],val['minDec'],val['maxDec'])
+            polyb = areap(val['minRA'], val['maxRA'],
+                          val['minDec'], val['maxDec'])
             pfb = PolygonPatch(polyb, facecolor=(0, 0, 0, 0), edgecolor='red')
             ax.add_patch(pfb)
-        
-        #plt.show()
+
+        # plt.show()
 
 
 def proj_gnomonic_plane(lamb0, phi1, lamb, phi):
@@ -661,7 +669,7 @@ def proj_gnomonic_plane(lamb0, phi1, lamb, phi):
     x,y: coordinates of the projected point
 
     """
-    
+
     cosc = np.sin(phi1)*np.sin(phi)
     cosc += np.cos(phi1)*np.cos(phi)*np.cos(lamb-lamb0)
 
@@ -677,7 +685,6 @@ def proj_gnomonic_plane(lamb0, phi1, lamb, phi):
 
 
 def proj_gnomonic_sphere(lamb0, phi, x, y):
-
     """
     Method to perform a gnomonic projection
     on a sphere of points of a plane.
@@ -748,7 +755,7 @@ def renameFields(tab):
 def fillCorresp(tab, corres, vara, varb):
     """
     Method to fill a dict used to change colnams of a nupy array
-    
+
     Parameters
     --------------
     tab: array
@@ -766,7 +773,7 @@ def fillCorresp(tab, corres, vara, varb):
       correspondence vara<-> varb
 
     """
-    
+
     if vara in tab.dtype.names and varb not in tab.dtype.names:
         corres[vara] = varb
 
@@ -793,7 +800,7 @@ def pixelate(data, nside, RACol='RA', DecCol='Dec'):
     ebv: E(B-V)
 
     """
-    
+
     res = data.copy()
     npix = hp.nside2npix(nside)
     table = hp.ang2vec(res[RACol], res[DecCol], lonlat=True)
@@ -846,7 +853,7 @@ def season(obs, season_gap=80., mjdCol='observationStartMJD'):
 
     flag = np.argwhere(diff > season_gap)
     if len(flag) > 0:
-        seas = np.zeros((len(obs),),dtype=int)
+        seas = np.zeros((len(obs),), dtype=int)
         flag += 1
         seas[0:flag[0][0]] = 1
         for iflag in range(len(flag)-1):
@@ -882,7 +889,6 @@ def LSSTPointing(xc, yc, angle_rot=0., area=None, maxbound=None):
 
     """
 
-    
     """
     arr = [[3, 0], [12, 0], [12, 1], [13, 1], [13, 2], [14, 2], [14, 3], [15, 3],
            [15, 12], [14, 12], [14, 13], [13, 13], [
@@ -919,12 +925,13 @@ def LSSTPointing(xc, yc, angle_rot=0., area=None, maxbound=None):
         poly_orig = affinity.scale(poly_orig, xfact=np.sqrt(
             area/poly_orig.area), yfact=np.sqrt(area/poly_orig.area))
 
-    #set rotation angle
+    # set rotation angle
     rotated_poly = affinity.rotate(poly_orig, angle_rot)
 
     return affinity.translate(rotated_poly,
                               xoff=xc-rotated_poly.centroid.x,
                               yoff=yc-rotated_poly.centroid.y)
+
 
 def LSSTPointing_circular(xc, yc, angle_rot=0., area=None, maxbound=None):
     """
@@ -952,22 +959,22 @@ def LSSTPointing_circular(xc, yc, angle_rot=0., area=None, maxbound=None):
     #
     arr = []
 
-    for x in np.arange(0.,1.001,0.001):
+    for x in np.arange(0., 1.001, 0.001):
         y = np.sqrt(1.-x*x)
-        arr.append([x,y])
+        arr.append([x, y])
 
     # symmetry I: y -> -y
     arrcp = list(arr)
     for val in arr[::-1]:
         if val[1] >= 0.:
             arrcp.append([val[0], -val[1]])
-    
+
     # symmetry II: x -> -x
     arr = list(arrcp)
     for val in arrcp[::-1]:
         if val[0] > 0.:
             arr.append([-val[0], val[1]])
-            
+
     # build polygon
     poly_orig = geometry.Polygon(arr)
 
@@ -976,15 +983,16 @@ def LSSTPointing_circular(xc, yc, angle_rot=0., area=None, maxbound=None):
         poly_orig = affinity.scale(poly_orig, xfact=np.sqrt(
             area/poly_orig.area), yfact=np.sqrt(area/poly_orig.area))
 
-    #set rotation angle
+    # set rotation angle
     rotated_poly = affinity.rotate(poly_orig, angle_rot)
 
     return affinity.translate(rotated_poly,
                               xoff=xc-rotated_poly.centroid.x,
                               yoff=yc-rotated_poly.centroid.y)
 
+
 class DataToPixels:
-    def __init__(self, nside, RACol, DecCol,num, outDir, dbName,
+    def __init__(self, nside, RACol, DecCol, num, outDir, dbName,
                  obsIdCol='observationId'):
         """
         class to match observations to sky pixels
@@ -1032,7 +1040,7 @@ class DataToPixels:
         #    theta -= np.pi/2.
         #print('theta', theta, np.rad2deg(theta))
         self.fpscale = np.tan(theta)
-        
+
     def __call__(self, data, RA, Dec, widthRA, widthDec, ipoint, nodither=False, display=False):
         """
         call method: this is where the processing is.
@@ -1063,39 +1071,39 @@ class DataToPixels:
           array with matched healpix infos and obs infos
 
         """
-        
+
         # display: (RA,Dec) distribution of the data
         if display:
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots()
             ax.plot(data[self.RACol], data[self.DecCol], 'ko')
             plt.show()
-        
+
         # select data inside an area centered in (RA,Dec) with width (widthRA+1,widthDec+1)
 
         #print('searching data inside',RA,Dec,widthRA,widthDec)
         dataSel = DataInside(data, RA, Dec, widthRA+1., widthDec+1.,
                              RACol=self.RACol, DecCol=self.DecCol)
-        
+
         # display: (RA,Dec) distribution of the selected data (ie inside the area)
-        #if display:
+        # if display:
         #    dataSel.plot()
-        
+
         self.observations = None
 
         #print('there man',len(dataSel.data))
-        if len(dataSel.data)==0:
+        if len(dataSel.data) == 0:
             return None
-        
+
         # mv to panda df
         dataset = pd.DataFrame(np.copy(dataSel.data))
-            
+
         # Possible to remove DD dithering here
         # This is usually to test impact of dithering on DDF
         if nodither:
             dataset[self.RACol] = np.mean(dataset[self.RACol])
             dataset[self.DecCol] = np.mean(dataset[self.DecCol])
-                
+
         self.observations = dataset
 
         # get central pixel ID
@@ -1108,9 +1116,9 @@ class DataToPixels:
             self.nside, vec, 3.*np.deg2rad(widthRA), inclusive=False, nest=True)
 
         # get pixel coordinates
-        coords = hp.pix2ang(self.nside, self.healpixIDs, nest=True, lonlat=True)
+        coords = hp.pix2ang(self.nside, self.healpixIDs,
+                            nest=True, lonlat=True)
         self.pixRA, self.pixDec = coords[0], coords[1]
-
 
         # display (RA,Dec) of pixels
         if display:
@@ -1132,9 +1140,9 @@ class DataToPixels:
 
         print('after matching', time.time()-time_ref,
               len(matched_pixels['healpixID'].unique()))
-            
+
         return matched_pixels
-            
+
     def match(self, grp, healpixIDs, pixRA, pixDec):
         """
         Method to match a set of pixels to a grp of observations
@@ -1158,7 +1166,6 @@ class DataToPixels:
 
         """
 
-        
         # print('hello', grp.columns)
         pixRA_rad = np.deg2rad(pixRA)
         pixDec_rad = np.deg2rad(pixDec)
@@ -1177,7 +1184,7 @@ class DataToPixels:
         #pnew = LSSTPointing(0., 0., area=np.pi*self.fpscale**2)
         fpnew = LSSTPointing(0., 0., maxbound=self.fpscale)
         #fpnew = LSSTPointing(np.deg2rad(self.LSST_RA-pRA),np.deg2rad(self.LSST_Dec-pDec),area=np.pi*self.fpscale**2)
-        #maxbound=self.fpscale)
+        # maxbound=self.fpscale)
 
         """
         import matplotlib.pyplot as plt
@@ -1199,8 +1206,8 @@ class DataToPixels:
         #names = [grp.name]*len(pixID_matched)
         df_pix = pd.DataFrame({'healpixID': pixID_matched,
                                'pixRA': pixRA_matched,
-                               'pixDec': pixDec_matched,})
-                               #'groupName': names})
+                               'pixDec': pixDec_matched, })
+        # 'groupName': names})
 
         return df_pix
         """
@@ -1217,36 +1224,38 @@ class DataToPixels:
         df_pix.loc[:, 'index'] = arr_index
         
         return df_pix
-        """ 
+        """
+
     def plot(self, pixels):
         """
          Method to plot matching results
          For each observation, the LSST FP is drawn as well as the center of matched pixels
-        
+
          """
-        
+
         import matplotlib.pyplot as plt
-        print(np.unique(pixels[[self.RACol,self.DecCol]],axis=0))
-        for vv in np.unique(pixels[[self.RACol,self.DecCol]],axis=0):
+        print(np.unique(pixels[[self.RACol, self.DecCol]], axis=0))
+        for vv in np.unique(pixels[[self.RACol, self.DecCol]], axis=0):
             fig, ax = plt.subplots()
             # plot all the pixels candidate for matching
-            ax.plot(self.pixRA, self.pixDec,'ko', mfc='None')
-            fpnew = LSSTPointing(vv[0],vv[1], area=9.6)
+            ax.plot(self.pixRA, self.pixDec, 'ko', mfc='None')
+            fpnew = LSSTPointing(vv[0], vv[1], area=9.6)
             pf = PolygonPatch(fpnew, facecolor=(0, 0, 0, 0), edgecolor='red')
             ax.add_patch(pf)
-            #compare with a circular FP
-            fpnew_c = LSSTPointing_circular(vv[0],vv[1], area=9.6)
-            pfc = PolygonPatch(fpnew_c, facecolor=(0, 0, 0, 0), edgecolor='red')
+            # compare with a circular FP
+            fpnew_c = LSSTPointing_circular(vv[0], vv[1], area=9.6)
+            pfc = PolygonPatch(fpnew_c, facecolor=(
+                0, 0, 0, 0), edgecolor='red')
             ax.add_patch(pfc)
-            idf = np.abs(pixels[self.RACol]-vv[0])<1.e-5
-            idf &= np.abs(pixels[self.DecCol]-vv[1])<1.e-5
-            ax.plot(pixels[idf]['pixRA'],pixels[idf]['pixDec'],'r*')
-            
+            idf = np.abs(pixels[self.RACol]-vv[0]) < 1.e-5
+            idf &= np.abs(pixels[self.DecCol]-vv[1]) < 1.e-5
+            ax.plot(pixels[idf]['pixRA'], pixels[idf]['pixDec'], 'r*')
+
             plt.show()
 
 
 class ProcessPixels:
-    def __init__(self, metricList,ipoint,outDir='',dbName='',RACol='fieldRA', DecCol='fieldDec', saveData=False):
+    def __init__(self, metricList, ipoint, outDir='', dbName='', RACol='fieldRA', DecCol='fieldDec', saveData=False):
         """
         class to process metrics on a set of data corresponding to pixels
 
@@ -1268,7 +1277,7 @@ class ProcessPixels:
          to save the data (or not) (default: False)
 
         """
-        
+
         self.metricList = metricList
         self.RACol = RACol
         self.DecCol = DecCol
@@ -1276,26 +1285,25 @@ class ProcessPixels:
         self.outDir = outDir
         self.dbName = dbName
         self.num = ipoint
-        
+
         # data will be save so clean the output directory first
         if self.saveData:
             self.clean()
-
 
     def clean(self):
         """
         Method to clean potential existing output files
 
         """
-        
+
         for metric in self.metricList:
-            listf = glob.glob('{}/*_{}_{}*'.format(self.outDir, metric.name, self.num))
+            listf = glob.glob(
+                '{}/*_{}_{}*'.format(self.outDir, metric.name, self.num))
             if len(listf) > 0:
                 for val in listf:
                     os.system('rm {}'.format(val))
-            
-        
-    def __call__(self, pixels,observations,ip):
+
+    def __call__(self, pixels, observations, ip):
         """
         Main processing here
 
@@ -1313,40 +1321,41 @@ class ProcessPixels:
         # metric results are stored in a dict
         self.resfi = {}
         for metric in self.metricList:
-            self.resfi[metric.name] = None
+            self.resfi[metric.name] = pd.DataFrame()
 
         data = pd.DataFrame(observations)
-        
+
         # run the metrics on those pixels
-        ipix = -1 # counter to estimate when to dump
-        isave = -1 # counter to estimate how many dumps
-        print('number of pixels',len(pixels),len(pixels['healpixID'].unique()))
-        for ipixel,vv in enumerate(pixels['healpixID'].unique()):
+        ipix = -1  # counter to estimate when to dump
+        isave = -1  # counter to estimate how many dumps
+        print('number of pixels', len(pixels),
+              len(pixels['healpixID'].unique()))
+        for ipixel, vv in enumerate(pixels['healpixID'].unique()):
             #print('processing pixel',ipixel,vv)
             #time_ref = time.time()
             ipix += 1
             idf = pixels['healpixID'] == vv
             selpix = pixels[idf]
-            dataPixels = self.getData(data,selpix)
+            dataPixels = self.getData(data, selpix)
             #print('got datapixels',time.time()-time_ref,selpix)
             #dataPixels = data.iloc[selpix['index'].tolist()].copy()
-            
-            for val in ['healpixID','pixRA','pixDec']:
+
+            for val in ['healpixID', 'pixRA', 'pixDec']:
                 dataPixels[val] = selpix[val].unique().tolist()*len(dataPixels)
             #time_ref = time.time()
             self.runMetrics(dataPixels)
             #print('pixel processed',time.time()-time_ref)
-            if self.saveData and ipix >=20:
+            if self.saveData and ipix >= 2:
                 isave += 1
-                self.dump(ip,isave)
+                self.dump(ip, isave)
                 ipix = -1
 
         if ipix >= 0 and self.saveData:
             isave += 1
-            self.dump(ip,isave)
+            self.dump(ip, isave)
             ipix = -1
-            
-    def getData(self,data,selpix):
+
+    def getData(self, data, selpix):
         """
         Method to select data from a list
 
@@ -1378,6 +1387,7 @@ class ProcessPixels:
             dataPixel = pd.concat((dataPixel,data[idfb]),sort=False)
         return dataPixel
         """
+
     def runMetrics(self, dataPixel):
         """
         Method to run the metrics on the data
@@ -1388,25 +1398,22 @@ class ProcessPixels:
           set of data used as input to the metric
 
         """
-        
+
         resdict = {}
         # run the metrics on these data
-        if len(dataPixel)<=5:
+        if len(dataPixel) <= 5:
             return
         for metric in self.metricList:
-            resdict[metric.name] = metric.run(season(dataPixel.to_records(index=False)))
-            #print('running',len(resdict[metric.name]))
+            resdict[metric.name] = metric.run(
+                season(dataPixel.to_records(index=False)))
+            # print('running',len(resdict[metric.name]))
 
         # concatenate the results
         for key in self.resfi.keys():
-            if resdict[key] is not None and resdict[key].size > 0:
-                if self.resfi[key] is None:
-                    self.resfi[key] = resdict[key]
-                else:
-                    #print('here pal',type(resdict[key]),type(resfi[key]))
-                    self.resfi[key] = np.concatenate((self.resfi[key], resdict[key]))
+            if resdict[key] is not None:
+                self.resfi[key] = pd.concat((self.resfi[key], resdict[key]))
 
-    def dump(self,ipoint,isave):
+    def dump(self, ipoint, isave):
         """
         Method to dump results in hdf5 file
 
@@ -1421,17 +1428,16 @@ class ProcessPixels:
 
         for key, vals in self.resfi.items():
             outName = '{}/{}_{}_{}.hdf5'.format(self.outDir,
-                                                 self.dbName, key, self.num)
+                                                self.dbName, key, self.num)
             if vals is not None:
-                df = pd.DataFrame.from_records(vals)
-                tab = Table.from_pandas(df)
+                # transform to astropy table to dump in hdf5 file
+                tab = Table.from_pandas(vals)
                 keyhdf = 'metric_{}_{}_{}'.format(self.num, ipoint, isave)
-                #print('dumping',keyhdf)
                 tab.write(outName, keyhdf, append=True, compression=True)
 
-        #reset the metric after dumping
+        # reset the metric after dumping
         for metric in self.metricList:
-            self.resfi[metric.name] = None
+            self.resfi[metric.name] = pd.DataFrame()
 
 
 class ProcessArea:
@@ -1513,7 +1519,6 @@ class ProcessArea:
             resfi[metric.name] = None
         # select data inside the area
 
-       
         # display: (RA,Dec) distribution of the data
         if display:
             import matplotlib.pyplot as plt
@@ -1521,13 +1526,12 @@ class ProcessArea:
             ax.plot(data[self.RACol], data[self.DecCol], 'ko')
             plt.show()
 
-        
         # select data inside an area centered in (RA,Dec) with width (widthRA+1,widthDec+1)
         dataSel = DataInside(data, RA, Dec, widthRA+1., widthDec+1.,
                              RACol=self.RACol, DecCol=self.DecCol)
-        
+
         # display: (RA,Dec) distribution of the selected data (ie inside the area)
-        #if display:
+        # if display:
         #    dataSel.plot()
         # Possible to remove DD dithering here
         # This is usually to test impact of dithering on DDF
@@ -1552,7 +1556,6 @@ class ProcessArea:
             # get pixel coordinates
             coords = hp.pix2ang(self.nside, healpixIDs, nest=True, lonlat=True)
             pixRA, pixDec = coords[0], coords[1]
-
 
             # display (RA,Dec) of pixels
             if display:
@@ -1599,7 +1602,7 @@ class ProcessArea:
                 ipix += 1
 
                 dataPixel = dataset.iloc[thematch['index'].tolist()].copy()
-                
+
                 pixRA = thematch['pixRA'].unique()
                 pixDec = thematch['pixDec'].unique()
 
@@ -1710,7 +1713,7 @@ class ProcessArea:
         tab = Table.from_pandas(df)
         keyhdf = 'metric_{}_{}_{}'.format(self.num, ipoint, isave)
         tab.write(outName, keyhdf, append=True, compression=True)
-   
+
     def match(self, grp, healpixIDs, pixRA, pixDec, name=None, ax=None):
 
         # print('hello', grp.columns)
@@ -1726,7 +1729,7 @@ class ProcessArea:
         # gnomonic projection of pixels on the focal plane
         #x, y = proj_gnomonic_plane(pRA_rad, pDec_rad, pixRA_rad, pixDec_rad)
         x, y = proj_gnomonic_plane(pDec_rad, pRA_rad, pixDec_rad, pixRA_rad)
-        
+
         #print('after gnomonic')
         #print(x, y)
         # get LSST FP with the good scale
