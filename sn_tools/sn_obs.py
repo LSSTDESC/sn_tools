@@ -1344,8 +1344,8 @@ class ProcessPixels:
                 dataPixels[val] = selpix[val].unique().tolist()*len(dataPixels)
             #time_ref = time.time()
             self.runMetrics(dataPixels)
-            #print('pixel processed',time.time()-time_ref)
-            if self.saveData and ipix >= 2:
+            #print('pixel processed',ipixel,time.time()-time_ref)
+            if self.saveData and ipix >= 20:
                 isave += 1
                 self.dump(ip, isave)
                 ipix = -1
