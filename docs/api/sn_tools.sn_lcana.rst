@@ -1,7 +1,7 @@
-sn\_tools.sn\_utils module
+sn\_tools.sn\_lcana module
 ==========================
 
-.. automodule:: sn_tools.sn_utils
+.. automodule:: sn_tools.sn_lcana
    :members:
    :undoc-members:
    :show-inheritance:

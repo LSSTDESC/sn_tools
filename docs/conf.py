@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 #
 # sn_tools documentation build configuration file, created by
-# sphinx-quickstart on Tue Mar 26 16:22:40 2019.
+# sphinx-quickstart on Wed Mar 25 09:44:45 2020.
 #
 # This file is execfile()d with the current directory set to its
 # containing dir.
@@ -17,7 +17,6 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
-
 import os
 import sys
 sys.path.insert(0, os.path.abspath('../sn_tools'))
@@ -32,7 +31,6 @@ sys.path.insert(0, os.path.abspath('../sn_tools'))
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-
 extensions = [
     'sphinx.ext.autosummary',
     'sphinx.ext.mathjax',
@@ -52,8 +50,8 @@ master_doc = 'index'
 
 # General information about the project.
 project = 'sn_tools'
-copyright = '2019, Philippe Gris'
-author = 'Philippe Gris'
+copyright = '2020, Ph.Gris'
+author = 'Ph.Gris'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -145,7 +143,7 @@ latex_elements = {
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
     (master_doc, 'sn_tools.tex', 'sn\\_tools Documentation',
-     'Philippe Gris', 'manual'),
+     'Ph.Gris', 'manual'),
 ]
 
 
