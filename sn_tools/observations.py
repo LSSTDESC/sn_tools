@@ -3,12 +3,14 @@ import numpy as np
 
 class Observations:
     """ class Observations
-    Input
-    ---------
+
+    Parameters
+    ---------------
     File (txt) with a list of observations
     (dumped from OpSim output for instance)
+
     Returns
-    ---------
+    -----------
     seasons: the list of seasons with observations
 
 
@@ -90,10 +92,12 @@ class Observations:
 
     def Load(self, filename):
         """ Load txt file of observations
-         Input
-        ---------
+
+         Parameters
+        ----------------
         File (txt) with a list of observations
         (dumped from OpSim output for instance)
+
         Returns
         ---------
         recordarray of observations

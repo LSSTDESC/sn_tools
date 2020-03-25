@@ -14,22 +14,17 @@ class SN_Rate:
     Available rates: Ripoche, Perrett, Dilday
 
     Parameters
-    -------------
+    ---------------
     rate :  str,opt
-      type of rate chosen (Ripoche, Perrett, Dilday)
-      Default : Ripoche
+      type of rate chosen (Ripoche, Perrett, Dilday) (default : Perrett)
     H0 : float, opt
-       Hubble constant value
-       Default : 70.
+       Hubble constant value :math:`H_{0}`(default : 70.)
     Om0 : float, opt
-        $\Omega_{0}$ value
-        Default : 0.25
+        matter density value :math:`\Omega_{0}`  (default : 0.25)
     min_rf_phase : float, opt
-       min rest-frame phase
-       Default : -15.
+       min rest-frame phase (default : -15.)
     max_rf_phase : float, opt
-       max rest-frame phase
-       Default : 20.
+       max rest-frame phase (default : 30.)
     """
 
     def __init__(self, rate='Perrett', H0=70, Om0=0.25,
@@ -45,35 +40,29 @@ class SN_Rate:
                  bins=None, account_for_edges=False,
                  duration=140., duration_z=None):
         """
+        call method
+
         Parameters
-        --------------
+        ----------------
         zmin : float, opt
-          minimal redshift
-          Default : 0.1
+          minimal redshift (default : 0.1)
         zmax : float,opt
-           max redshift
-           Default : 0.2
+           max redshift (default : 0.2)
         dz : float, opt
-           redshift bin
-           Default : 0.001
+           redshift bin (default : 0.001)
         survey_area : float, opt
-           area of the survey (deg$^{2}$)
-           Default : 9.6 deg$^{2}$
+           area of the survey (:math:`deg^{2}`) (default : 9.6 :math:`deg^{2}`)
         bins : list(float), opt
-          redshift bins
-          Default : None
+          redshift bins (default : None)
         account_for_edges : bool
-          to account for season edges. If true, duration of the survey will be reduced by (1+z)*(maf_rf_phase-min_rf_phase)/365.25
-          Default : False
+          to account for season edges. If true, duration of the survey will be reduced by (1+z)*(maf_rf_phase-min_rf_phase)/365.25 (default : False)
         duration : float, opt
-           survey duration (in days)
-           Default : 140 days
+           survey duration (in days) (default : 140 days)
         duration_z : list(float),opt
-          survey duration (as a function of z)
-          Default : None
+          survey duration (as a function of z) (default : None)
 
         Returns
-        ---------
+        -----------
         Lists :
         zz : float
            redshift values
@@ -241,32 +230,23 @@ class SN_Rate:
         Parameters
         --------------
         zmin : float, opt
-          minimal redshift
-          Default : 0.1
+          minimal redshift (default : 0.1)
         zmax : float,opt
-           max redshift
-           Default : 0.2
+           max redshift (default : 0.2)
         dz : float, opt
-           redshift bin
-           Default : 0.001
+           redshift bin (default : 0.001)
         survey_area : float, opt
-           area of the survey (deg$^{2}$)
-           Default : 9.6 deg$^{2}$
+           area of the survey (:math:`deg^{2}`) (default : 9.6 :math:`deg^{2}`)
         bins : list(float), opt
-          redshift bins
-          Default : None
+          redshift bins (default : None)
         account_for_edges : bool
-          to account for season edges. If true, duration of the survey will be reduced by (1+z)*(maf_rf_phase-min_rf_phase)/365.25
-          Default : False
+          to account for season edges. If true, duration of the survey will be reduced by (1+z)*(maf_rf_phase-min_rf_phase)/365.25 (default : False)
         duration : float, opt
-           survey duration (in days)
-           Default : 140 days
+           survey duration (in days) (default : 140 days)
         duration_z : list(float),opt
-          survey duration (as a function of z)
-          Default : None
+          survey duration (as a function of z) (default : None)
         norm: bool, opt
-          to normalise the results
-          Default: False
+          to normalise the results (default: False)
 
         """
         import pylab as plt
@@ -274,7 +254,7 @@ class SN_Rate:
         zz, rate, err_rate, nsn, err_nsn = self.__call__(
             zmin=zmin, zmax=zmax, dz=dz, bins=bins,
             account_for_edges=account_for_edges,
-            duration=duration,survey_area=survey_area)
+            duration=duration, survey_area=survey_area)
 
         nsn_sum = np.cumsum(nsn)
 
@@ -285,4 +265,3 @@ class SN_Rate:
         plt.xlabel('z')
         plt.ylabel('N$_{SN}$ <')
         plt.grid()
-        
