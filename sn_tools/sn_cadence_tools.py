@@ -20,7 +20,7 @@ class ReferenceData:
     class to handle light curve of SN
 
     Parameters
-    -----------
+    --------------
 
     Li_files : list[str]
       names light curve reference file
@@ -39,6 +39,7 @@ class ReferenceData:
         self.fluxes = []
         self.mag_to_flux = []
 
+        # load the files
         for val in Li_files:
             self.fluxes.append(self.GetInterpFluxes(
                 self.band, np.load(val), self.z))
@@ -69,11 +70,12 @@ class ReferenceData:
         selc = np.copy(sel)
         difftime = (sel['time']-sel['DayMax'])
         selc = rf.append_fields(selc, 'deltaT', difftime)
+
         return interpolate.interp1d(selc['deltaT'], selc['flux_e'], bounds_error=False, fill_value=0.)
 
     def GetInterpmag(self, band, tab):
         """
-        magnitude (m5) to flux (e/sec) interpolator
+        Magnitude (m5) to flux (e/sec) interpolator
 
         Parameters
         ---------------
@@ -90,17 +92,19 @@ class ReferenceData:
 
         idx = tab['band'] == band
         sel = tab[idx]
+
         return interpolate.interp1d(sel['m5'], sel['flux_e'], bounds_error=False, fill_value=0.)
 
 
 class GenerateFakeObservations:
-    """ Class to generate Fake observations
+    """
+    class to generate Fake observations
 
     Parameters
-    -------------
+    ---------------
+
     config: dict
       dict of parameters
-
     list : str,opt
         Name of the columns for data generation.
         Default : 'observationStartMJD', 'fieldRA', 'fieldDec','filter','fiveSigmaDepth','visitExposureTime','numExposures','visitTime','season'
@@ -127,6 +131,7 @@ class GenerateFakeObservations:
         self.seeingEffCol = seeingEffCol
         self.seeingGeomCol = seeingGeomCol
         self.visitTime = visitTime
+
         # now make fake obs
         if not sequences:
             self.makeFake(config)
@@ -167,8 +172,6 @@ class GenerateFakeObservations:
         Single_Exposure_Time = {}
         for il, season in enumerate(config['seasons']):
             m5 = dict(zip(bands, config['m5'][season]))
-            print('hello', m5)
-            # mjd_min = config['MJD_min'] + float(season-1)*inter_season_gap
             mjd_min = config['MJD_min']+il * \
                 (config['season_length'][season]+inter_season_gap)
             mjd_max = mjd_min+config['season_length'][season]
@@ -235,12 +238,12 @@ class GenerateFakeObservations:
         """ Generate Fake observations
 
         Parameters
-        -------------
+        ---------------
         config : dict
            dict of parameters (config file)
 
         Returns
-        ---------
+        -----------
         recordarray of observations with the fields:
         MJD, RA, Dec, band,m5,Nexp, ExpTime, Season
         accessible through self.Observations
@@ -293,8 +296,10 @@ class GenerateFakeObservations:
         self.Observations = res
 
     def m5coadd(self, m5, Nvisits, Tvisit):
-        """ Coadded m5 estimation
-        use approx. m5+=1.25*log10(Nvisits*Tvisits/30.)
+        """ Coadded :math:`m_{5}` estimation
+        use approx. :math:`\Delta m_{5}=1.25*log_{10}(N_{visits}*T_{visits}/30.)
+        with : :math:`N_{visits}` : number of visits
+                    :math:`T_{visits}` : single visit exposure time
 
         Parameters
         --------------
@@ -444,9 +449,9 @@ class TemplateData(object):
         astropy table with the following infos:
         flux (float) : flux
         fluxerr (float) : flux error
-        phase (float) : phase 
+        phase (float) : phase
         snr_m5 (float) : Signal-to-Noise Ratio
-        mag (float) : magnitude 
+        mag (float) : magnitude
         magerr (float) : magnitude error
         time (float) : time (MJD) (in days)
         band (str) : band
@@ -472,7 +477,7 @@ class TemplateData(object):
         """
         fluxerr_corr = self.FluxErrCorr(
             flux, m5_obs, exptime_obs, self.gamma_ref, self.m5_ref)
-        
+
         fluxerr /= fluxerr_corr
         """
         tab = self.SelectSave(param, flux, fluxerr,
@@ -481,7 +486,8 @@ class TemplateData(object):
 
     def FluxErrCorr(self, fluxes_obs, m5_obs, exptime_obs, gamma_ref, m5_ref):
         """
-        Flux error correction (m5 values different between template file and observations)
+        Flux error correction
+        (because m5 values different between template file and observations)
 
         Parameters
         --------------
@@ -525,7 +531,7 @@ class TemplateData(object):
 
     def Srand(self, gamma, mag, m5):
         """
-        \sigma_{rand} estimation (eq. 5 in 
+        \sigma_{rand} estimation (eq. 5 in
         LSST: from science drivers to reference design and anticipated data products)
 
         .. math::
@@ -553,7 +559,7 @@ class TemplateData(object):
 
     def FisherValues(self, param, phase, fluxerr):
         """
-        Estimate Fisher elements
+        Estimate Fisher matrix elements
 
         Parameters
         --------------
@@ -624,9 +630,9 @@ class TemplateData(object):
         astropy table with the following infos:
         flux (float) : flux
         fluxerr (float) : flux error
-        phase (float) : phase 
+        phase (float) : phase
         snr_m5 (float) : Signal-to-Noise Ratio
-        mag (float) : magnitude 
+        mag (float) : magnitude
         magerr (float) : magnitude error
         time (float) : time (MJD) (in days)
         band (str) : band
@@ -709,12 +715,12 @@ class TemplateData(object):
 
 """
 class TemplateData_x1color(object):
-    
+
     # class to load template LC
-    
+
 
     def __init__(self, filenames, band):
-       
+
         self.fi = filenames
         self.refdata = self.Stack()
         self.telescope = Telescope(airmass=1.1)
@@ -801,30 +807,31 @@ class TemplateData_x1color(object):
 
 
 class AnaOS:
+    """
+    class to analyze an observing strategy
+    The idea here is to disentangle WFD and DD obs
+    so as to estimate statistics such as the total
+    number of visits or the DDF fraction.
+
+    Parameters
+    ---------------
+    dbDir: str
+     path to the location dir of the database
+    dbName: str
+     name of the dbfile to load
+    dbExtens: str
+     extension of the dbfile
+          two possibilities:
+          - dbExtens = db for scheduler files
+          - dbExtens = npy for npy files (generated from scheduler files)
+     nclusters: int
+      number of clusters to search in DD data
+    fields: pandas df
+      fields to consider for matching
+
+    """
+
     def __init__(self, dbDir, dbName, dbExtens, nclusters, fields):
-        """
-        class to analyze an observing strategy
-        The idea here is to disentangle WFD and DD obs
-        so as to estimate statistics such as the total 
-        number of visits or the DDF fraction.
-
-        Parameters
-        ----------
-        dbDir: str
-         path to the location dir of the database
-        dbName: str
-         name of the dbfile to load
-        dbExtens: str
-         extension of the dbfile
-         two possibilities:
-         - dbExtens = db for scheduler files
-         - dbExtens = npy for npy files (generated from scheduler files)
-        nclusters: int
-         number of clusters to search in DD data
-        fields: pandas df
-         fields to consider for matching
-
-        """
 
         self.dbDir = dbDir
         self.dbName = dbName
@@ -835,7 +842,10 @@ class AnaOS:
         self.stat = self.process()
 
     def process(self):
+        """
+        Method for processing
 
+        """
         df = pd.DataFrame(columns=['cadence'])
         df.loc[0] = self.dbName
 
@@ -1026,6 +1036,8 @@ def Match_DD(fields_DD, df):
 
     Parameters
     ---------------
+    fields_DD: pandas df
+      DD fields to match to data
     df: pandas df
      data (results from a metric) to match to DD fields
 
