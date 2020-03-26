@@ -9,7 +9,7 @@ from lsst.sims.photUtils import Sed, PhotometricParameters, Bandpass, Sed
 import sncosmo
 import h5py
 from scipy.interpolate import InterpolatedUnivariateSpline as Spline1d
-from scipy.interpolate import griddata,interp2d
+from scipy.interpolate import griddata, interp2d
 from sn_tools.sn_telescope import Telescope
 import pandas as pd
 from scipy.interpolate import RegularGridInterpolator
@@ -18,10 +18,10 @@ import pprint
 
 
 class MultiProc:
-    def __init__(self, toprocess,params,func,nproc):
+    def __init__(self, toprocess, params, func, nproc):
         """
         Class to perform multiprocessing
-        
+
         Parameters
         ----------------
         toprocess: pandas df
@@ -43,7 +43,7 @@ class MultiProc:
         self.func = func
 
         self.data = self.multi()
-        
+
     def multi(self):
         """
         Method to perform multiprocessing
@@ -56,11 +56,11 @@ class MultiProc:
 
         # multiprocessing parameters
         nz = len(self.toprocess)
-        t= np.linspace(0, nz-1, self.nproc+1, dtype='int')
+        t = np.linspace(0, nz-1, self.nproc+1, dtype='int')
         result_queue = multiprocessing.Queue()
 
         procs = [multiprocessing.Process(name='Subprocess-'+str(j), target=self.process,
-                                         args=(self.toprocess[t[j]:t[j+1]], self.params, j, result_queue)) 
+                                         args=(self.toprocess[t[j]:t[j+1]], self.params, j, result_queue))
                  for j in range(self.nproc)]
 
         for p in procs:
@@ -79,7 +79,7 @@ class MultiProc:
 
         # gather the results
         for key, vals in resultdict.items():
-            restot = pd.concat((restot,vals),sort=False)
+            restot = pd.concat((restot, vals), sort=False)
             """
             if restot is None:
                 restot = vals
@@ -88,7 +88,7 @@ class MultiProc:
             """
         return restot
 
-    def process(self,toproc,params,j=0,output_q=None):
+    def process(self, toproc, params, j=0, output_q=None):
         """
         Method to perform processing on toprocs
 
@@ -110,12 +110,13 @@ class MultiProc:
         for val in toproc:
             tab = self.func(val, params)
             if tab is not None:
-                metricTot = pd.concat((metricTot,tab),sort=False)
+                metricTot = pd.concat((metricTot, tab), sort=False)
 
         if output_q is not None:
             return output_q.put({j: metricTot})
         else:
             return metricTot
+
 
 class GenerateSample:
     """ Generates a sample of parameters for simulation
@@ -207,12 +208,12 @@ class GenerateSample:
             rp = self.getParameters(daymin, daymax, duration)
             if len(rp) > 0:
                 r += rp
-        print('Number of SN to simulate:', len(r))
+        #print('Number of SN to simulate:', len(r))
         # print(r)
         if len(r) > 0:
             names = ['z', 'x1', 'color', 'daymax',
                      'epsilon_x0', 'epsilon_x1', 'epsilon_color',
-                     'epsilon_daymax','min_rf_phase', 'max_rf_phase']
+                     'epsilon_daymax', 'min_rf_phase', 'max_rf_phase']
             types = ['f8']*len(names)
             #params = np.zeros(len(r), dtype=list(zip(names, types)))
             params = np.asarray(r, dtype=list(zip(names, types)))
@@ -261,13 +262,13 @@ class GenerateSample:
         # get z range
         zmin = self.params['z']['min']
         zmax = self.params['z']['max']
-        print('zmin max',zmin,zmax)
+        #print('zmin max', zmin, zmax)
         r = []
         epsilon = 1.e-8
         if self.params['z']['type'] == 'random':
             # get sn rate for this z range
-            
-            if zmin<1.e-6:
+
+            if zmin < 1.e-6:
                 zmin = 0.01
             print(zmin, zmax, duration, self.area)
             zz, rate, err_rate, nsn, err_nsn = self.sn_rate(
@@ -308,7 +309,7 @@ class GenerateSample:
                                  -1., dist_daymax,
                                  [1./len(dist_daymax)]*len(dist_daymax))
                 r.append((z, x1_color[0], x1_color[1], T0, 0.,
-                          0., 0.,0., self.min_rf_phase, self.max_rf_phase))
+                          0., 0., 0., self.min_rf_phase, self.max_rf_phase))
 
         if self.params['z']['type'] == 'uniform':
             zstep = self.params['z']['step']
@@ -316,8 +317,8 @@ class GenerateSample:
             x1_color = self.params['x1_color']['min']
 
             nz = int((zmax-zmin)/zstep)
-            
-            for z in np.linspace(zmin,zmax,nz+1):
+
+            for z in np.linspace(zmin, zmax, nz+1):
                 if z < 1.e-6:
                     z = 0.01
                 if self.params['daymax']['type'] == 'uniform':
@@ -330,7 +331,7 @@ class GenerateSample:
                     if widthWindow < 1.:
                         break
                     #T0_values = np.linspace(T0_min,T0_max,nT0+1)
-                    T0_values = np.arange(T0_min,T0_max,daystep)
+                    T0_values = np.arange(T0_min, T0_max, daystep)
                 if self.params['daymax']['type'] == 'unique':
                     T0_values = [daymin+21.*(1.+z)]
 
@@ -346,24 +347,24 @@ class GenerateSample:
                 T0_min = daymin-(1.+z)*self.min_rf_phase
                 T0_max = daymax-(1.+z)*self.max_rf_phase
                 nT0 = int((T0_max-T0_min)/daystep)
-                T0_values = np.linspace(T0_min,T0_max,nT0+1)
+                T0_values = np.linspace(T0_min, T0_max, nT0+1)
             if self.params['daymax']['type'] == 'unique':
                 T0_values = [daymin+21.*(1.+z)]
             for T0 in T0_values:
                 r.append((z, x1_color[0], x1_color[1], T0, 0.,
-                          0., 0., 0.,self.min_rf_phase, self.max_rf_phase))
+                          0., 0., 0., self.min_rf_phase, self.max_rf_phase))
         rdiff = []
         if self.params['differential_flux']:
             for rstart in r:
-                for kdiff in [4, -4, 5, -5, 6, -6, 7,-7]:
+                for kdiff in [4, -4, 5, -5, 6, -6, 7, -7]:
                     rstartc = list(rstart)
                     rstartc[np.abs(kdiff)] = epsilon*np.sign(kdiff)
                     rdiff.append(tuple(rstartc))
         if rdiff:
             r += rdiff
 
-        #print(r[:20])
-        #print(test)
+        # print(r[:20])
+        # print(test)
         return r
 
     def getVal(self, type, val, distrib, weight):
@@ -857,7 +858,7 @@ class DiffFlux:
             '/')[-1].split('.')[0].split('_')[1:])
         """
         # get metadata
-        metaFile='{}/Simu_{}.hdf5'.format(dirFiles,id_prod)
+        metaFile = '{}/Simu_{}.hdf5'.format(dirFiles, id_prod)
         metaTable = self.metaData(metaFile)
         print(metaTable.dtype, len(metaTable))
 
@@ -1016,11 +1017,12 @@ class DiffFlux:
 
         idx = True
         for par in self.snParams:
-            idx &= (tab['epsilon_{}'.format(par)] < 1.e-10)&(tab['epsilon_{}'.format(par)] >=0.)
-        
+            idx &= (tab['epsilon_{}'.format(par)] <
+                    1.e-10) & (tab['epsilon_{}'.format(par)] >= 0.)
+
         # Get the "nominal" LC with epsilon_snpar == 0.
-        lcnom = Table.read(self.lcFile, path='lc_{}'.format(tab['id_hdf5'][idx].data[0]))
-       
+        lcnom = Table.read(self.lcFile, path='lc_{}'.format(
+            tab['id_hdf5'][idx].data[0]))
 
         for i, par in enumerate(self.snParams):
             ida = tab['epsilon_{}'.format(par)] > 1.e-9
@@ -1037,7 +1039,7 @@ class DiffFlux:
 
 
 class MbCov:
-    def __init__(self, salt2Dir, paramNames=dict(zip(['x0', 'x1', 'color'], ['x0', 'x1', 'color'])),interp=True):
+    def __init__(self, salt2Dir, paramNames=dict(zip(['x0', 'x1', 'color'], ['x0', 'x1', 'color'])), interp=True):
         """ Class to estimate covariance matrix with mb
 
         Parameters
@@ -1116,26 +1118,26 @@ class MbCov:
         self.xs = np.linspace(float(wl_min_sal), float(wl_max_sal), dt)
         self.dxs = (float(wl_max_sal-wl_min_sal)/(dt-1))
 
-        self.I2 = np.sum(self.splref(self.xs)*self.xs*self.splB(self.xs)*self.dxs)
+        self.I2 = np.sum(self.splref(self.xs)*self.xs *
+                         self.splB(self.xs)*self.dxs)
 
     def genRat_int(self):
-        
-        x1 = np.arange(-3.0,3.0,0.1)
-        color = np.arange(-0.3,0.3,0.01)
-        x1_all = np.repeat(x1,len(color))
-        color_all = np.tile(color,len(x1))
+
+        x1 = np.arange(-3.0, 3.0, 0.1)
+        color = np.arange(-0.3, 0.3, 0.01)
+        x1_all = np.repeat(x1, len(color))
+        color_all = np.tile(color, len(x1))
 
         r = []
         mref = 9.907
-        for (x1v,colorv) in zip(x1_all, color_all):
-            r.append((x1v,colorv,self.ratInt(x1v,colorv),mref))
+        for (x1v, colorv) in zip(x1_all, color_all):
+            r.append((x1v, colorv, self.ratInt(x1v, colorv), mref))
 
-        tab= np.rec.fromrecords(r, names=['x1','color','ratioInt','mref'])
+        tab = np.rec.fromrecords(r, names=['x1', 'color', 'ratioInt', 'mref'])
 
-        np.save(self.ratName,tab)
-        
+        np.save(self.ratName, tab)
 
-    def ratInt(self,x1,color):
+    def ratInt(self, x1, color):
         """ Estimate a ratio of two sums requested to estimated mb
 
         Parameters
@@ -1153,9 +1155,9 @@ class MbCov:
         """
         I1 = np.sum((self.splM0(self.xs)*10**-12+x1*self.splM1(self.xs)*10**-12)*(
             10**(-0.4*self.color_law_salt2(self.xs)*color))*self.xs*self.splB(self.xs)*self.dxs)
-        
+
         return I1/self.I2
-   
+
     def mB_interp(self, x0, x1, color):
         """ Estimate mB for supernovae
 
@@ -1171,7 +1173,8 @@ class MbCov:
 
         """
 
-        rat = griddata((self.ratio_Int['x1'],self.ratio_Int['color']),self.ratio_Int['ratioInt'],(x1,color),method='cubic')
+        rat = griddata((self.ratio_Int['x1'], self.ratio_Int['color']),
+                       self.ratio_Int['ratioInt'], (x1, color), method='cubic')
         mb = -2.5*np.log10(x0*rat)+np.mean(self.ratio_Int['mref'])
 
         return mb
@@ -1191,8 +1194,8 @@ class MbCov:
 
         """
 
-
-        rat = self.ratInt(params[self.paramNames['x1']],params[self.paramNames['color']])
+        rat = self.ratInt(params[self.paramNames['x1']],
+                          params[self.paramNames['color']])
         # computation of mb
         mref = 9.907
         mb = -2.5*np.log10(params[self.paramNames['x0']]*rat)+mref
@@ -1315,7 +1318,6 @@ class MbCov:
         h_ref = 1.e-8
         Der = np.zeros(shape=(len(vparam_names), 1))
 
-       
         par_var = params.copy()
         ider = -1
         for i, key in enumerate(vparam_names):
@@ -1326,7 +1328,7 @@ class MbCov:
             par_var[key] += h
             ider += 1
             Der[ider] = (self.mB(par_var)-self.mB(params))/h
-            
+
             par_var[key] -= h
 
         Prod = np.dot(covar, Der)
@@ -1368,7 +1370,7 @@ class MbCov:
         res = {}
         h_ref = 1.e-8
         Der = np.zeros(shape=(len(vparam_names), 1))
-        
+
         rt = []
         r = []
         for i, key in enumerate(vparam_names):
@@ -1379,30 +1381,31 @@ class MbCov:
         for i, key in enumerate(vparam_names):
             rot = list(rt[0])
             h = h_ref
-            if np.abs(rot[i])<1.e-5:
+            if np.abs(rot[i]) < 1.e-5:
                 h = 1.e-10
-            rot[i]+=h
-            rot[-1]=h
+            rot[i] += h
+            rot[-1] = h
             rt.append(tuple(rot))
 
-        tabDiff = np.rec.fromrecords(rt,names=vparam_names+['h'])
-        mbVals = self.mB_interp(tabDiff[self.paramNames['x0']],tabDiff[self.paramNames['x1']],tabDiff[self.paramNames['color']])
-        tabDiff = rf.append_fields(tabDiff,'mB',mbVals)
+        tabDiff = np.rec.fromrecords(rt, names=vparam_names+['h'])
+        mbVals = self.mB_interp(
+            tabDiff[self.paramNames['x0']], tabDiff[self.paramNames['x1']], tabDiff[self.paramNames['color']])
+        tabDiff = rf.append_fields(tabDiff, 'mB', mbVals)
 
         ider = -1
-        for i,key in enumerate(vparam_names):
+        for i, key in enumerate(vparam_names):
             ider += 1
             Der[ider] = (tabDiff['mB'][i+1]-tabDiff['mB'][0])/tabDiff['h'][i+1]
-            
 
         Prod = np.dot(covar, Der)
 
         for i, key in enumerate(vparam_names):
             res['Cov_{}mb'.format(self.transNames[key])] = Prod[i, 0]
-          
+
         res['Cov_mbmb'] = np.asscalar(np.dot(Der.T, Prod))
-        res['mb_recalc'] = self.mB_interp(params[self.paramNames['x0']],params[self.paramNames['x1']],params[self.paramNames['color']]) 
-        
+        res['mb_recalc'] = self.mB_interp(
+            params[self.paramNames['x0']], params[self.paramNames['x1']], params[self.paramNames['color']])
+
         return res
     """
     def mbDeriv(self,params,vparam_names):
@@ -1504,9 +1507,10 @@ class MbCov:
             cov_int = self.mbCovar_int(params, covar, vparam_names)
             print(cov_int)
 
+
 class GetReference:
 
-    def __init__(self, lcName,gammaName,tel_par,param_Fisher=['x0', 'x1', 'color','daymax']):
+    def __init__(self, lcName, gammaName, tel_par, param_Fisher=['x0', 'x1', 'color', 'daymax']):
         """ Class to load reference data
             used for the fast SN simulator
 
@@ -1521,15 +1525,14 @@ class GetReference:
 
         """""
         # Load the file - lc reference
-        
+
         f = h5py.File(lcName, 'r')
         keys = list(f.keys())
         #lc_ref_tot = Table.read(filename, path=keys[0])
         lc_ref_tot = Table.from_pandas(pd.read_hdf(lcName))
 
-        idx = lc_ref_tot['z']>0.005
+        idx = lc_ref_tot['z'] > 0.005
         lc_ref_tot = np.copy(lc_ref_tot[idx])
-
 
         # telescope requested
         telescope = Telescope(name=tel_par['name'],
@@ -1543,7 +1546,7 @@ class GetReference:
         if not os.path.exists(gammaName):
             print('gamma file {} does not exist')
             print('will generate it - few minutes')
-            Gamma('ugrizy',telescope,gammaName)
+            Gamma('ugrizy', telescope, gammaName)
             print('end of gamma estimation')
 
         fgamma = h5py.File(gammaName, 'r')
@@ -1568,20 +1571,18 @@ class GetReference:
 
         method = 'linear'
 
-        # for each band: load data to be used for interpolation 
+        # for each band: load data to be used for interpolation
         for band in bands:
             idx = lc_ref_tot['band'] == band
             lc_sel = Table(lc_ref_tot[idx])
-            
+
             lc_sel['z'] = lc_sel['z'].data.round(decimals=4)
             lc_sel['phase'] = lc_sel['phase'].data.round(decimals=4)
 
-            
             fluxes_e_sec = telescope.mag_to_flux_e_sec(
                 mag_range, [band]*len(mag_range), [30]*len(mag_range))
             self.mag_to_flux_e_sec[band] = interpolate.interp1d(
                 mag_range, fluxes_e_sec[:, 1], fill_value=0., bounds_error=False)
-
 
             # these reference data will be used for griddata interp.
             self.lc_ref[band] = lc_sel
@@ -1591,54 +1592,52 @@ class GetReference:
             # Another interpolator, faster than griddata: regulargridinterpolator
 
             # Fluxes and errors
-            zmin, zmax, zstep, nz = self.limVals(lc_sel,'z')
-            phamin, phamax, phastep, npha= self.limVals(lc_sel,'phase')
+            zmin, zmax, zstep, nz = self.limVals(lc_sel, 'z')
+            phamin, phamax, phastep, npha = self.limVals(lc_sel, 'phase')
 
-            zstep = np.round(zstep,3)
-            phastep = np.round(phastep,3)
-            
-            zv = np.linspace(zmin,zmax,nz)
+            zstep = np.round(zstep, 3)
+            phastep = np.round(phastep, 3)
+
+            zv = np.linspace(zmin, zmax, nz)
             #zv = np.round(zv,2)
-            #print(band,zv)
-            phav = np.linspace(phamin,phamax,npha)
-            
-            
-            index = np.lexsort((lc_sel['z'],lc_sel['phase']))
-            flux = np.reshape(lc_sel[index]['flux'],(npha,nz))
-            fluxerr = np.reshape(lc_sel[index]['fluxerr'],(npha,nz))
-            
-            
-            self.flux[band] = RegularGridInterpolator((phav,zv),flux,method=method,bounds_error=False,fill_value=0.)
-            self.fluxerr[band] = RegularGridInterpolator((phav,zv),fluxerr,method=method,bounds_error=False,fill_value=0.)
+            # print(band,zv)
+            phav = np.linspace(phamin, phamax, npha)
 
+            index = np.lexsort((lc_sel['z'], lc_sel['phase']))
+            flux = np.reshape(lc_sel[index]['flux'], (npha, nz))
+            fluxerr = np.reshape(lc_sel[index]['fluxerr'], (npha, nz))
+
+            self.flux[band] = RegularGridInterpolator(
+                (phav, zv), flux, method=method, bounds_error=False, fill_value=0.)
+            self.fluxerr[band] = RegularGridInterpolator(
+                (phav, zv), fluxerr, method=method, bounds_error=False, fill_value=0.)
 
             # Flux derivatives
             self.param[band] = {}
             for par in param_Fisher:
-                valpar = np.reshape(lc_sel[index]['d{}'.format(par)],(npha,nz))
-                self.param[band][par] = RegularGridInterpolator((phav,zv),valpar,method=method,bounds_error=False,fill_value=0.)
+                valpar = np.reshape(
+                    lc_sel[index]['d{}'.format(par)], (npha, nz))
+                self.param[band][par] = RegularGridInterpolator(
+                    (phav, zv), valpar, method=method, bounds_error=False, fill_value=0.)
 
             # gamma estimator
-           
-            rec = Table.read(gammaName,path='gamma_{}'.format(band))
+
+            rec = Table.read(gammaName, path='gamma_{}'.format(band))
 
             rec['mag'] = rec['mag'].data.round(decimals=4)
             rec['exptime'] = rec['exptime'].data.round(decimals=4)
 
+            magmin, magmax, magstep, nmag = self.limVals(rec, 'mag')
+            expmin, expmax, expstep, nexp = self.limVals(rec, 'exptime')
+            mag = np.linspace(magmin, magmax, nmag)
+            exp = np.linspace(expmin, expmax, nexp)
 
-            magmin, magmax, magstep, nmag = self.limVals(rec,'mag')
-            expmin, expmax, expstep, nexp = self.limVals(rec,'exptime')
-            mag = np.linspace(magmin,magmax,nmag)
-            exp = np.linspace(expmin,expmax,nexp)
+            index = np.lexsort((np.round(rec['exptime'], 4), rec['mag']))
+            gammab = np.reshape(rec[index]['gamma'], (nmag, nexp))
+            self.gamma[band] = RegularGridInterpolator(
+                (mag, exp), gammab, method=method, bounds_error=False, fill_value=0.)
 
-            
-
-            index = np.lexsort((np.round(rec['exptime'],4),rec['mag']))
-            gammab = np.reshape(rec[index]['gamma'],(nmag,nexp))
-            self.gamma[band] = RegularGridInterpolator((mag,exp),gammab,method=method,bounds_error=False,fill_value=0.)
-
-
-    def limVals(self,lc, field):
+    def limVals(self, lc, field):
         """ Get unique values of a field in  a table
 
         Parameters
@@ -1658,23 +1657,20 @@ class GetReference:
          step value for this field (median)
         nvals: int
          number of unique values
-         
+
 
 
 
         """
-        
 
         lc.sort(field)
         vals = np.unique(lc[field].data.round(decimals=4))
-        #print(vals)
+        # print(vals)
         vmin = np.min(vals)
         vmax = np.max(vals)
-        vstep = np.median(vals[1:]-vals[:-1]) 
-    
-        return vmin,vmax,vstep,len(vals)
+        vstep = np.median(vals[1:]-vals[:-1])
 
-
+        return vmin, vmax, vstep, len(vals)
 
     def Read_Ref(self, fi, j=-1, output_q=None):
         """" Load the reference file and
@@ -1691,8 +1687,6 @@ class GetReference:
          single table = vstack of all the tables in fi.
 
         """
-        
-
 
         tab_tot = Table()
         """
@@ -1707,9 +1701,9 @@ class GetReference:
         for kk in keys:
 
             tab_b = Table.read(fi, path=kk)
-            
+
             if tab_b is not None:
-                tab_tot = vstack([tab_tot, tab_b],metadata_conflicts='silent')
+                tab_tot = vstack([tab_tot, tab_b], metadata_conflicts='silent')
                 """
                 diff = tab_b['z']-zvals_arr[:, np.newaxis]
                 #flag = np.abs(diff)<1.e-3
@@ -1782,8 +1776,9 @@ class GetReference:
 
         return tab_res
 
+
 class Gamma:
-    def __init__(self,bands,telescope, fileout):
+    def __init__(self, bands, telescope, fileout):
         """ class to estimate gamma parameters
             depending on mag and exposure time
 
@@ -1813,29 +1808,27 @@ class Gamma:
         mag (float): mag
         exptime (float): exposure time
         gamma (float): gamma estimation
-        
+
 
         """
         # mag range to consider
         mag_range = np.arange(10., 35., 0.05)
 
         # exptimes to consider
-        exptimes = np.arange(1.,900.,1.)
+        exptimes = np.arange(1., 900., 1.)
 
         # gamma estimation
-        tab = self.loopGamma(bands,mag_range,exptimes, telescope)
+        tab = self.loopGamma(bands, mag_range, exptimes, telescope)
 
-        #dump the result in a hdf5 file
+        # dump the result in a hdf5 file
 
         for band in bands:
-            idx = tab['band']==band
+            idx = tab['band'] == band
             sel = Table(tab[idx])
-            sel.write(fileout,path='gamma_{}'.format(band),
-                      append=True,compression=True)
+            sel.write(fileout, path='gamma_{}'.format(band),
+                      append=True, compression=True)
 
-
-
-    def loopGamma(self,bands,mag_range,exptimes, telescope):
+    def loopGamma(self, bands, mag_range, exptimes, telescope):
         """ Gamma parameter estimation - loop on bands
 
         Parameters
@@ -1863,11 +1856,10 @@ class Gamma:
 
         """
         result_queue = multiprocessing.Queue()
-        for i,band in enumerate(bands):
+        for i, band in enumerate(bands):
             p = multiprocessing.Process(
-                name='Subprocess-'+str(i), target=self.calcGamma, args=(band, mag_range,exptimes,telescope,i,result_queue))
+                name='Subprocess-'+str(i), target=self.calcGamma, args=(band, mag_range, exptimes, telescope, i, result_queue))
             p.start()
-            
 
         resultdict = {}
         for j in range(len(bands)):
@@ -1878,12 +1870,11 @@ class Gamma:
 
         restot = Table()
         for j in range(len(bands)):
-            restot = vstack([restot,resultdict[j]])
-                
+            restot = vstack([restot, resultdict[j]])
+
         return restot
 
-
-    def calcGamma(self,band, mag_range,exptimes,telescope, j=-1, output_q=None):
+    def calcGamma(self, band, mag_range, exptimes, telescope, j=-1, output_q=None):
         """ Gamma parameter estimation
 
         Parameters
@@ -1908,19 +1899,19 @@ class Gamma:
         mag (float): mag
         exptime (float): exposure time
         gamma (float): gamma estimation
-        
+
 
         """
 
         gamm = []
         for mag in mag_range:
             for exptime in exptimes:
-                gamm.append((band,mag,exptime,telescope.gamma(mag,band,exptime)))
+                gamm.append(
+                    (band, mag, exptime, telescope.gamma(mag, band, exptime)))
 
-        rec = Table(rows=gamm, names=['band','mag','exptime','gamma'])
-    
+        rec = Table(rows=gamm, names=['band', 'mag', 'exptime', 'gamma'])
+
         if output_q is not None:
             output_q.put({j: rec})
         else:
             return rec
-
