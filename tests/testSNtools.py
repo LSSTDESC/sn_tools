@@ -4,14 +4,27 @@ import unittest
 import lsst.utils.tests
 from sn_tools.sn_rate import SN_Rate
 from sn_tools.sn_utils import GenerateSample
-from sn_tools.sn_cadence_tools import ReferenceData, GenerateFakeObservations, TemplateData, AnaOS
+from sn_tools.sn_cadence_tools import ReferenceData, GenerateFakeObservations
+from sn_tools.sn_cadence_tools import TemplateData, AnaOS, Match_DD
 from sn_tools.sn_telescope import Telescope
 from sn_tools.sn_obs import DDFields
 import os
 from numpy.testing import assert_almost_equal, assert_equal
 import pandas as pd
+import h5py
+from astropy.table import Table, vstack
 
 m5_ref = dict(zip('ugrizy', [23.60, 24.83, 24.38, 23.92, 23.35, 22.44]))
+
+
+def getFile(dbDir, dbName, dbExtens):
+    repo_reffiles = 'https://me.lsst.eu/gris/Reference_Files/unittests'
+    # check whether the file is available; if not-> get it!
+    if not os.path.isfile('{}/{}.{}'.format(dbDir, dbName, dbExtens)):
+        path = '{}/{}.{}'.format(repo_reffiles,
+                                 dbName, dbExtens)
+        cmd = 'wget {}'.format(path)
+        os.system(cmd)
 
 
 class TestSNRate(unittest.TestCase):
@@ -249,7 +262,7 @@ class TestSNCadence(unittest.TestCase):
         fake_obs = GenerateFakeObservations(config).Observations
 
         # this is to print the reference
-        #print(fake_obs, fake_obs.dtype)
+        # print(fake_obs, fake_obs.dtype)
 
         dtype = [('observationStartMJD', '<f8'), ('fieldRA', '<f8'), ('fieldDec', '<f8'), ('filter', '<U1'),
                  ('fiveSigmaDepth', '<f8'), ('numExposures',
@@ -379,11 +392,13 @@ class TestSNCadence(unittest.TestCase):
         nclusters = 5
         fields = DDFields()
 
+        getFile(dbDir, dbName, dbExtens)
+
         stat = AnaOS(dbDir, dbName, dbExtens, nclusters,
                      fields).stat
 
         # thi is to get the reference data
-        #print(stat.values.tolist(), stat.columns)
+        # print(stat.values.tolist(), stat.columns)
 
         valrefs = ['descddf_v1.4_10yrs_twoyears', 339316, 26443, 73015, 70055, 21483, 80777, 67543, 339316, 20513, 0.05700763418179191, 967, 3838, 1930, 1480, 1920, 10378, 20513, 3730.0, 272.0, 174.0, 348.0, 688.0, 1900.0, 348.0, 2.001879929708757, 1.883274130238675, 1.353426274694172, 2791.0, 248.0, 129.0, 254.0, 504.0, 1400.0, 256.0, 3.2066746992925483, 3.0166084454850193, 1.3534620445526713, 5313.0, 224.0, 256.0,
                    512.0, 1017.0, 2796.0, 508.0, 1.424606742986726, 1.3640734093042113, 1.3297419541315458, 5145.0, 464.0, 240.0, 480.0, 960.0, 2525.0, 476.0, 1.6342188350701072, 1.5566493003965718, 1.3366864617690055, 3534.0, 272.0, 168.0, 336.0, 669.0, 1757.0, 332.0, 1.4463375323299488, 1.3777211519657158, 1.3366522961266032, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -410,6 +425,68 @@ class TestSNCadence(unittest.TestCase):
                 assert(np.isclose(stat[name], dfref[name]).all())
             else:
                 assert((stat[name] == dfref[name]).all())
+
+    def testMatch_DD(self):
+
+        # get some data
+        dbDir = '.'
+        dbName = 'descddf_v1.4_10yrs_NSNMetric_DD'
+        dbExtens = 'hdf5'
+
+        # grab the file if not already available
+        getFile(dbDir, dbName, dbExtens)
+
+        fName = '{}/{}.{}'.format(dbDir, dbName, dbExtens)
+        fFile = h5py.File(fName, 'r')
+        keys = list(fFile.keys())
+
+        data = Table()
+        for key in keys:
+            data = vstack([data, Table.read(fFile, path=key)])
+            break
+
+        # get DD fields
+        fields = DDFields()
+
+        # now perform the matching on the first 10 rows of data
+        datadf = data[:10].to_pandas()
+
+        matched = Match_DD(fields, datadf)
+
+        # this is to print reference values
+        """
+        print(type(matched))
+        print(matched.values.tolist(), matched.columns)
+        """
+
+        valrefs = [[0, 351.0, -64.1987, 45407, 1, -2.0, -0.2, 0.0, -1, -1.0, -1.0, 'SPT', 290, 349.39, -63.32, 5],
+                   [0, 351.0, -64.1987, 45407, 1, -2.0, 0.0, 0.0, -
+                       1, -1.0, -1.0, 'SPT', 290, 349.39, -63.32, 5],
+                   [0, 351.0, -64.1987, 45407, 1, -2.0, 0.2, 0.0, -
+                       1, -1.0, -1.0, 'SPT', 290, 349.39, -63.32, 5],
+                   [0, 351.0, -64.1987, 45407, 1, 0.0, -0.2, 0.0, -
+                       1, -1.0, -1.0, 'SPT', 290, 349.39, -63.32, 5],
+                   [0, 351.0, -64.1987, 45407, 1, 0.0, 0.0, 0.0, -
+                       1, -1.0, -1.0, 'SPT', 290, 349.39, -63.32, 5],
+                   [0, 351.0, -64.1987, 45407, 1, 0.0, 0.2, 0.0, -
+                       1, -1.0, -1.0, 'SPT', 290, 349.39, -63.32, 5],
+                   [0, 351.0, -64.1987, 45407, 1, 2.0, -0.2, 0.0, -
+                       1, -1.0, -1.0, 'SPT', 290, 349.39, -63.32, 5],
+                   [0, 351.0, -64.1987, 45407, 1, 2.0, 0.0, 0.0, -
+                       1, -1.0, -1.0, 'SPT', 290, 349.39, -63.32, 5],
+                   [0, 351.0, -64.1987, 45407, 1, 2.0, 0.2, 0.0, -
+                       1, -1.0, -1.0, 'SPT', 290, 349.39, -63.32, 5],
+                   [0, 351.0, -64.1987, 45407, 2, -2.0, -0.2, 0.7601352128498775, 1, 10.37962376408833, 9.0, 'SPT', 290, 349.39, -63.32, 5]]
+        cols = ['index', 'pixRA', 'pixDec', 'healpixID', 'season', 'x1', 'color',
+                'zlim', 'status', 'nsn_med', 'nsn', 'fieldname', 'fieldId', 'RA', 'Dec',
+                'fieldnum']
+
+        dataref = pd.DataFrame(valrefs, columns=cols)
+        for name in cols:
+            if name != 'fieldname':
+                assert(np.isclose(dataref[name], matched[name]).all())
+            else:
+                assert((dataref[name] == matched[name]).all())
 
 
 if __name__ == "__main__":
