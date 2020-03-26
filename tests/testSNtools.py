@@ -4,12 +4,12 @@ import unittest
 import lsst.utils.tests
 from sn_tools.sn_rate import SN_Rate
 from sn_tools.sn_utils import GenerateSample
-from sn_tools.sn_cadence_tools import ReferenceData, GenerateFakeObservations, TemplateData
+from sn_tools.sn_cadence_tools import ReferenceData, GenerateFakeObservations, TemplateData, AnaOS
 from sn_tools.sn_telescope import Telescope
+from sn_tools.sn_obs import DDFields
 import os
-from lsst.sims.photUtils import PhotometricParameters
-from lsst.sims.photUtils import Bandpass, Sed
 from numpy.testing import assert_almost_equal, assert_equal
+import pandas as pd
 
 m5_ref = dict(zip('ugrizy', [23.60, 24.83, 24.38, 23.92, 23.35, 22.44]))
 
@@ -370,6 +370,46 @@ class TestSNCadence(unittest.TestCase):
                 assert(np.isclose(simulations[name], refsimu[name]).all())
             else:
                 assert((simulations[name] == refsimu[name]).all())
+
+    def testAnaOS(self):
+
+        dbDir = '.'
+        dbName = 'descddf_v1.4_10yrs_twoyears'
+        dbExtens = 'npy'
+        nclusters = 5
+        fields = DDFields()
+
+        stat = AnaOS(dbDir, dbName, dbExtens, nclusters,
+                     fields).stat
+
+        # thi is to get the reference data
+        #print(stat.values.tolist(), stat.columns)
+
+        valrefs = ['descddf_v1.4_10yrs_twoyears', 339316, 26443, 73015, 70055, 21483, 80777, 67543, 339316, 20513, 0.05700763418179191, 967, 3838, 1930, 1480, 1920, 10378, 20513, 3730.0, 272.0, 174.0, 348.0, 688.0, 1900.0, 348.0, 2.001879929708757, 1.883274130238675, 1.353426274694172, 2791.0, 248.0, 129.0, 254.0, 504.0, 1400.0, 256.0, 3.2066746992925483, 3.0166084454850193, 1.3534620445526713, 5313.0, 224.0, 256.0,
+                   512.0, 1017.0, 2796.0, 508.0, 1.424606742986726, 1.3640734093042113, 1.3297419541315458, 5145.0, 464.0, 240.0, 480.0, 960.0, 2525.0, 476.0, 1.6342188350701072, 1.5566493003965718, 1.3366864617690055, 3534.0, 272.0, 168.0, 336.0, 669.0, 1757.0, 332.0, 1.4463375323299488, 1.3777211519657158, 1.3366522961266032, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        names = ['cadence', 'WFD', 'WFD_g', 'WFD_i', 'WFD_r', 'WFD_u', 'WFD_y', 'WFD_z',
+                 'WFD_all', 'DD', 'frac_DD', 'DD_g', 'DD_i', 'DD_r', 'DD_u', 'DD_y',
+                 'DD_z', 'DD_all', 'ELAIS', 'ELAIS_u', 'ELAIS_g', 'ELAIS_r', 'ELAIS_i',
+                 'ELAIS_z', 'ELAIS_y', 'ELAIS_area', 'ELAIS_width_RA', 'ELAIS_width_Dec',
+                 'SPT', 'SPT_u', 'SPT_g', 'SPT_r', 'SPT_i', 'SPT_z', 'SPT_y', 'SPT_area',
+                 'SPT_width_RA', 'SPT_width_Dec', 'COSMOS', 'COSMOS_u', 'COSMOS_g',
+                 'COSMOS_r', 'COSMOS_i', 'COSMOS_z', 'COSMOS_y', 'COSMOS_area',
+                 'COSMOS_width_RA', 'COSMOS_width_Dec', 'CDFS', 'CDFS_u', 'CDFS_g',
+                 'CDFS_r', 'CDFS_i', 'CDFS_z', 'CDFS_y', 'CDFS_area', 'CDFS_width_RA',
+                 'CDFS_width_Dec', 'XMM-LSS', 'XMM-LSS_u', 'XMM-LSS_g', 'XMM-LSS_r',
+                 'XMM-LSS_i', 'XMM-LSS_z', 'XMM-LSS_y', 'XMM-LSS_area',
+                 'XMM-LSS_width_RA', 'XMM-LSS_width_Dec', 'ADFS1', 'ADFS1_u', 'ADFS1_g',
+                 'ADFS1_r', 'ADFS1_i', 'ADFS1_z', 'ADFS1_y', 'ADFS1_area',
+                 'ADFS1_width_RA', 'ADFS1_width_Dec', 'ADFS2', 'ADFS2_u', 'ADFS2_g',
+                 'ADFS2_r', 'ADFS2_i', 'ADFS2_z', 'ADFS2_y', 'ADFS2_area',
+                 'ADFS2_width_RA', 'ADFS2_width_Dec']
+
+        dfref = pd.DataFrame([valrefs], columns=names)
+        for name in names:
+            if name != 'cadence':
+                assert(np.isclose(stat[name], dfref[name]).all())
+            else:
+                assert((stat[name] == dfref[name]).all())
 
 
 if __name__ == "__main__":
