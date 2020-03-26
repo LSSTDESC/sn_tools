@@ -744,6 +744,7 @@ def renameFields(tab):
 
     fillCorresp(tab, corresp, 'mjd', 'observationStartMJD')
     fillCorresp(tab, corresp, 'RA', 'fieldRA')
+    fillCorresp(tab, corresp, 'Ra', 'fieldRA')
     fillCorresp(tab, corresp, 'Dec', 'fieldDec')
     fillCorresp(tab, corresp, 'band', 'filter')
     fillCorresp(tab, corresp, 'exptime', 'visitExposureTime')
@@ -2497,7 +2498,8 @@ def getFields_fromId(observations, fieldIds):
     return obs
 
 
-def getFields(observations, fieldType='WFD', fieldIds=None, nside=64):
+def getFields(observations, fieldType='WFD', fieldIds=None,
+              nside=64, RACol='fieldRA', DecCol='fieldDec'):
 
     print(observations.dtype)
 
@@ -2537,7 +2539,7 @@ def getFields(observations, fieldType='WFD', fieldIds=None, nside=64):
                         obser = getFields_fromId(observations, fieldIds)
                     else:
                         obser = getFields_fromId(observations, [0])
-                    return pixelate(obser, nside, RACol='fieldRA', DecCol='fieldDec')
+                    return pixelate(obser, nside, RACol=RACol, DecCol=DecCol)
 
                 else:
                     """
@@ -2546,14 +2548,14 @@ def getFields(observations, fieldType='WFD', fieldIds=None, nside=64):
                     DD except by selecting pixels with a large number of visits
                     """
                     pixels = pixelate(observations, nside,
-                                      RACol='fieldRA', DecCol='fieldDec')
+                                      RACol=RACol, DecCol=DecCol)
 
                     df = pd.DataFrame(np.copy(pixels))
 
                     groups = df.groupby('healpixID').filter(
                         lambda x: len(x) > 5000)
 
-                    group_DD = groups.groupby(['fieldRA', 'fieldDec']).filter(
+                    group_DD = groups.groupby([RACol, DecCol]).filter(
                         lambda x: len(x) > 4000)
 
                     # return np.array(group_DD.to_records().view(type=np.matrix))

@@ -828,16 +828,23 @@ class AnaOS:
       number of clusters to search in DD data
     fields: pandas df
       fields to consider for matching
+    RACol: str,opt
+      RA colname
+    DecCol: str,opt
+      Dec colname
 
     """
 
-    def __init__(self, dbDir, dbName, dbExtens, nclusters, fields):
+    def __init__(self, dbDir, dbName, dbExtens, nclusters, fields,
+                 RACol='fieldRA', DecCol='fieldDec'):
 
         self.dbDir = dbDir
         self.dbName = dbName
         self.dbExtens = dbExtens
         self.nclusters = nclusters
         self.fields = fields
+        self.RACol = RACol
+        self.DecCol = DecCol
 
         self.stat = self.process()
 
@@ -853,7 +860,8 @@ class AnaOS:
         observations = self.load_obs()
 
         # WDF obs
-        obs_WFD = getFields(observations, 'WFD')
+        obs_WFD = getFields(observations, 'WFD',
+                            RACol=self.RACol, DecCol=self.DecCol)
         df['WFD'] = len(obs_WFD)
         df_bands = pd.DataFrame(obs_WFD).groupby(
             ['filter']).size().to_frame('count').reset_index()
@@ -864,7 +872,8 @@ class AnaOS:
         # DDF obs
         nside = 128
         fieldIds = [290, 744, 1427, 2412, 2786]
-        obs_DD = getFields(observations, 'DD', fieldIds, nside)
+        obs_DD = getFields(observations, 'DD', fieldIds, nside,
+                           RACol=self.RACol, DecCol=self.DecCol)
         df['DD'] = len(obs_DD)
 
         df['frac_DD'] = df['DD']/(df['DD']+df['WFD'])
