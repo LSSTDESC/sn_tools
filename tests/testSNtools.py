@@ -3,7 +3,8 @@ import numpy as np
 import unittest
 import lsst.utils.tests
 from sn_tools.sn_rate import SN_Rate
-from sn_tools.sn_utils import GenerateSample
+from sn_tools.sn_utils import GenerateSample, Make_Files_for_Cadence_Metric, X0_norm
+from sn_tools.sn_utils import DiffFlux, MbCov
 from sn_tools.sn_cadence_tools import ReferenceData, GenerateFakeObservations
 from sn_tools.sn_cadence_tools import TemplateData, AnaOS, Match_DD
 from sn_tools.sn_telescope import Telescope
@@ -15,16 +16,49 @@ import h5py
 from astropy.table import Table, vstack
 
 m5_ref = dict(zip('ugrizy', [23.60, 24.83, 24.38, 23.92, 23.35, 22.44]))
+repo_dir = 'https://me.lsst.eu/gris/Reference_Files'
 
 
-def getFile(dbDir, dbName, dbExtens):
-    repo_reffiles = 'https://me.lsst.eu/gris/Reference_Files/unittests'
+def getFile(dbDir, dbName, dbExtens, repofile):
+    repo_reffiles = '{}/{}'.format(repo_dir, repofile)
     # check whether the file is available; if not-> get it!
     if not os.path.isfile('{}/{}.{}'.format(dbDir, dbName, dbExtens)):
         path = '{}/{}.{}'.format(repo_reffiles,
                                  dbName, dbExtens)
         cmd = 'wget {}'.format(path)
         os.system(cmd)
+
+
+def Observations(daymin=59000, cadence=3., season_length=140.):
+    band = 'r'
+    # Define fake data
+    names = ['observationStartMJD', 'fieldRA', 'fieldDec',
+             'fiveSigmaDepth', 'visitExposureTime', 'numExposures',
+             'visitTime', 'season', 'seeingFwhmEff', 'seeingFwhmGeom']
+    types = ['f8']*len(names)
+    names += ['night']
+    types += ['i2']
+    names += ['filter']
+    types += ['O']
+
+    day0 = daymin
+    daylast = day0+season_length
+    cadence = cadence
+    dayobs = np.arange(day0, daylast, cadence)
+    npts = len(dayobs)
+    data = np.zeros(npts, dtype=list(zip(names, types)))
+    data['observationStartMJD'] = dayobs
+    # data['night'] = np.floor(data['observationStartMJD']-day0)
+    data['night'] = 10
+    data['fiveSigmaDepth'] = m5_ref[band]
+    data['visitExposureTime'] = 30.
+    data['numExposures'] = 2
+    data['visitTime'] = 2.*15.
+    data['filter'] = band
+    data['season'] = 1.
+    data['seeingFwhmEff'] = 0.8
+    data['seeingFwhmGeom'] = 0.8
+    return data
 
 
 class TestSNRate(unittest.TestCase):
@@ -122,95 +156,6 @@ class TestSNTelescope(unittest.TestCase):
 
 
 class TestSNCadence(unittest.TestCase):
-
-    def testGenerateSample(self):
-        sn_parameters = {}
-        # redshift
-        sn_parameters['z'] = {}
-        sn_parameters['z']['type'] = 'uniform'
-        sn_parameters['z']['min'] = 0.1
-        sn_parameters['z']['max'] = 0.2
-        sn_parameters['z']['step'] = 0.1
-        sn_parameters['z']['rate'] = 'Perrett'
-        # X1_Color
-        sn_parameters['x1_color'] = {}
-        sn_parameters['x1_color']['type'] = 'unique'
-        sn_parameters['x1_color']['min'] = [-2.0, 0.2]
-        sn_parameters['x1_color']['max'] = [0.2, 0.2]
-        sn_parameters['x1_color']['rate'] = 'JLA'
-        # DayMax
-        sn_parameters['daymax'] = {}
-        sn_parameters['daymax']['type'] = 'unique'
-        sn_parameters['daymax']['step'] = 1.
-        # Miscellaneous
-        sn_parameters['min_rf_phase'] = -20.   # obs min phase (rest frame)
-        sn_parameters['max_rf_phase'] = 60.  # obs max phase (rest frame)
-        sn_parameters['absmag'] = -19.0906      # peak abs mag
-        sn_parameters['band'] = 'bessellB'     # band for absmag
-        sn_parameters['magsys'] = 'vega'      # magsys for absmag
-        sn_parameters['differential_flux'] = False
-        # Cosmology
-        cosmo_parameters = {}
-        cosmo_parameters['model'] = 'w0waCDM'      # Cosmological model
-        cosmo_parameters['Omega_m'] = 0.30             # Omega_m
-        cosmo_parameters['Omega_l '] = 0.70             # Omega_l
-        cosmo_parameters['H0'] = 72.0                  # H0
-        cosmo_parameters['w0'] = -1.0                  # w0
-        cosmo_parameters['wa'] = 0.0                   # wa
-
-        # instantiate GenerateSample
-        genpar = GenerateSample(
-            sn_parameters, cosmo_parameters, mjdCol='observationStartMJD', dirFiles='../reference_files')
-
-        # get some observations
-        observations = self.Observations()
-
-        # get simulation parameters from these observations
-        params = genpar(observations)
-
-        names = ['z', 'x1', 'color', 'daymax', 'epsilon_x0', 'epsilon_x1',
-                 'epsilon_color', 'epsilon_daymax', 'min_rf_phase', 'max_rf_phase']
-
-        types = ['f8']*len(names)
-
-        # print(params.dtype.names)
-
-        params_ref = np.array([(0.1, -2., 0.2, 59023.1, 0., 0., 0., 0., -15., 30.),
-                               (0.2, -2., 0.2, 59025.2, 0., 0., 0., 0., -15., 30.)], dtype=list(zip(names, types)))
-
-        for name in params_ref.dtype.names:
-            assert(np.isclose(params[name], params_ref[name]).all())
-
-    def Observations(self, daymin=59000, cadence=3., season_length=140.):
-        band = 'r'
-        # Define fake data
-        names = ['observationStartMJD', 'fieldRA', 'fieldDec',
-                 'fiveSigmaDepth', 'visitExposureTime', 'numExposures',
-                 'visitTime', 'season', 'seeingFwhmEff', 'seeingFwhmGeom']
-        types = ['f8']*len(names)
-        names += ['night']
-        types += ['i2']
-        names += ['filter']
-        types += ['O']
-
-        day0 = daymin
-        daylast = day0+season_length
-        cadence = cadence
-        dayobs = np.arange(day0, daylast, cadence)
-        npts = len(dayobs)
-        data = np.zeros(npts, dtype=list(zip(names, types)))
-        data['observationStartMJD'] = dayobs
-        # data['night'] = np.floor(data['observationStartMJD']-day0)
-        data['night'] = 10
-        data['fiveSigmaDepth'] = m5_ref[band]
-        data['visitExposureTime'] = 30.
-        data['numExposures'] = 2
-        data['visitTime'] = 2.*15.
-        data['filter'] = band
-        data['season'] = 1.
-        data['seeingFwhmEff'] = 0.8
-        data['seeingFwhmGeom'] = 0.8
-        return data
 
     def testReferenceData(self):
         # dirfiles = os.getenv('REF_FILES')
@@ -336,8 +281,8 @@ class TestSNCadence(unittest.TestCase):
 
         daymin = 59000
         season_length = 180.
-        obs = self.Observations(daymin=daymin, cadence=10,
-                                season_length=season_length)
+        obs = Observations(daymin=daymin, cadence=10,
+                           season_length=season_length)
         T0 = daymin+season_length/2
         params = np.array([(z, T0, min_rf_phase, max_rf_phase)],
                           # (0.3, daymin+50, min_rf_phase, max_rf_phase)],
@@ -392,7 +337,7 @@ class TestSNCadence(unittest.TestCase):
         nclusters = 5
         fields = DDFields()
 
-        getFile(dbDir, dbName, dbExtens)
+        getFile(dbDir, dbName, dbExtens, 'unittests')
 
         stat = AnaOS(dbDir, dbName, dbExtens, nclusters,
                      fields).stat
@@ -434,7 +379,7 @@ class TestSNCadence(unittest.TestCase):
         dbExtens = 'hdf5'
 
         # grab the file if not already available
-        getFile(dbDir, dbName, dbExtens)
+        getFile(dbDir, dbName, dbExtens, 'unittests')
 
         fName = '{}/{}.{}'.format(dbDir, dbName, dbExtens)
         fFile = h5py.File(fName, 'r')
@@ -487,6 +432,105 @@ class TestSNCadence(unittest.TestCase):
                 assert(np.isclose(dataref[name], matched[name]).all())
             else:
                 assert((dataref[name] == matched[name]).all())
+
+
+class TestSNUtils(unittest.TestCase):
+    def testGenerateSample(self):
+        sn_parameters = {}
+        # redshift
+        sn_parameters['z'] = {}
+        sn_parameters['z']['type'] = 'uniform'
+        sn_parameters['z']['min'] = 0.1
+        sn_parameters['z']['max'] = 0.2
+        sn_parameters['z']['step'] = 0.1
+        sn_parameters['z']['rate'] = 'Perrett'
+        # X1_Color
+        sn_parameters['x1_color'] = {}
+        sn_parameters['x1_color']['type'] = 'unique'
+        sn_parameters['x1_color']['min'] = [-2.0, 0.2]
+        sn_parameters['x1_color']['max'] = [0.2, 0.2]
+        sn_parameters['x1_color']['rate'] = 'JLA'
+        # DayMax
+        sn_parameters['daymax'] = {}
+        sn_parameters['daymax']['type'] = 'unique'
+        sn_parameters['daymax']['step'] = 1.
+        # Miscellaneous
+        sn_parameters['min_rf_phase'] = -20.   # obs min phase (rest frame)
+        sn_parameters['max_rf_phase'] = 60.  # obs max phase (rest frame)
+        sn_parameters['absmag'] = -19.0906      # peak abs mag
+        sn_parameters['band'] = 'bessellB'     # band for absmag
+        sn_parameters['magsys'] = 'vega'      # magsys for absmag
+        sn_parameters['differential_flux'] = False
+        # Cosmology
+        cosmo_parameters = {}
+        cosmo_parameters['model'] = 'w0waCDM'      # Cosmological model
+        cosmo_parameters['Omega_m'] = 0.30             # Omega_m
+        cosmo_parameters['Omega_l '] = 0.70             # Omega_l
+        cosmo_parameters['H0'] = 72.0                  # H0
+        cosmo_parameters['w0'] = -1.0                  # w0
+        cosmo_parameters['wa'] = 0.0                   # wa
+
+        # instantiate GenerateSample
+        genpar = GenerateSample(
+            sn_parameters, cosmo_parameters, mjdCol='observationStartMJD', dirFiles='../reference_files')
+
+        # get some observations
+        observations = Observations()
+
+        # get simulation parameters from these observations
+        params = genpar(observations)
+
+        names = ['z', 'x1', 'color', 'daymax', 'epsilon_x0', 'epsilon_x1',
+                 'epsilon_color', 'epsilon_daymax', 'min_rf_phase', 'max_rf_phase']
+
+        types = ['f8']*len(names)
+
+        # print(params.dtype.names)
+
+        params_ref = np.array([(0.1, -2., 0.2, 59023.1, 0., 0., 0., 0., -15., 30.),
+                               (0.2, -2., 0.2, 59025.2, 0., 0., 0., 0., -15., 30.)], dtype=list(zip(names, types)))
+
+        for name in params_ref.dtype.names:
+            assert(np.isclose(params[name], params_ref[name]).all())
+
+    def testMake_Files_for_Cadence_Metric(self):
+
+        telescope = Telescope(airmass=1.2)
+        x1 = -2.0
+        color = 0.2
+        dbDir = '.'
+        fName = 'LC_{}_{}'.format(x1, color)
+        fExtens = 'hdf5'
+        simulator_name = 'SNCosmo'
+
+        getFile(dbDir, fName, fExtens, 'Templates')
+
+        proc = Make_Files_for_Cadence_Metric(
+            '{}/{}.{}'.format(dbDir, fName, fExtens), telescope, simulator_name)
+
+        assert(os.path.isfile('Mag_to_Flux_LSST_{}.npy'.format(simulator_name)))
+        assert(os.path.isfile('Li_{}_{}_{}.npy'.format(simulator_name, x1, color)))
+
+    def testX0_norm(self):
+
+        salt2Dir = '../../SALT2_Files'
+        outFile = 'X0_norm.npy'
+        #X0_norm(salt2Dir=salt2Dir, outfile=outFile)
+
+        assert(os.path.isfile(outFile))
+
+    def testDiffFlux(self):
+
+        print('Test to be implemented')
+        test_implemented = False
+        assert(test_implemented == True)
+
+    def testMbCov(self):
+
+        salt2Dir = 'SALT2_Files'
+        # MbCov(salt2Dir)
+
+    def testGetReference(self):
 
 
 if __name__ == "__main__":
