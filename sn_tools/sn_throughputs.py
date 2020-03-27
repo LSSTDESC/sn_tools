@@ -89,7 +89,7 @@ class Throughputs(object):
         self.lsst_atmos = {}
         self.lsst_atmos_aerosol = {}
         self.airmass = -1.
-        self.aerosol = params['aerosol']
+        self.aerosol_b = params['aerosol']
         self.Load_System()
         self.Load_DarkSky()
 
@@ -118,6 +118,7 @@ class Throughputs(object):
     def atmosphere(self):
         return self.lsst_atmos
 
+    @property
     def aerosol(self):
         return self.lsst_atmos_aerosol
 
@@ -185,7 +186,7 @@ class Throughputs(object):
                     atmosphere.wavelen, atmosphere.sb)
                 self.lsst_atmos[f] = Bandpass(wavelen=wavelen, sb=sb)
 
-            if self.aerosol:
+            if self.aerosol_b:
                 atmosphere_aero = Bandpass()
                 atmosphere_aero.readThroughput(os.path.join(
                     self.atmosDir, 'atmos_%d_aerosol.dat' % (self.airmass*10)))

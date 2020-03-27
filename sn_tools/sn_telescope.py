@@ -7,11 +7,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import math
 from scipy.constants import *
+from functools import wraps
 
 # decorator to access parameters of the class
 
 
 def get_val_decor(func):
+    @wraps(func)
     def func_deco(theclass, what, xlist):
         for x in xlist:
             if x not in theclass.data[what].keys():
@@ -102,7 +104,16 @@ class Telescope(Throughputs):
 
     @get_val_decor
     def get(self, what, band):
-        """Decorator to access quantities
+        """
+        Decorator to access quantities
+
+        Parameters
+        ---------------
+        what: str
+          parameter to estimate
+        band: str
+          filter
+
         """
         filter_trans = self.system[band]
         wavelen_min, wavelen_max, wavelen_step = filter_trans.getWavelenLimits(
@@ -129,7 +140,16 @@ class Telescope(Throughputs):
 
     @get_val_decor
     def get_inputs(self, what, band):
-        """decorator to access Tb, Sigmab, mag_sky
+        """
+        decorator to access Tb, Sigmab, mag_sky
+
+        Parameters
+        ---------------
+        what: str
+          parameter to estimate
+        band: str
+          filter
+
         """
         myup = self.Calc_Integ_Sed(self.darksky, self.system[band])
         self.data['Tb'][band] = self.Calc_Integ(self.atmosphere[band])
@@ -139,8 +159,17 @@ class Telescope(Throughputs):
 
     @get_val_decor
     def get_zp(self, what, band):
-        """ decorator get zero points
+        """ 
+        decorator get zero points
         formula used here are extracted from LSE-40
+
+        Parameters
+        ---------------
+        what: str
+          parameter to estimate
+        band: str
+          filter
+
         """
         photParams = PhotometricParameters(bandpass=band)
         Diameter = 2.*np.sqrt(photParams.effarea*1.e-4 /
@@ -170,7 +199,16 @@ class Telescope(Throughputs):
         self.data['counts_zp'][band] = counts/2.*photParams.exptime
 
     def return_value(self, what, band):
-        """accessor
+        """
+        accessor
+
+        Parameters
+        ---------------
+        what: str
+          parameter to estimate
+        band: str
+          filter
+
         """
         if len(band) > 1:
             return self.data[what]
@@ -196,24 +234,45 @@ class Telescope(Throughputs):
         return self.return_value('mag_sky', filtre)
 
     def Sigmab(self, filtre):
-        """Sigmab accessor
+        """
+        Sigmab accessor
+
+        Parameters
+        ----------------
+        band: str
+          filter
+
         """
         self.get_inputs('Sigmab', filtre)
         return self.return_value('Sigmab', filtre)
 
     def zp(self, filtre):
-        """zp accessor
+        """
+        zp accessor
+
+        Parameters
+        ----------------
+        band: str
+          filter
+
         """
         self.get_zp('zp', filtre)
         return self.return_value('zp', filtre)
 
     def FWHMeff(self, filtre):
-        """ FWHMeff
+        """ 
+        FWHMeff accessor
+
+        Parameters
+        ----------------
+        band: str
+          filter
         """
         return self.return_value('FWHMeff', filtre)
 
     def Calc_Integ(self, bandpass):
-        """ integration over bandpass
+        """ 
+        integration over bandpass
 
         Parameters
         --------------
@@ -235,7 +294,8 @@ class Telescope(Throughputs):
         return resu
 
     def Calc_Integ_Sed(self, sed, bandpass, wavelen=None, fnu=None):
-        """ SED integration
+        """ 
+        SED integration
 
         Parameters
         --------------
@@ -274,7 +334,8 @@ class Telescope(Throughputs):
         return nphoton * dlambda
 
     def flux_to_mag(self, flux, band, zp=None):
-        """ Flux to magnitude conversion
+        """ 
+        Flux to magnitude conversion
 
         Parameters
         --------------
@@ -298,7 +359,8 @@ class Telescope(Throughputs):
         return m
 
     def mag_to_flux(self, mag, band, zp=None):
-        """Magnitude to flux conversion
+        """
+        Magnitude to flux conversion
 
         Parameters
         --------------
@@ -320,7 +382,8 @@ class Telescope(Throughputs):
         return np.power(10., -0.4 * (mag-zp))
 
     def zero_points(self, band):
-        """Get zero points
+        """
+        Zero points estimation
 
         Parameters
         --------------
@@ -335,7 +398,8 @@ class Telescope(Throughputs):
         return np.asarray([self.zp[b] for b in band])
 
     def mag_to_flux_e_sec(self, mag, band, exptime):
-        """ Mag to flux (in photoelec/sec) conversion
+        """ 
+        Mag to flux (in photoelec/sec) conversion
 
         Parameters
         --------------
@@ -373,7 +437,8 @@ class Telescope(Throughputs):
             return np.asarray([self.mag_to_flux_e_sec(m, b, expt) for m, b, expt in zip(mag, band, exptime)])
 
     def gamma(self, mag, band, exptime):
-        """gamma parameter estimation
+        """
+        gamma parameter estimation
 
         cf eq(5) of the paper LSST : from science drivers to reference design and anticipated data products
 
