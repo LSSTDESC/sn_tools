@@ -208,14 +208,14 @@ class GenerateSample:
             rp = self.getParameters(daymin, daymax, duration)
             if len(rp) > 0:
                 r += rp
-        #print('Number of SN to simulate:', len(r))
+        # print('Number of SN to simulate:', len(r))
         # print(r)
         if len(r) > 0:
             names = ['z', 'x1', 'color', 'daymax',
                      'epsilon_x0', 'epsilon_x1', 'epsilon_color',
                      'epsilon_daymax', 'min_rf_phase', 'max_rf_phase']
             types = ['f8']*len(names)
-            #params = np.zeros(len(r), dtype=list(zip(names, types)))
+            # params = np.zeros(len(r), dtype=list(zip(names, types)))
             params = np.asarray(r, dtype=list(zip(names, types)))
             return params
         else:
@@ -262,7 +262,7 @@ class GenerateSample:
         # get z range
         zmin = self.params['z']['min']
         zmax = self.params['z']['max']
-        #print('zmin max', zmin, zmax)
+        # print('zmin max', zmin, zmax)
         r = []
         epsilon = 1.e-8
         if self.params['z']['type'] == 'random':
@@ -284,7 +284,7 @@ class GenerateSample:
 
             if N_SN < 1:
                 N_SN = 1
-                #weight_z = 1
+                # weight_z = 1
             print('nsn', N_SN)
             for j in range(N_SN):
                 z = self.getVal(self.params['z']['type'], zmin, zz, weight_z)
@@ -330,7 +330,7 @@ class GenerateSample:
                     widthWindow = T0_max-T0_min
                     if widthWindow < 1.:
                         break
-                    #T0_values = np.linspace(T0_min,T0_max,nT0+1)
+                    # T0_values = np.linspace(T0_min,T0_max,nT0+1)
                     T0_values = np.arange(T0_min, T0_max, daystep)
                 if self.params['daymax']['type'] == 'unique':
                     T0_values = [daymin+21.*(1.+z)]
@@ -403,10 +403,10 @@ class GenerateSample:
         ---------
         dict of (x1,color) rates
         keys : 'low_z' and 'high_z'
-        values (float) : recarray with X1,Color,weight_X1,weight_Color,weight 
+        values (float) : recarray with X1,Color,weight_X1,weight_Color,weight
         """
 
-        #prefix = os.getenv('SN_UTILS_DIR')+'/input/Dist_X1_Color_'+rate+'_'
+        # prefix = os.getenv('SN_UTILS_DIR')+'/input/Dist_X1_Color_'+rate+'_'
         prefix = '{}/Dist_X1_Color_{}'.format(self.dirFiles, rate)
         suffix = '.txt'
         # names=['x1','c','weight_x1','weight_c','weight_tot']
@@ -511,7 +511,7 @@ class Make_Files_for_Cadence_Metric:
 
         Returns
         ----------
-        npy file produced 
+        npy file produced
         name of the file: Li_simulator_x1_color.npy
         numpy array with the following fields:
         time : float
@@ -563,7 +563,7 @@ class Make_Files_for_Cadence_Metric:
 
 
 class X0_norm:
-    """ 
+    """
     X0 estimations
     to be used as input for SN input params
     for simulation
@@ -576,7 +576,7 @@ class X0_norm:
       model use for SN (default:'salt2-extended')
     version: str, opt
       version used (default:'1.0')
-    absmag: float, opt 
+    absmag: float, opt
       absolute mag for the supernova (default:-19.0906)
     outfile: str,opt
       name/location of the output file (default:'reference_files/X0_norm.npy')
@@ -626,7 +626,7 @@ class X0_norm:
         np.save(outfile, tab)
 
     def flux_10pc(self):
-        """ 
+        """
         Extimate flux at 10pc
         using Vega spectrum
 
@@ -640,7 +640,7 @@ class X0_norm:
         """
         name = 'STANDARD'
         band = 'B'
-        #thedir = os.getenv('SALT2_DIR')
+        # thedir = os.getenv('SALT2_DIR')
         thedir = self.salt2Dir
 
         os.environ[name] = thedir+'/Instruments/Landolt'
@@ -676,7 +676,7 @@ class X0_norm:
         self.flux_at_10pc = np.power(10., -0.4 * (self.absmag-zp))
 
     def X0_norm(self, x1, color):
-        """ 
+        """
         Extimate X0 from flux at 10pc
         using Vega spectrum
 
@@ -718,7 +718,7 @@ class X0_norm:
         return self.flux_at_10pc * 1.E-4 / e_per_sec
 
     def getMag(self, filename, name, band):
-        """ 
+        """
         Get magnitude in filename
 
         Parameters
@@ -750,7 +750,7 @@ class X0_norm:
         sfile.close()
 
     def calcInteg(self, bandpass, signal, wavelen):
-        """ 
+        """
         Estimate integral of signal
         over wavelength using bandpass
 
@@ -842,7 +842,7 @@ class X0_norm:
 
 class DiffFlux:
     def __init__(self, id_prod, dirFiles, outDir):
-        """ 
+        """
         Class to estimate flux derivatives wrt SN parameters (x0,x1,color)
 
         Parameters
@@ -957,21 +957,22 @@ class DiffFlux:
             names = vals[1]
             for lc in vals[3]:
                 lc.write(self.lcOut,'lc_{}'.format(lc.meta['index_hdf5']),compression=True,append=True)
-            
+
         res = np.rec.fromrecords(r,names=names)
         Table(res).write(self.summaryOut,'summary',compression=True)
 
 
     def procGroups(self,group, j=0, output_q=None):
-        
+
         metaTot = []
         names = []
         lclist = []
         for gr in group.groups:
-            #print(len(gr),gr[['z','x1','color','daymax','epsilon_x0','epsilon_x1','epsilon_color']])
-            #print(gr.dtype)
+            # print(len(gr),gr[['z','x1','color','daymax','epsilon_x0','epsilon_x1','epsilon_color']])
+            # print(gr.dtype)
             lsdiff = self.diffFlux(gr)
-            metaTot.append(tuple([lsdiff.meta[key] for key in lsdiff.meta.keys()]))
+            metaTot.append(tuple([lsdiff.meta[key]
+                           for key in lsdiff.meta.keys()]))
             names = lsdiff.keys()
             lclist.append(lsdiff)
 
@@ -1008,7 +1009,7 @@ class DiffFlux:
         return tabres
 
     def diffFlux(self, tab):
-        """ 
+        """
         Evaluate flux derivatives wrt SN parameters (x0, x1, color)
         using df/dp = (f(p+h)-f(p-h))/2h
 
@@ -1052,7 +1053,7 @@ class DiffFlux:
 
 class MbCov:
     def __init__(self, salt2Dir, paramNames=dict(zip(['x0', 'x1', 'color'], ['x0', 'x1', 'color'])), interp=True):
-        """ 
+        """
         Class to estimate covariance matrix with mb
 
         Parameters
@@ -1090,7 +1091,7 @@ class MbCov:
         wl_max_sal = 7000
 
         # interpolation of TB and Trest
-        #filt2 = np.genfromtxt('{}/snfit_data/Instruments/SNLS3-Landolt-model/sb-shifted.dat'.format(salt2Dir))
+        # filt2 = np.genfromtxt('{}/snfit_data/Instruments/SNLS3-Landolt-model/sb-shifted.dat'.format(salt2Dir))
         filt2 = np.genfromtxt(
             '{}/Instruments/SNLS3-Landolt-model/sb-shifted.dat'.format(salt2Dir))
         filt2 = np.genfromtxt(
@@ -1100,7 +1101,7 @@ class MbCov:
         self.splB = Spline1d(wlen, tran, k=1, ext=1)
 
         # interpolation of ref spectrum
-        #data = np.genfromtxt(thedir+'/snfit_data/MagSys/bd_17d4708_stisnic_002.ascii')
+        # data = np.genfromtxt(thedir+'/snfit_data/MagSys/bd_17d4708_stisnic_002.ascii')
         data = np.genfromtxt(
             '{}/MagSys/bd_17d4708_stisnic_002.ascii'.format(salt2Dir))
         dispersion = data[:, 0]
@@ -1139,7 +1140,7 @@ class MbCov:
 
     def genRat_int(self):
         """
-        Estimate set of ratios 
+        Estimate set of ratios
 
 
         """
@@ -1158,7 +1159,7 @@ class MbCov:
         np.save(self.ratName, tab)
 
     def ratInt(self, x1, color):
-        """ 
+        """
 
         Estimate a ratio of two sums requested to estimated mb
 
@@ -1181,13 +1182,13 @@ class MbCov:
         return I1/self.I2
 
     def mB_interp(self, x0, x1, color):
-        """ 
+        """
         Estimate mB interpolation for supernovae
 
         Parameters
         ----------------
         params: dict
-         dict of parameters: x0, x1, color 
+         dict of parameters: x0, x1, color
 
         Returns
         -----------
@@ -1203,14 +1204,14 @@ class MbCov:
         return mb
 
     def mB(self, params):
-        """ 
+        """
 
         Estimate mB for supernovae
 
         Parameters
         ---------------
         params: dict
-         dict of parameters: x0, x1, color 
+         dict of parameters: x0, x1, color
 
         Returns
         -----------
@@ -1233,7 +1234,7 @@ class MbCov:
         Parameters
         ----------
         params: dict
-         dict of parameters: x0, x1, color 
+         dict of parameters: x0, x1, color
 
         Returns
         -------
@@ -1246,7 +1247,7 @@ class MbCov:
         I1 = np.sum((self.splM0(self.xs)*10**-12+params[self.paramNames['x1']]*self.splM1(self.xs)*10**-12)*(
             10**(-0.4*self.color_law_salt2(self.xs)*params[self.paramNames['color']]))*self.xs*self.splB(self.xs)*self.dxs)
         I2 = np.sum(self.splref(self.xs)*self.xs*self.splB(self.xs)*self.dxs)
-        #print(I1, I2,params['x1'],params['c'])
+        # print(I1, I2,params['x1'],params['c'])
 
         # computation of mb
         mref = 9.907
@@ -1255,34 +1256,34 @@ class MbCov:
         return mb
     """
     def calcInteg(self, bandpass, signal,wavelen):
-        
-        
-        
+
+
+
         fa = interpolate.interp1d(bandpass.wavelen,bandpass.sb)
         fb = interpolate.interp1d(wavelen,signal)
-        
+
         min_wave=np.max([np.min(bandpass.wavelen),np.min(wavelen)])
         max_wave=np.min([np.max(bandpass.wavelen),np.max(wavelen)])
-        
-        #print 'before integrand',min_wave,max_wave
-        
+
+        # print 'before integrand',min_wave,max_wave
+
         wavelength_integration_step=5
         waves=np.arange(min_wave,max_wave,wavelength_integration_step)
-        
-        integrand=fa(waves) *fb(waves) 
-        #print 'rr',len(f2(wavelen)),len(wavelen),len(integrand)
-        
+
+        integrand=fa(waves) *fb(waves)
+        # print 'rr',len(f2(wavelen)),len(wavelen),len(integrand)
+
         range_inf=min_wave
         range_sup=max_wave
         n_steps = int((range_sup-range_inf) / wavelength_integration_step)
-        
+
 
         x = np.core.function_base.linspace(range_inf, range_sup, n_steps)
-        #print len(waves),len(x)
+        # print len(waves),len(x)
         return integrate.simps(integrand,x=waves)
 
     def Get_Mag(self,filename,name,band):
-        
+
         sfile=open(filename,'rb')
         spectrum_file='unknown'
         for line in sfile.readlines():
@@ -1364,7 +1365,7 @@ class MbCov:
             if key != 'c':
                 res['Cov_'+key.upper()+'mb']=Prod[i,0]
             else:
-               res['Cov_Colormb']=Prod[i,0] 
+               res['Cov_Colormb']=Prod[i,0]
             """
         res['Cov_mbmb'] = np.asscalar(np.dot(Der.T, Prod))
         res['mb_recalc'] = self.mB(par_var)
@@ -1434,13 +1435,13 @@ class MbCov:
         return res
     """
     def mbDeriv(self,params,vparam_names):
-        
+
         res={}
         h=1.e-6
-        #Der=np.zeros(shape=(len(vparam_names),1))
+        # Der=np.zeros(shape=(len(vparam_names),1))
         Der={}
 
-        #print params
+        # print params
         par_var=params.copy()
         ider=-1
         for i,key in enumerate(vparam_names):
@@ -1463,21 +1464,21 @@ class MbCov:
         """
         Salt2Model
         BEGIN_OF_FITPARAMS Salt2Model
-        DayMax 53690.0336018 0.105513809169 
-        Redshift 0.1178 0 F 
-        Color -0.0664131339433 0.0234330339301 
-        X0 0.00030732251016 8.89813428854e-06 
-        X1 -0.0208012409076 0.160846457522 
-        CovColorColor 0.00054910707917 -1 
-        CovColorDayMax 0.00040528682468 -1 
-        CovColorX0 -1.68238293879e-07 -1 
-        CovColorX1 0.00114702847231 -1 
-        CovDayMaxDayMax 0.0111331639253 -1 
-        CovDayMaxX0 -2.94345317778e-07 -1 
-        CovDayMaxX1 0.0131008809199 -1 
-        CovX0X0 7.91767938168e-11 -1 
-        CovX0X1 -7.23852420336e-07 -1 
-        CovX1X1 0.0258715828973 
+        DayMax 53690.0336018 0.105513809169
+        Redshift 0.1178 0 F
+        Color -0.0664131339433 0.0234330339301
+        X0 0.00030732251016 8.89813428854e-06
+        X1 -0.0208012409076 0.160846457522
+        CovColorColor 0.00054910707917 -1
+        CovColorDayMax 0.00040528682468 -1
+        CovColorX0 -1.68238293879e-07 -1
+        CovColorX1 0.00114702847231 -1
+        CovDayMaxDayMax 0.0111331639253 -1
+        CovDayMaxX0 -2.94345317778e-07 -1
+        CovDayMaxX1 0.0131008809199 -1
+        CovX0X0 7.91767938168e-11 -1
+        CovX0X1 -7.23852420336e-07 -1
+        CovX1X1 0.0258715828973
         """
 
         salt2_res = {}
@@ -1534,27 +1535,43 @@ class MbCov:
 
 
 class GetReference:
+    """
+    Class to load reference data
+    used for the fast SN simulator
+
+    Parameters
+    ----------------
+    lcName: str
+      name of the reference file to load (lc)
+    gammaName: str
+      name of the reference file to load (gamma)
+    tel_par: dict
+      telescope parameters
+    param_Fisher : list(str),opt
+      list of SN parameter for Fisher estimation to consider
+      (default: ['x0', 'x1', 'color', 'daymax'])
+
+    Returns
+    -----------
+    The following dict can be accessed:
+
+    mag_to_flux_e_sec : Interp1D of mag to flux(e.sec-1)  conversion
+    flux : dict of RegularGridInterpolator of fluxes (key: filters, (x,y)=(phase, z), result=flux)
+    fluxerr : dict of RegularGridInterpolator of flux errors (key: filters, (x,y)=(phase, z), result=fluxerr)
+    param : dict of dict of RegularGridInterpolator of flux derivatives wrt SN parameters
+                  (key: filters plus param_Fisher parameters; (x,y)=(phase, z), result=flux derivatives)
+    gamma : dict of RegularGridInterpolator of gamma values (key: filters)
+
+
+    """""
 
     def __init__(self, lcName, gammaName, tel_par, param_Fisher=['x0', 'x1', 'color', 'daymax']):
-        """ 
-        Class to load reference data
-            used for the fast SN simulator
 
-        Parameters
-        ----------------
-        lcName: str
-         name of the reference file to load (lc)
-        gammaName: str
-         name of the reference file to load (gamma)
-        tel_par: dict
-         telescope parameters
-
-        """""
         # Load the file - lc reference
 
         f = h5py.File(lcName, 'r')
         keys = list(f.keys())
-        #lc_ref_tot = Table.read(filename, path=keys[0])
+        # lc_ref_tot = Table.read(filename, path=keys[0])
         lc_ref_tot = Table.from_pandas(pd.read_hdf(lcName))
 
         idx = lc_ref_tot['z'] > 0.005
@@ -1578,10 +1595,10 @@ class GetReference:
         fgamma = h5py.File(gammaName, 'r')
 
         # Load references needed for the following
-        self.lc_ref = {}
-        self.gamma_ref = {}
+        self._lc_ref = {}
+        self._gamma_ref = {}
         self.gamma = {}
-        self.m5_ref = {}
+        self._m5_ref = {}
         self.mag_to_flux_e_sec = {}
 
         self.flux = {}
@@ -1590,10 +1607,10 @@ class GetReference:
 
         bands = np.unique(lc_ref_tot['band'])
         mag_range = np.arange(10., 38., 0.01)
-        #exptimes = np.linspace(15.,30.,2)
-        #exptimes = [15.,30.,60.,100.]
+        # exptimes = np.linspace(15.,30.,2)
+        # exptimes = [15.,30.,60.,100.]
 
-        #gammArray = self.loopGamma(bands, mag_range, exptimes,telescope)
+        # gammArray = self.loopGamma(bands, mag_range, exptimes,telescope)
 
         method = 'linear'
 
@@ -1611,9 +1628,9 @@ class GetReference:
                 mag_range, fluxes_e_sec[:, 1], fill_value=0., bounds_error=False)
 
             # these reference data will be used for griddata interp.
-            self.lc_ref[band] = lc_sel
-            self.gamma_ref[band] = lc_sel['gamma'][0]
-            self.m5_ref[band] = np.unique(lc_sel['m5'])[0]
+            self._lc_ref[band] = lc_sel
+            self._gamma_ref[band] = lc_sel['gamma'][0]
+            self._m5_ref[band] = np.unique(lc_sel['m5'])[0]
 
             # Another interpolator, faster than griddata: regulargridinterpolator
 
@@ -1625,7 +1642,7 @@ class GetReference:
             phastep = np.round(phastep, 3)
 
             zv = np.linspace(zmin, zmax, nz)
-            #zv = np.round(zv,2)
+            # zv = np.round(zv,2)
             # print(band,zv)
             phav = np.linspace(phamin, phamax, npha)
 
@@ -1732,7 +1749,7 @@ class GetReference:
                 tab_tot = vstack([tab_tot, tab_b], metadata_conflicts='silent')
                 """
                 diff = tab_b['z']-zvals_arr[:, np.newaxis]
-                #flag = np.abs(diff)<1.e-3
+                # flag = np.abs(diff)<1.e-3
                 flag_idx = np.where(np.abs(diff) < 1.e-3)
                 if len(flag_idx[1]) > 0:
                     tab_tot = vstack([tab_tot, tab_b[flag_idx[1]]])
@@ -1742,7 +1759,7 @@ class GetReference:
             print(flag,flag_idx[1])
             print('there man',tab_b[flag_idx[1]])
             mtile = np.tile(tab_b['z'],(len(zvals),1))
-            #print('mtile',mtile*flag)
+            # print('mtile',mtile*flag)
                 
             masked_array = np.ma.array(mtile,mask=~flag)
             
@@ -1753,7 +1770,7 @@ class GetReference:
         for val in zvals:
             print('hello',tab_b[['band','z','time']],'and',val)
             if np.abs(np.unique(tab_b['z'])-val)<0.01:
-            #print('loading ref',np.unique(tab_b['z']))
+            # print('loading ref',np.unique(tab_b['z']))
             tab_tot=vstack([tab_tot,tab_b])
             break
             """
@@ -1763,7 +1780,18 @@ class GetReference:
             return tab_tot
 
     def Read_Multiproc(self, tab):
+        """
+        Multiprocessing method to read references
 
+        Parameters
+        ---------------
+        tab: astropy Table of data
+
+        Returns
+        -----------
+        stacked astropy Table of data
+
+        """
         # distrib=np.unique(tab['z'])
         nlc = len(tab)
         print('ici pal', nlc)
@@ -1777,7 +1805,7 @@ class GetReference:
             batch = range(0, nlc)
 
         # lc_ref_tot={}
-        #print('there pal',batch)
+        # print('there pal',batch)
         result_queue = multiprocessing.Queue()
         for i in range(len(batch)-1):
 
@@ -1804,44 +1832,46 @@ class GetReference:
 
 
 class Gamma:
-    def __init__(self, bands, telescope, fileout):
-        """ class to estimate gamma parameters
-            depending on mag and exposure time
+    """ 
+    Class to estimate gamma parameters
+    depending on mag and exposure time
 
-        Parameters
-        -----------
-        bands: str
-         bands to process
-        telescope: Telescope
-         telescope used to estimate gamma
-        fileout: str
-         output file name (extension: hdf5)
+    Parameters
+    -----------
+    bands: str
+      bands to process
+    telescope: Telescope
+      telescope used to estimate gamma
+    fileout: str
+      output file name (extension: hdf5)
+    mag_range: numpy array, opt
+      magnitude range to consider ( default: np.arange(10., 35., 0.05))
+    exptimes: numpy array, opt
+      exposure times to consider (default: np.arange(1., 900., 1.))
 
-        Returns
-        --------
-        None
+    Returns
+    --------
+    None
 
-        Output
-        ------
-        output fileout is generated.
-        hdf5 format with the keys:
-        gamma_band1
-        gamma_band2
-        ........
-        for each key: astropy table for band b
-        with the following fields:
-        band (str): band name
-        mag (float): mag
-        exptime (float): exposure time
-        gamma (float): gamma estimation
+    Output
+    ------
+    output fileout is generated.
+    hdf5 format with the keys:
+    gamma_band1
+    gamma_band2
+    ........
+    for each key: astropy table for band b
+    with the following fields:
+    band (str): band name
+    mag (float): mag
+    exptime (float): exposure time
+    gamma (float): gamma estimation
 
+    """
 
-        """
-        # mag range to consider
-        mag_range = np.arange(10., 35., 0.05)
-
-        # exptimes to consider
-        exptimes = np.arange(1., 900., 1.)
+    def __init__(self, bands, telescope, fileout,
+                 mag_range=np.arange(10., 35., 0.05),
+                 exptimes=np.arange(1., 900., 1.)):
 
         # gamma estimation
         tab = self.loopGamma(bands, mag_range, exptimes, telescope)
@@ -1855,7 +1885,8 @@ class Gamma:
                       append=True, compression=True)
 
     def loopGamma(self, bands, mag_range, exptimes, telescope):
-        """ Gamma parameter estimation - loop on bands
+        """ 
+        gamma parameter estimation - loop on bands
 
         Parameters
         -----------
