@@ -449,25 +449,31 @@ class GenerateSample:
 
 
 class Make_Files_for_Cadence_Metric:
+    """ Class to generate two files that will be used as input for the Cadence metric
+
+    Parameters
+    ---------------
+    file_name: str
+      LC filename
+    telescope: Telescope()
+      telescope model
+    simulator_name: str
+      name of the simulator used to produce LC data.
+
+    Returns
+    -----------
+    Two npy files with:
+      - recordarray of LC: MJD, RA, Dec, band,m5,Nexp, ExpTime, Season
+      - recordarray of mag_to_flux values
+    """
 
     def __init__(self, file_name, telescope, simulator_name):
-        """ Class to generate two files that will be used as input for the Cadence metric
-
-        Parameters
-        ---------
-        LC file (filename)
-
-        Returns
-        ---------
-        recordarray of LC:
-        MJD, RA, Dec, band,m5,Nexp, ExpTime, Season
-        recordarray of mag_to_flux values
-        """
 
         self.telescope = telescope
         self.simulator_name = simulator_name
 
         self.prod_mag_to_flux()
+
         if file_name != '':
             self.prod_(file_name)
 
@@ -491,12 +497,8 @@ class Make_Files_for_Cadence_Metric:
             else:
                 mag_to_flux_tot = np.concatenate(
                     (mag_to_flux_tot, mag_to_flux))
-        # print(mag_to_flux_tot)
-        # print('done')
-        # np.save('Mag_to_Flux_'+self.simulator_name +
-        # '.npy', np.copy(mag_to_flux_tot))
-        np.save('Mag_to_Flux_LSST_sim' +
-                '.npy', np.copy(mag_to_flux_tot))
+        np.save('Mag_to_Flux_LSST_{}.npy'.format(
+            self.simulator_name), np.copy(mag_to_flux_tot))
 
     def prod_(self, filename):
         """
@@ -526,32 +528,34 @@ class Make_Files_for_Cadence_Metric:
           T0
         """
         import h5py
+
         f = h5py.File(filename, 'r')
-        # print(f.keys())
         simu = {}
         for i, key in enumerate(f.keys()):
-            # print(i)
             simu[i] = Table.read(filename, path=key)
 
         restot = None
         for key, val in simu.items():
-            # print(val.meta)
             z = val.meta['z']
             x1 = val.meta['x1']
             color = val.meta['color']
             daymax = val.meta['daymax']
-            idx = val['flux_e'] > 0.
-            sel = val[idx]
+            grab = True
+            for vv in ['x1', 'color', 'x0', 'daymax']:
+                grab &= val.meta['epsilon_{}'.format(vv)] < 1.e-12
+            if grab:
+                idx = val['flux_e_sec'] > 0.
+                sel = val[idx]
 
-            res = np.array(np.copy(sel[['time', 'band', 'flux_e', 'flux']]), dtype=[
-                ('time', '<f8'), ('band', 'U8'), ('flux_e', '<f8'), ('flux', '<f8')])
+                res = np.array(np.copy(sel[['time', 'band', 'flux_e_sec', 'flux']]), dtype=[
+                    ('time', '<f8'), ('band', 'U8'), ('flux_e', '<f8'), ('flux', '<f8')])
 
-            res = rf.append_fields(res, 'z', [z]*len(res))
-            res = rf.append_fields(res, 'DayMax', [DayMax]*len(res))
-            if restot is None:
-                restot = res
-            else:
-                restot = np.concatenate((restot, res))
+                res = rf.append_fields(res, 'z', [z]*len(res))
+                res = rf.append_fields(res, 'DayMax', [daymax]*len(res))
+                if restot is None:
+                    restot = res
+                else:
+                    restot = np.concatenate((restot, res))
 
         # print(restot)
         np.save('Li_'+self.simulator_name+'_'+str(x1) +
@@ -559,31 +563,32 @@ class Make_Files_for_Cadence_Metric:
 
 
 class X0_norm:
-    """ X0 estimations
-         to be used as input for SN input params
-         for simulation
+    """ 
+    X0 estimations
+    to be used as input for SN input params
+    for simulation
 
-        Parameters
-        ----------
-        salt2Dir: str, opt
-          directory where to find SALT2 ref. files (default:'SALT2_Files')
-        model: str, opt
-          model use for SN (default:'salt2-extended')
-        version: str, opt
-          version used (default:'1.0')
-        absmag: float, opt 
-          absolute mag for the supernova (default:-19.0906)
-        outfile: str,opt
-         name/location of the output file (default:'reference_files/X0_norm.npy')
+    Parameters
+    ---------------
+    salt2Dir: str, opt
+      directory where to find SALT2 ref. files (default:'SALT2_Files')
+    model: str, opt
+      model use for SN (default:'salt2-extended')
+    version: str, opt
+      version used (default:'1.0')
+    absmag: float, opt 
+      absolute mag for the supernova (default:-19.0906)
+    outfile: str,opt
+      name/location of the output file (default:'reference_files/X0_norm.npy')
 
-        Returns
-        --------
-        None
-        The output file contains a numpy array with the following fields:
-         x1: float, stretch
-         color: float, color
-         flux_10pc: float, flux at 10pc
-         x0_norm: float, x0 value
+    Returns
+    ----------
+    None
+    The output file contains a numpy array with the following fields:
+    x1: float, stretch
+    color: float, color
+    flux_10pc: float, flux at 10pc
+    x0_norm: float, x0 value
     """
 
     def __init__(self, salt2Dir='SALT2_Files', model='salt2-extended', version='1.0', absmag=-19.0906, outfile='reference_files/X0_norm.npy'):
@@ -621,15 +626,16 @@ class X0_norm:
         np.save(outfile, tab)
 
     def flux_10pc(self):
-        """ Extimate flux at 10pc
+        """ 
+        Extimate flux at 10pc
         using Vega spectrum
 
         Parameters
-        ----------
+        ---------------
         None
 
         Returns
-        --------
+        ----------
         None
         """
         name = 'STANDARD'
@@ -670,11 +676,12 @@ class X0_norm:
         self.flux_at_10pc = np.power(10., -0.4 * (self.absmag-zp))
 
     def X0_norm(self, x1, color):
-        """ Extimate X0 from flux at 10pc
+        """ 
+        Extimate X0 from flux at 10pc
         using Vega spectrum
 
         Parameters
-        ----------
+        ---------------
         x1: float
          stretch of the supernova
         color: float
@@ -682,7 +689,7 @@ class X0_norm:
 
 
         Returns
-        --------
+        -----------
         x0: float
           x0 from flux at 10pc
         """
@@ -711,7 +718,8 @@ class X0_norm:
         return self.flux_at_10pc * 1.E-4 / e_per_sec
 
     def getMag(self, filename, name, band):
-        """ Get magnitude in filename
+        """ 
+        Get magnitude in filename
 
         Parameters
         --------------
@@ -736,12 +744,14 @@ class X0_norm:
             if np.string_('SPECTRUM') in line:
                 spectrum_file = line.decode().split(' ')[1].strip()
             if name in line and band in line:
+                sfile.close()
                 return float(line.decode().split(' ')[2]), spectrum_file
 
         sfile.close()
 
     def calcInteg(self, bandpass, signal, wavelen):
-        """ Estimate integral of signal
+        """ 
+        Estimate integral of signal
         over wavelength using bandpass
 
         Parameters
@@ -832,10 +842,11 @@ class X0_norm:
 
 class DiffFlux:
     def __init__(self, id_prod, dirFiles, outDir):
-        """ Class to estimate flux derivatives wrt SN parameters (x0,x1,color)
+        """ 
+        Class to estimate flux derivatives wrt SN parameters (x0,x1,color)
 
         Parameters
-        ----------
+        ---------------
         id_prod: str
          production id
         dirFile: str
@@ -885,7 +896,7 @@ class DiffFlux:
         """ Process (astropy) groups
 
         Parameters
-        ----------
+        ---------------
         groups: astropy table groups
          each group is composed by a list of SN light curves
 
@@ -974,13 +985,13 @@ class DiffFlux:
         """ Get metadata
 
         Parameters
-        ----------
+        ---------------
 
         metaFile: str
          filename of the metadata
 
         Returns
-        -------
+        -----------
         tabres : astropy Table
          astropy table with metadata
 
@@ -997,16 +1008,17 @@ class DiffFlux:
         return tabres
 
     def diffFlux(self, tab):
-        """ Evaluate flux derivatives wrt SN parameters (x0, x1, color)
+        """ 
+        Evaluate flux derivatives wrt SN parameters (x0, x1, color)
         using df/dp = (f(p+h)-f(p-h))/2h
 
         Parameters
-        ----------
+        ---------------
         tab: astropy Table
          table of metadata
 
         Returns
-        -------
+        -----------
         lcnom : astropy Table
          light curve with three additional columns:
          dx0 = dflux/dx0
@@ -1040,7 +1052,8 @@ class DiffFlux:
 
 class MbCov:
     def __init__(self, salt2Dir, paramNames=dict(zip(['x0', 'x1', 'color'], ['x0', 'x1', 'color'])), interp=True):
-        """ Class to estimate covariance matrix with mb
+        """ 
+        Class to estimate covariance matrix with mb
 
         Parameters
         ----------
@@ -1067,7 +1080,10 @@ class MbCov:
             self.ratio_Int = np.load(self.ratName)
 
     def load(self, salt2Dir):
+        """
+        Load a set of SALT2 files requested for mb cov estimations
 
+        """
         # from F. Mondon 2017/10/20
         # wavelength limits for salt2 model
         wl_min_sal = 3000
@@ -1122,7 +1138,11 @@ class MbCov:
                          self.splB(self.xs)*self.dxs)
 
     def genRat_int(self):
+        """
+        Estimate set of ratios 
 
+
+        """
         x1 = np.arange(-3.0, 3.0, 0.1)
         color = np.arange(-0.3, 0.3, 0.01)
         x1_all = np.repeat(x1, len(color))
@@ -1138,17 +1158,19 @@ class MbCov:
         np.save(self.ratName, tab)
 
     def ratInt(self, x1, color):
-        """ Estimate a ratio of two sums requested to estimated mb
+        """ 
+
+        Estimate a ratio of two sums requested to estimated mb
 
         Parameters
-        ----------
+        ---------------
         x1: float
          x1 of the supernova
         color: float
          color of the supernova
 
         Returns
-        -------
+        -----------
         float
          ratio value
 
@@ -1159,15 +1181,16 @@ class MbCov:
         return I1/self.I2
 
     def mB_interp(self, x0, x1, color):
-        """ Estimate mB for supernovae
+        """ 
+        Estimate mB interpolation for supernovae
 
         Parameters
-        ----------
+        ----------------
         params: dict
          dict of parameters: x0, x1, color 
 
         Returns
-        -------
+        -----------
         mb : float
          mb value
 
@@ -1180,15 +1203,17 @@ class MbCov:
         return mb
 
     def mB(self, params):
-        """ Estimate mB for supernovae
+        """ 
+
+        Estimate mB for supernovae
 
         Parameters
-        ----------
+        ---------------
         params: dict
          dict of parameters: x0, x1, color 
 
         Returns
-        -------
+        -----------
         mb : float
          mb value
 
@@ -1511,11 +1536,12 @@ class MbCov:
 class GetReference:
 
     def __init__(self, lcName, gammaName, tel_par, param_Fisher=['x0', 'x1', 'color', 'daymax']):
-        """ Class to load reference data
+        """ 
+        Class to load reference data
             used for the fast SN simulator
 
         Parameters
-        -----------
+        ----------------
         lcName: str
          name of the reference file to load (lc)
         gammaName: str
