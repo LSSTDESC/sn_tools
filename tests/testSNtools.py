@@ -4,7 +4,7 @@ import unittest
 import lsst.utils.tests
 from sn_tools.sn_rate import SN_Rate
 from sn_tools.sn_utils import GenerateSample, Make_Files_for_Cadence_Metric, X0_norm
-from sn_tools.sn_utils import DiffFlux, MbCov
+from sn_tools.sn_utils import DiffFlux, MbCov, GetReference, Gamma
 from sn_tools.sn_cadence_tools import ReferenceData, GenerateFakeObservations
 from sn_tools.sn_cadence_tools import TemplateData, AnaOS, Match_DD
 from sn_tools.sn_telescope import Telescope
@@ -515,7 +515,7 @@ class TestSNUtils(unittest.TestCase):
 
         salt2Dir = '../../SALT2_Files'
         outFile = 'X0_norm.npy'
-        #X0_norm(salt2Dir=salt2Dir, outfile=outFile)
+        # X0_norm(salt2Dir=salt2Dir, outfile=outFile)
 
         assert(os.path.isfile(outFile))
 
@@ -531,6 +531,77 @@ class TestSNUtils(unittest.TestCase):
         # MbCov(salt2Dir)
 
     def testGetReference(self):
+
+        Instrument = {}
+        Instrument['name'] = 'LSST'  # name of the telescope (internal)
+        # dir of throughput
+        Instrument['throughput_dir'] = 'LSST_THROUGHPUTS_BASELINE'
+        Instrument['atmos_dir'] = 'THROUGHPUTS_DIR'  # dir of atmos
+        Instrument['airmass'] = 1.2  # airmass value
+        Instrument['atmos'] = True  # atmos
+        Instrument['aerosol'] = False  # aerosol
+
+        lc_reference = {}
+        gamma_reference = '../../reference_files/gamma.hdf5'
+
+        x1, color = -2.0, 0.2
+        fDir = '.'
+        fName = 'LC_{}_{}_vstack'.format(x1, color)
+        fExtens = 'hdf5'
+
+        getFile(fDir, fName, fExtens, 'Templates')
+        fullname = '{}/{}.{}'.format(fDir, fName, fExtens)
+
+        lc_ref = GetReference(
+            fullname, gamma_reference, Instrument)
+
+        bands_ref = ['g', 'r', 'i', 'z', 'y']
+        # check whether dict keys are ok
+
+        assert(set(lc_ref.flux.keys()) == set(bands_ref))
+        assert(set(lc_ref.fluxerr.keys()) == set(bands_ref))
+        assert(set(lc_ref.param.keys()) == set(bands_ref))
+        assert(set(lc_ref.gamma.keys()) == set(bands_ref))
+
+        # now check interpolation
+        band = 'i'
+        phase = np.array([-20., 0., 30.])
+        z = np.array([0.5]*len(phase))
+        fluxes_ref = np.array([1.00000000e-10, 1.53458242e-06, 1.75235325e-07])
+        fluxes_err_ref = np.array(
+            [3.31944210e-08, 3.42222646e-08, 3.33133353e-08])
+
+        fluxes = lc_ref.flux[band]((phase, z))
+        fluxes_err = lc_ref.fluxerr[band]((phase, z))
+
+        assert(np.isclose(fluxes, fluxes_ref).all())
+        assert(np.isclose(fluxes_err, fluxes_err_ref).all())
+
+        # print(lc_ref.flux, lc_ref.fluxerr)
+        # print(lc_ref.param, lc_ref.gamma)
+
+    def testGamma(self):
+
+        bands = 'r'
+        telescope = Telescope(airmass=1.2)
+        outName = 'gamma_test.hdf5'
+        mag_range = np.arange(20., 25., 1.)
+        exptimes = np.array([15., 30.])
+        Gamma(bands, telescope, outName,
+              mag_range=mag_range,
+              exptimes=exptimes)
+        # check production
+        fFile = h5py.File(outName, 'r')
+        keys = list(fFile.keys())
+
+        data = Table()
+        for key in keys:
+            data = vstack([data, Table.read(fFile, path=key)])
+
+        gamma_ref = [0.039963862137247765, 0.03998193106862388, 0.03990922579288891, 0.039954612896444454, 0.0397719855008266,
+                     0.039885992750413296, 0.03942725347333887, 0.039713626736669436, 0.038561325770985665, 0.03928066288549283]
+
+        assert(np.isclose(data['gamma'], np.array(gamma_ref)).all())
 
 
 if __name__ == "__main__":
