@@ -1595,10 +1595,10 @@ class GetReference:
         fgamma = h5py.File(gammaName, 'r')
 
         # Load references needed for the following
-        self._lc_ref = {}
-        self._gamma_ref = {}
+        self.lc_ref = {}
+        self.gamma_ref = {}
         self.gamma = {}
-        self._m5_ref = {}
+        self.m5_ref = {}
         self.mag_to_flux_e_sec = {}
 
         self.flux = {}
@@ -1628,9 +1628,9 @@ class GetReference:
                 mag_range, fluxes_e_sec[:, 1], fill_value=0., bounds_error=False)
 
             # these reference data will be used for griddata interp.
-            self._lc_ref[band] = lc_sel
-            self._gamma_ref[band] = lc_sel['gamma'][0]
-            self._m5_ref[band] = np.unique(lc_sel['m5'])[0]
+            self.lc_ref[band] = lc_sel
+            self.gamma_ref[band] = lc_sel['gamma'][0]
+            self.m5_ref[band] = np.unique(lc_sel['m5'])[0]
 
             # Another interpolator, faster than griddata: regulargridinterpolator
 
