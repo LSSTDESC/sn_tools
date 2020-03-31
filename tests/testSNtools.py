@@ -685,16 +685,17 @@ class TestSNUtils(unittest.TestCase):
 
 
 class TestSNcalcFast(unittest.TestCase):
+    """
     def testLCfast(self):
 
         x1, color = -2.0, 0.2
 
         lc = simuLCfast(x1, color)
-        """
-        print(lc.columns)
-        for col in lc.columns:
-            print(col, lc[col].values.tolist())
-        """
+
+        #print(lc.columns)
+        #for col in lc.columns:
+        #    print(col, lc[col].values.tolist())
+
 
         # These are what the result should be
         dictRef = {}
@@ -713,6 +714,7 @@ class TestSNcalcFast(unittest.TestCase):
 
         for key in dictRef.keys():
             assert(np.isclose(dictRef[key], lc[key]).all())
+    """
 
     def testCalcSN(self):
 
@@ -738,7 +740,7 @@ class TestSNcalcFast(unittest.TestCase):
         print(lc['band'])
         # instance of CalcSN
 
-        sn = CalcSN_df(lc, n_phase_min=0, n_phase_max=0).sn
+        sn = CalcSN_df(lc, n_phase_min=0, n_phase_max=0, from_matrix=False).sn
 
         print(sn)
 
