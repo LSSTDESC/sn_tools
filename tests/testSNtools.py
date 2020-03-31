@@ -7,6 +7,7 @@ from sn_tools.sn_utils import GenerateSample, Make_Files_for_Cadence_Metric, X0_
 from sn_tools.sn_utils import DiffFlux, MbCov, GetReference, Gamma
 from sn_tools.sn_cadence_tools import ReferenceData, GenerateFakeObservations
 from sn_tools.sn_cadence_tools import TemplateData, AnaOS, Match_DD
+from sn_tools.sn_calcFast import LCfast, CalcSN, CalcSN_df
 from sn_tools.sn_telescope import Telescope
 from sn_tools.sn_obs import DDFields
 import os
@@ -29,15 +30,15 @@ def getFile(dbDir, dbName, dbExtens, repofile):
         os.system(cmd)
 
 
-def Observations(daymin=59000, cadence=3., season_length=140.):
-    band = 'r'
+def Observations(daymin=59000, cadence=3., season_length=140., band='r'):
     # Define fake data
     names = ['observationStartMJD', 'fieldRA', 'fieldDec',
              'fiveSigmaDepth', 'visitExposureTime', 'numExposures',
-             'visitTime', 'season', 'seeingFwhmEff', 'seeingFwhmGeom']
+             'visitTime', 'season', 'seeingFwhmEff', 'seeingFwhmGeom',
+             'pixRA', 'pixDec']
     types = ['f8']*len(names)
-    names += ['night']
-    types += ['i2']
+    names += ['night', 'healpixID']
+    types += ['i2', 'i2']
     names += ['filter']
     types += ['O']
 
@@ -58,7 +59,107 @@ def Observations(daymin=59000, cadence=3., season_length=140.):
     data['season'] = 1.
     data['seeingFwhmEff'] = 0.8
     data['seeingFwhmGeom'] = 0.8
+    data['healpixID'] = 10
+    data['pixRA'] = 0.0
+    data['pixDec'] = 0.0
     return data
+
+
+def getReference(x1, color):
+    # first step: get reference files
+    Instrument = {}
+    Instrument['name'] = 'LSST'  # name of the telescope (internal)
+    # dir of throughput
+    Instrument['throughput_dir'] = 'LSST_THROUGHPUTS_BASELINE'
+    Instrument['atmos_dir'] = 'THROUGHPUTS_DIR'  # dir of atmos
+    Instrument['airmass'] = 1.2  # airmass value
+    Instrument['atmos'] = True  # atmos
+    Instrument['aerosol'] = False  # aerosol
+
+    lc_reference = {}
+    gamma_reference = '../../reference_files/gamma.hdf5'
+
+    fDir = '.'
+    fName = 'LC_{}_{}_vstack'.format(x1, color)
+    fExtens = 'hdf5'
+
+    getFile(fDir, fName, fExtens, 'Templates')
+    fullname = '{}/{}.{}'.format(fDir, fName, fExtens)
+
+    lc_ref = GetReference(
+        fullname, gamma_reference, Instrument)
+
+    return lc_ref
+
+
+def snSimuParam(x1, color):
+    sn_parameters = {}
+    # redshift
+    sn_parameters['z'] = {}
+    sn_parameters['z']['type'] = 'uniform'
+    sn_parameters['z']['min'] = 0.1
+    sn_parameters['z']['max'] = 0.2
+    sn_parameters['z']['step'] = 0.1
+    sn_parameters['z']['rate'] = 'Perrett'
+    # X1_Color
+    sn_parameters['x1_color'] = {}
+    sn_parameters['x1_color']['type'] = 'unique'
+    sn_parameters['x1_color']['min'] = [x1, color]
+    sn_parameters['x1_color']['max'] = [0.2, 0.2]
+    sn_parameters['x1_color']['rate'] = 'JLA'
+    # DayMax
+    sn_parameters['daymax'] = {}
+    sn_parameters['daymax']['type'] = 'unique'
+    sn_parameters['daymax']['step'] = 1.
+    # Miscellaneous
+    sn_parameters['min_rf_phase'] = -20.   # obs min phase (rest frame)
+    sn_parameters['max_rf_phase'] = 60.  # obs max phase (rest frame)
+    sn_parameters['absmag'] = -19.0906      # peak abs mag
+    sn_parameters['band'] = 'bessellB'     # band for absmag
+    sn_parameters['magsys'] = 'vega'      # magsys for absmag
+    sn_parameters['differential_flux'] = False
+    # Cosmology
+    cosmo_parameters = {}
+    cosmo_parameters['model'] = 'w0waCDM'      # Cosmological model
+    cosmo_parameters['Omega_m'] = 0.30             # Omega_m
+    cosmo_parameters['Omega_l '] = 0.70             # Omega_l
+    cosmo_parameters['H0'] = 72.0                  # H0
+    cosmo_parameters['w0'] = -1.0                  # w0
+    cosmo_parameters['wa'] = 0.0                   # wa
+
+    return sn_parameters, cosmo_parameters
+
+
+def simuLCfast(x1, color, bands='r'):
+
+    # get reference LC
+    lc_ref = getReference(x1, color)
+
+    # get telescope model
+    telescope = Telescope()
+
+    # instance of LCfast
+    lcf = LCfast(lc_ref, x1, color, telescope)
+
+    # need some observations to run...
+    obs = None
+    for band in bands:
+        obs_b = Observations(season_length=180, band=band)
+        if obs is None:
+            obs = obs_b
+        else:
+            obs = np.concatenate((obs, obs_b))
+
+    # and simulation parameters
+    sn_parameters, cosmo_parameters = snSimuParam(x1, color)
+    gen_par = GenerateSample(
+        sn_parameters, cosmo_parameters, mjdCol='observationStartMJD', dirFiles='../reference_files')
+    params = gen_par(obs)
+
+    # perform simulation
+    lc = lcf(obs, params)
+
+    return lc
 
 
 class TestSNRate(unittest.TestCase):
@@ -532,29 +633,8 @@ class TestSNUtils(unittest.TestCase):
 
     def testGetReference(self):
 
-        Instrument = {}
-        Instrument['name'] = 'LSST'  # name of the telescope (internal)
-        # dir of throughput
-        Instrument['throughput_dir'] = 'LSST_THROUGHPUTS_BASELINE'
-        Instrument['atmos_dir'] = 'THROUGHPUTS_DIR'  # dir of atmos
-        Instrument['airmass'] = 1.2  # airmass value
-        Instrument['atmos'] = True  # atmos
-        Instrument['aerosol'] = False  # aerosol
-
-        lc_reference = {}
-        gamma_reference = '../../reference_files/gamma.hdf5'
-
         x1, color = -2.0, 0.2
-        fDir = '.'
-        fName = 'LC_{}_{}_vstack'.format(x1, color)
-        fExtens = 'hdf5'
-
-        getFile(fDir, fName, fExtens, 'Templates')
-        fullname = '{}/{}.{}'.format(fDir, fName, fExtens)
-
-        lc_ref = GetReference(
-            fullname, gamma_reference, Instrument)
-
+        lc_ref = getReference(x1, color)
         bands_ref = ['g', 'r', 'i', 'z', 'y']
         # check whether dict keys are ok
 
@@ -604,6 +684,74 @@ class TestSNUtils(unittest.TestCase):
         assert(np.isclose(data['gamma'], np.array(gamma_ref)).all())
 
 
+class TestSNcalcFast(unittest.TestCase):
+    def testLCfast(self):
+
+        x1, color = -2.0, 0.2
+
+        lc = simuLCfast(x1, color)
+        """
+        print(lc.columns)
+        for col in lc.columns:
+            print(col, lc[col].values.tolist())
+        """
+
+        # These are what the result should be
+        dictRef = {}
+        dictRef['flux'] = [4.511147986335053e-06, 1.2317188232550995e-05, 2.550111662322939e-05, 3.7578119573455526e-05, 4.55531457559699e-05, 4.891115014639708e-05, 4.7133300685124935e-05, 4.158604026288241e-05, 3.409213315546674e-05, 2.8570455907048627e-05, 2.5038831188298558e-05, 2.1858035689046604e-05, 1.879011450752236e-05, 1.577897479370136e-05, 1.2660074510369872e-05, 9.969941676665338e-06,
+                           5.397161397972984e-07, 1.967780860222931e-06, 4.340271623278295e-06, 7.16463061377825e-06, 9.4576858760202e-06, 1.074632739127063e-05, 1.0806717280098711e-05, 1.0358122558068462e-05, 9.29955918584795e-06, 7.726015475790287e-06, 6.461230015881104e-06, 5.541974962087858e-06, 4.687433939533106e-06, 3.907532488461168e-06, 3.2920828790886484e-06, 2.726609113336508e-06, 2.199381111769534e-06, 1.7924998997463632e-06]
+        dictRef['fluxerr'] = [1.3821321678798889e-07, 1.5590732755617273e-07, 1.8192455445555648e-07, 2.0285059931323458e-07, 2.1555825057784464e-07, 2.2069012111866136e-07, 2.1798814946172864e-07, 2.0933344110851897e-07, 1.9703905993883528e-07, 1.8746494699300317e-07, 1.8107622426999082e-07, 1.7512278927588011e-07, 1.6918224778846632e-07, 1.6314139119634574e-07, 1.5663895504416641e-07, 1.5080545075808596e-07,
+                              1.2827790544421312e-07, 1.319367353776003e-07, 1.3780067391562013e-07, 1.444714740719694e-07, 1.4966887217260837e-07, 1.525119664284462e-07, 1.5264390402315115e-07, 1.5166109046153174e-07, 1.4931627272214047e-07, 1.4576103156036853e-07, 1.428392606613501e-07, 1.4067762168236507e-07, 1.3863793314338187e-07, 1.3674984997871739e-07, 1.3524128572955553e-07, 1.3384023244235643e-07, 1.3252059639045936e-07, 1.3149313102973464e-07]
+        dictRef['phase'] = [-12.818181818180495, -10.090909090907767, -7.36363636363504, -4.636363636362313, -1.909090909089586, 0.8181818181831411, 3.545454545455868, 6.272727272728595, 9.000000000001322, 11.72727272727405, 14.454545454546777, 17.181818181819505, 19.90909090909223, 22.63636363636496, 25.363636363637685, 28.09090909091041, -13.499999999997575, -
+                            10.999999999997575, -8.499999999997575, -5.999999999997575, -3.499999999997575, -0.9999999999975747, 1.5000000000024254, 4.000000000002426, 6.500000000002426, 9.000000000002427, 11.500000000002427, 14.000000000002427, 16.500000000002427, 19.000000000002427, 21.500000000002427, 24.000000000002427, 26.500000000002427, 29.000000000002427]
+        dictRef['snr_m5'] = [32.6390492253349, 79.0032670408847, 140.17413262077946, 185.25022701771144, 211.32638455663877, 221.6281811730865, 216.2195550607211, 198.6593257277231, 173.02220770871315, 152.40425671747036, 138.27785116043069, 124.81548392089903, 111.0643389193895, 96.71962877103869, 80.82328247657294, 66.11128196326659, 4.207397508778439,
+                             14.914578980533221, 31.496737279644844, 49.59200880174548, 63.190733909673284, 70.46219154424494, 70.79691356989717, 68.29782462032185, 62.28094913106561, 53.00467067969722, 45.23427232796791, 39.39485822841845, 33.81061613696503, 28.574309142344976, 24.342292084326132, 20.372118783571523, 16.5965228928586, 13.631890013638992]
+        dictRef['time'] = [59009.0, 59012.0, 59015.0, 59018.0, 59021.0, 59024.0, 59027.0, 59030.0, 59033.0, 59036.0, 59039.0, 59042.0, 59045.0, 59048.0, 59051.0, 59054.0,
+                           59009.0, 59012.0, 59015.0, 59018.0, 59021.0, 59024.0, 59027.0, 59030.0, 59033.0, 59036.0, 59039.0, 59042.0, 59045.0, 59048.0, 59051.0, 59054.0, 59057.0, 59060.0]
+        dictRef['mag'] = [22.264347936828727, 21.17378667626179, 20.383667628776795, 19.962728012255248, 19.75376968891716, 19.676545933826414, 19.71674598749469, 19.85269669801393, 20.06843018222962, 20.26027269577972, 20.403530491878712, 20.551037795464264, 20.715242055501704, 20.904868666274634, 21.143974968002418, 21.40333407795156, 24.569652108525073,
+                          23.165123792144367, 22.30627334873159, 21.76208111121057, 21.460603408714015, 21.321915453797978, 21.315831147725476, 21.361863008990856, 21.478909715330477, 21.68017668794674, 21.87427761744152, 22.04090422386863, 22.222727721721945, 22.420309128362387, 22.606388721881086, 22.8110084174069, 23.044314394722278, 23.266417772157325]
+
+        for key in dictRef.keys():
+            assert(np.isclose(dictRef[key], lc[key]).all())
+
+    def testCalcSN(self):
+
+        x1, color = -2.0, 0.2
+
+        # Simulate LC
+        lc = simuLCfast(x1, color, bands='griz')
+
+        print(lc['band'])
+        # instance of CalcSN
+
+        sn = CalcSN(Table.from_pandas(lc), nPhamin=0, nPhamax=0).sn
+
+        print(sn)
+
+    def testCalcSN_df(self):
+
+        x1, color = -2.0, 0.2
+
+        # Simulate LC
+        lc = simuLCfast(x1, color, bands='griz')
+
+        print(lc['band'])
+        # instance of CalcSN
+
+        sn = CalcSN_df(lc, n_phase_min=0, n_phase_max=0).sn
+
+        print(sn)
+
+
+"""        
 if __name__ == "__main__":
-    lsst.utils.tests.init()
-    unittest.main(verbosity=5)
+   
+    
+"""
+lsst.utils.tests.init()
+snRate = TestSNRate
+snTelescope = TestSNTelescope
+snCadence = TestSNCadence
+snUtil = TestSNUtils
+calcFast = TestSNcalcFast
+unittest.main(verbosity=5)
