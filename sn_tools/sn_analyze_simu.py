@@ -6,23 +6,26 @@ import pylab as plt
 from sn_tools.sn_rate import SN_Rate
 
 
-def Plot_Parameters(tab, season):
-    """ Plot simulation
-    parameters ('X1', 'Color', 'DayMax', 'z')
-    Input
-    ---------
+def plotParameters(tab, season=None):
+    """ 
+    Simple function to show how to access results from simulation
+
+    Parameters
+    ---------------
     tab: recarray of parameters
     season: season
 
     Returns
-    ---------
-    Plot (X1,Color,DayMax,SN_Rate)
+    ------------
+    Plot (x1,color,daymax,SN_Rate)
     """
 
-    idx = tab['season'] == season
-    sel = tab[idx]
+    sel = tab
+    if season is not None:
+        idx = tab['season'] == season
+        sel = tab[idx]
     thesize = 15
-    toplot = ['X1', 'Color', 'DayMax', 'z']
+    toplot = ['x1', 'color', 'daymax', 'z']
     fig, ax = plt.subplots(ncols=2, nrows=2, figsize=(10, 9))
 
     for i, var in enumerate(toplot):
@@ -42,7 +45,7 @@ def Plot_Parameters(tab, season):
             sn_rate = SN_Rate(rate='Perrett', H0=72, Om0=0.3)
             zmin = np.min(sel['z'])
             zmax = np.max(sel['z'])
-            duration = np.max(sel['DayMax'])-np.min(sel['DayMax'])
+            duration = np.max(sel['daymax'])-np.min(sel['daymax'])
             zz, rate, err_rate, nsn, err_nsn = sn_rate(
                 zmin=zmin-dz/2., zmax=zmax, dz=dz, duration=duration, survey_area=9.6)
             axis.plot(zz, np.cumsum(nsn))
@@ -67,5 +70,4 @@ if __name__ == "__main__":
     for i, key in enumerate(f.keys()):
         summary = Table.read(filename, path=key)
         print(len(summary), summary.dtype)
-        for season in np.unique(summary['season']):
-            Plot_Parameters(summary, season)
+        plotParameters(summary)
