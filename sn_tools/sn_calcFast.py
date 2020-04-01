@@ -383,18 +383,18 @@ class LCfast:
         lc.loc[:, 'x1'] = self.x1
         lc.loc[:, 'color'] = self.color
 
-        lc.loc[:, 'N_aft'] = (np.sign(lc['phase']) == 1) & (
+        lc.loc[:, 'n_aft'] = (np.sign(lc['phase']) == 1) & (
             lc['snr_m5'] >= self.snr_min)
-        lc.loc[:, 'N_bef'] = (np.sign(lc['phase']) == -
+        lc.loc[:, 'n_bef'] = (np.sign(lc['phase']) == -
                               1) & (lc['snr_m5'] >= self.snr_min)
 
-        lc.loc[:, 'N_phmin'] = (lc['phase'] <= -5.)
-        lc.loc[:, 'N_phmax'] = (lc['phase'] >= 20)
+        lc.loc[:, 'n_phmin'] = (lc['phase'] <= -5.)
+        lc.loc[:, 'n_phmax'] = (lc['phase'] >= 20)
 
         # transform boolean to int because of some problems in the sum()
 
-        for colname in ['N_aft', 'N_bef', 'N_phmin', 'N_phmax']:
-            lc[colname] = lc[colname].astype(int)
+        for colname in ['n_aft', 'n_bef', 'n_phmin', 'n_phmax']:
+            lc.loc[:colname] = lc[colname].astype(int)
 
         if output_q is not None:
             output_q.put({j: lc})
@@ -653,18 +653,18 @@ class LCfast:
             lc.loc[:, 'x1'] = self.x1
             lc.loc[:, 'color'] = self.color
 
-            lc.loc[:, 'N_aft'] = (np.sign(lc['phase']) == 1) & (
+            lc.loc[:, 'n_aft'] = (np.sign(lc['phase']) == 1) & (
                 lc['snr_m5'] >= self.snr_min)
-            lc.loc[:, 'N_bef'] = (np.sign(lc['phase'])
+            lc.loc[:, 'n_bef'] = (np.sign(lc['phase'])
                                   == -1) & (lc['snr_m5'] >= self.snr_min)
 
-            lc.loc[:, 'N_phmin'] = (lc['phase'] <= -5.)
-            lc.loc[:, 'N_phmax'] = (lc['phase'] >= 20)
+            lc.loc[:, 'n_phmin'] = (lc['phase'] <= -5.)
+            lc.loc[:, 'n_phmax'] = (lc['phase'] >= 20)
 
             # transform boolean to int because of some problems in the sum()
 
-            for colname in ['N_aft', 'N_bef', 'N_phmin', 'N_phmax']:
-                lc[colname] = lc[colname].astype(int)
+            for colname in ['n_aft', 'n_bef', 'n_phmin', 'n_phmax']:
+                lc.loc[:, colname] = lc[colname].astype(int)
 
         if output_q is not None:
             output_q.put({j: lc})
@@ -820,21 +820,21 @@ class CalcSN:
         phase = np.tile(lc['phase'], (len(valu), 1))
 
         count_bef = self.select_phase(phase, flag, flag_snr, operator.lt, 0.)
-        restab.add_column(Column(count_bef, name='N_bef'))
+        restab.add_column(Column(count_bef, name='n_bef'))
 
         count_aft = self.select_phase(phase, flag, flag_snr, operator.ge, 0.)
-        restab.add_column(Column(count_aft, name='N_aft'))
+        restab.add_column(Column(count_aft, name='n_aft'))
 
         count_pmin = self.select_phase(phase, flag, True, operator.le, -5.)
-        restab.add_column(Column(count_pmin, name='N_phmin'))
+        restab.add_column(Column(count_pmin, name='n_phmin'))
 
         count_pmax = self.select_phase(phase, flag, True, operator.ge, 30.)
-        restab.add_column(Column(count_pmax, name='N_phmax'))
+        restab.add_column(Column(count_pmax, name='n_phmax'))
 
         # LC selection here
-        idx = (restab['N_bef'] >= self.nBef) & (restab['N_aft'] >= self.nAft)
-        idx &= (restab['N_phmin'] >= self.nPhamin) & (
-            restab['N_phmax'] >= self.nPhamax)
+        idx = (restab['n_bef'] >= self.nBef) & (restab['n_aft'] >= self.nAft)
+        idx &= (restab['n_phmin'] >= self.nPhamin) & (
+            restab['n_phmax'] >= self.nPhamax)
         restab_good = Table(restab[idx])
         restab_bad = Table(restab[~idx])
         for par in self.params:
@@ -883,8 +883,6 @@ class CalcSN:
         -----------
         None. astropy Table of results (restab) is updated
         """
-
-        print(resu.dtype, type(restab))
 
         time_ref = time.time()
         parts = {}
@@ -950,14 +948,17 @@ class CalcSN_df:
     quality selection: number of point with phase >= 30 (default: 1)
     params: list(str)
       list of Fisher parameters to estimate (default: ['x0', 'x1', 'daymax','color'])
-
+    invert_matrix: bool, opt
+      if True, SN parameter variances are estimated by inverting the Fisher matrix
+      if False, only color variance is estimated from analytic estimation.
     """
 
     def __init__(self, lc,
                  n_bef=4, n_aft=10, snr_min=5.,
                  phase_min=-5, phase_max=20,
                  n_phase_min=1, n_phase_max=1,
-                 params=['x0', 'x1', 'daymax', 'color']):
+                 params=['x0', 'x1', 'daymax', 'color'],
+                 invert_matrix=False):
 
         self.n_bef = n_bef
         self.n_aft = n_aft
@@ -966,6 +967,12 @@ class CalcSN_df:
         self.phase_max = phase_max
         self.n_phase_min = n_phase_min
         self.n_phase_max = n_phase_max
+        self.params = params
+        self.invert_matrix = invert_matrix
+        # list of variables in the output df
+        self.names_out = ['x1', 'color', 'z', 'daymax', 'season',
+                          'healpixID', 'pixRA', 'pixDec']
+
         # select only fields involved in the calculation
         # this would save some memory
         fields = []
@@ -980,49 +987,93 @@ class CalcSN_df:
                     fields.append('F_'+vala+valb)
                     tosum.append('F_'+vala+valb)
         time_ref = time.time()
-        # lc to process - move to pandas DataFrame format
-        #lc = pd.DataFrame(np.copy(lc_all[fields]))
-        lc = lc[fields]
+        lc.loc[:] = lc[fields]
 
-        goodsn, badsn = self.selectLC(lc, tosum)
+        # prepare LC for selection
+        lc = self.statLC(lc)
 
-        print('here', len(goodsn), len(badsn))
+        for colname in ['n_aft', 'n_bef', 'n_phmin', 'n_phmax']:
+            lc.loc[:, colname] = lc[colname].astype(int)
+
         time_ref = time.time()
 
-        res = self.calcDummy(badsn, params)
+        # This is the final LC result
+        sndf = lc.groupby(self.names_out).apply(
+            lambda x: self.sigmaColor(x, tosum)).reset_index()
 
-        # time_ref = time.time()
+        self.sn = sndf
 
-        if len(goodsn) > 0:
-            restab = self.calcSigma(goodsn, params)
-            res = np.concatenate((res, restab))
-
-        # print('after sigma',time.time()-time_ref)
-        # time_ref = time.time()
-
-        # print('final result',res)
-
-        self.sn = res
-
-    def selectLC(self, lc, tosum):
+    def sigmaColor(self, grp, tosam):
         """
-        Method to select light curves
+        Method to estimate sigmaColor for a group
+
+        Parameters
+        ---------------
+        grp : df group
+          data to process
+        tosam: list(str)
+           list of var to sum-up
+
+        Returns
+        -----------
+        pandas df with the following cols:
+        n_bef: number of LC point before max
+        n_aft: number of LC points after max
+        n_phmin: number of LC points with phase<=phase_min
+        n_phmax: number of LC points with phase>= phase_max
+        Cov_colorcolor: color variance
+
+        """
+
+        tosuma = list(tosam)
+        tosuma += ['n_aft', 'n_bef', 'n_phmin', 'n_phmax']
+        #sums = grp[tosuma].sum().to_frame()
+        sums = pd.DataFrame([grp[tosuma].sum()], columns=tosuma)
+
+        # selection cuts
+        idx = sums['n_aft'] >= self.n_aft
+        idx &= sums['n_bef'] >= self.n_bef
+        idx &= sums['n_phmin'] >= self.n_phase_min
+        idx &= sums['n_phmax'] >= self.n_phase_max
+
+        # estimate sigma_color**2 for grp passing the cuts only.
+        dict_out = {}
+        for var in self.params:
+            dict_out['Cov_{}{}'.format(var, var)] = [100.]
+
+        if len(sums[idx]) > 0:
+            if not self.invert_matrix:
+                dict_out['Cov_colorcolor'] = CovColor(
+                    sums).Cov_colorcolor.to_list()
+            else:
+                covCalc = self.sigmaSNparams(sums)
+                for key in dict_out.keys():
+                    dict_out[key] = covCalc[key].to_list()
+
+        for vv in ['n_aft', 'n_bef', 'n_phmin', 'n_phmax']:
+            dict_out[vv] = sums[vv].to_list()
+
+        # return results as a df
+        return pd.DataFrame.from_dict(dict_out)
+
+    def statLC(self, lc):
+        """
+        Method to add var to lc so as to ease future selection
 
         Parameters
         ---------------
         lc: pandas df
-          lc to select
-        tosum: list(str)
-          list of colums to perform the sum
+          data to process
 
         Returns
         -----------
-        Two pandas df:
+        initial df with added cols:
+        n_bef: number of LC point before max
+        n_aft: number of LC points after max
+        n_phmin: number of LC points with phase<=phase_min
+        n_phmax: number of LC points with phase>= phase_max
 
         """
-
-        # LC selection
-
         lc.loc[:, 'n_aft'] = (np.sign(lc['phase']) == 1) & (
             lc['snr_m5'] >= self.snr_min)
         lc.loc[:, 'n_bef'] = (np.sign(lc['phase']) == -
@@ -1034,44 +1085,87 @@ class CalcSN_df:
         lc.loc[:, 'n_phmin'] = (lc['phase'] <= self.phase_min)
         lc.loc[:, 'n_phmax'] = (lc['phase'] >= self.phase_max)
 
-        # transform boolean to int because of some problems in the sum()
+        return lc
 
-        for colname in ['n_aft', 'n_bef', 'n_phmin', 'n_phmax']:
-            lc[colname] = lc[colname].astype(int)
+    def sigmaSNparams(self, grp):
+        """
+        Method to estimate variances of SN parameters
+        from inversion of the Fisher matrix
 
-        tosum += ['n_aft', 'n_bef', 'n_phmin', 'n_phmax']
-        sums = lc.groupby(['x1', 'color', 'season', 'healpixID',
-                           'pixRA', 'pixDec', 'z', 'daymax'])[tosum].sum()
+        Parameters
+        ---------------
+        grp: pandas df of flux derivatives wrt SN parameters
 
-        idx = sums['n_aft'] >= self.n_aft
-        idx &= sums['n_bef'] >= self.n_bef
-        idx &= sums['n_phmin'] >= self.n_phase_min
-        idx &= sums['n_phmax'] >= self.n_phase_max
-        # idx &= sums['F_colorcolor']>=1.e-8
+        Returns
+        ----------
+        Diagonal elements of the inverted matrix (as pandas df)
 
-        goodsn = sums.loc[idx]
-        badsn = sums.loc[~idx]
+        """
+        parts = {}
+        for ia, vala in enumerate(self.params):
+            for jb, valb in enumerate(self.params):
+                if jb >= ia:
+                    parts[ia, jb] = grp['F_'+vala+valb]
 
-        return goodsn, badsn
+            # print(parts)
+        size = len(grp)
+        npar = len(self.params)
+        Fisher_Big = np.zeros((npar*size, npar*size))
+        Big_Diag = np.zeros((npar*size, npar*size))
+        Big_Diag = []
 
-    def calcDummy(self, lc, params):
+        for iv in range(size):
+            Fisher_Matrix = np.zeros((npar, npar))
+            for ia, vala in enumerate(self.params):
+                for jb, valb in enumerate(self.params):
+                    if jb >= ia:
+                        Fisher_Big[ia+npar*iv][jb+npar*iv] = parts[ia, jb]
 
-        df = lc.copy()
-        # for ia, vala in enumerate(params):
-        df.loc[:, 'Cov_colorcolor'] = [100.]*len(lc)
+        # pprint.pprint(Fisher_Big)
 
-        # names = ['z','daymax','season', 'pixRA', 'pixDec', 'Cov_x0x0', 'Cov_x1x1','Cov_colorcolor']
-        names = ['x1', 'color', 'z', 'daymax', 'season',
-                 'healpixID', 'pixRA', 'pixDec', 'Cov_colorcolor']
-        names += ['n_aft', 'n_bef', 'n_phmin', 'n_phmax']
-        gr = df.groupby(names)
-        # print(gr.keys,list(gr.groups.keys()))
-        restab = np.rec.fromrecords(list(gr.groups.keys()), names=gr.keys)
+        Fisher_Big = Fisher_Big + np.triu(Fisher_Big, 1).T
+        Big_Diag = np.diag(np.linalg.inv(Fisher_Big))
 
-        return restab
+        res = pd.DataFrame()
+        for ia, vala in enumerate(self.params):
+            indices = range(ia, len(Big_Diag), npar)
+            # restab.add_column(
+            #    Column(np.take(Big_Diag, indices), name='Cov_{}{}'.format(vala,vala)))
+            res['Cov_{}{}'.format(vala, vala)] = np.take(Big_Diag, indices)
 
-    def covColor(self, lc):
+        return res
 
+
+class CovColor:
+    """
+    class to estimate CovColor from lc using Fisher matrix element
+
+    Parameters
+    ---------------
+    lc: pandas df
+    lc to process. Should contain the Fisher matrix components
+    ie the sum of the derivative of the fluxes wrt SN parameters
+
+    """
+
+    def __init__(self, lc):
+
+        self.Cov_colorcolor = self.varColor(lc)
+
+    def varColor(self, lc):
+        """
+        Method to estimate the variance color from matrix element
+
+        Parameters
+        --------------
+        lc: pandas df
+          data to process containing the derivative of the flux with respect to SN parameters
+
+        Returns
+        ----------
+        float: Cov_colorcolor
+
+        """
         a1 = lc['F_x0x0']
         a2 = lc['F_x0x1']
         a3 = lc['F_x0daymax']
@@ -1101,107 +1195,28 @@ class CalcSN_df:
 
         return res/detM
 
-    def covColor_old(self, lc):
-
-        a = lc['F_x0x0']
-        e = lc['F_x1x1']
-        i = lc['F_colorcolor']
-        b = lc['F_x0x1']
-        c = lc['F_x0color']
-        f = lc['F_x1color']
-        d = b
-        g = c
-        h = f
-
-        det = a*e*i+b*f*g+c*d*h-c*e*g-f*h*a-i*b*d
-
-        res = (a*e-b*d)/det
-
-        return res
-
     def det(self, a1, a2, a3, b1, b2, b3, c1, c2, c3):
+        """
+        Method to estimate the det of a matrix from its values
 
+        Parameters
+        ---------------
+        Values of the matrix
+        ( a1 a2 a3)
+        (b1 b2 b3)
+        (c1 c2 c3)
+
+        Returns
+        -----------
+        det value
+        """
         resp = a1*b2*c3+b1*c2*a3+c1*a2*b3
         resm = a3*b2*c1+b3*c2*a1+c3*a2*b1
 
         return resp-resm
 
-    def calcSigma(self, lc, params):
 
-        # first: group by (z,daymax)
-
-        df = lc.copy()
-
-        df.loc[:, 'Cov_colorcolor'] = self.covColor(lc)
-
-        """
-        gg = df.groupby(['x1','color','z','daymax','season', 'pixRA', 'pixDec']).apply(lambda x: sigma_x0_x1_color_grp(x,params=['x0','x1','daymax','color']))
-
-        print(gg)
-        """
-        names = ['x1', 'color', 'z', 'daymax', 'season',
-                 'healpixID', 'pixRA', 'pixDec', 'Cov_colorcolor']
-        names += ['N_aft', 'N_bef', 'N_phmin', 'N_phmax']
-        grfi = df.groupby(names)
-
-        """
-        # for each group: estimate the sum
-
-        # sums = groups.sum().groupby(['z','daymax','season', 'pixRA', 'pixDec'])
-
-        gr = groups.apply(lambda x: sigma_x0_x1_color_grp(x,params=['x0','x1','color']))
-
-        names = ['z','daymax','season', 'pixRA', 'pixDec', 'Cov_x0x0', 'Cov_x1x1','Cov_colorcolor']
-        grfi = gr.groupby(names)
-        """
-
-        restab = np.rec.fromrecords(list(grfi.groups.keys()), names=grfi.keys)
-        # print('test',restab)
-
-        return restab
-    """
-    def selectLC(self,lc, params):
-        
-        restab = Table(np.unique(lc[['season','pixRA','pixDec','z','daymax']]))
-    
-        valu = np.unique(lc['z','daymax'])
-        diff = lc['daymax']-valu['daymax'][:, np.newaxis]
-        flag = np.abs(diff) < 1.e-5
-        diffb = lc['z']-valu['z'][:, np.newaxis]
-        flag &= np.abs(diffb) < 1.e-5
-
-        tile_band = np.tile(lc['band'], (len(valu), 1))
-        tile_snr = np.tile(lc['snr_m5'], (len(valu), 1))
-
-        flag_snr = tile_snr > 5.
-
-        # difftime = lc['time']-lc['daymax']
-        phase = np.tile(lc['phase'], (len(valu), 1))
-
-        count_bef = self.select_phase(phase, flag, flag_snr,operator.lt,0.)
-        restab.add_column(Column(count_bef,name='N_bef'))
-
-        count_aft = self.select_phase(phase, flag, flag_snr,operator.ge,0.)
-        restab.add_column(Column(count_aft,name='N_aft'))
-
-        count_pmin = self.select_phase(phase, flag, True,operator.le,-5.)
-        restab.add_column(Column(count_pmin,name='N_phmin'))
-        
-        count_pmax = self.select_phase(phase, flag, True,operator.ge,30.)
-        restab.add_column(Column(count_pmax,name='N_phmax'))
-
-        # LC selection here
-        idx = (restab['N_bef']>=2)&(restab['N_aft']>=5)
-        idx &= (restab['N_phmin']>=1)&(restab['N_phmax']>=1)
-        restab_good = Table(restab[idx])
-        restab_bad = Table(restab[~idx])
-        for par in params:
-            restab_bad.add_column(Column([100.]*len(restab_bad),name='Cov_{}{}'.format(par,par)))
-
-        return restab_good, restab_bad
-    """
-
-
+"""
 def det(a1, a2, a3, b1, b2, b3, c1, c2, c3):
 
     resp = a1*b2*c3+b1*c2*a3+c1*a2*b3
@@ -1241,248 +1256,9 @@ def covColor(lc):
 
     return res/detM
 
+"""
 
-class CalcSN_df_old:
-    def __init__(self, lc, N_bef=4, N_aft=10, snr_min=5, N_phase_min=1,
-                 N_phase_max=1, params=['x0', 'x1', 'daymax', 'color']):
-
-        # select only fields involved in the calculation
-        # this would save some memory
-        fields = []
-        for fi in ['season', 'healpixID', 'pixRA', 'pixDec', 'z',
-                   'daymax', 'snr_m5', 'phase', 'x1', 'color']:
-            fields.append(fi)
-
-        tosum = []
-        for ia, vala in enumerate(params):
-            for jb, valb in enumerate(params):
-                if jb >= ia:
-                    fields.append('F_'+vala+valb)
-                    tosum.append('F_'+vala+valb)
-        time_ref = time.time()
-        # lc to process - move to pandas DataFrame format
-        lc = pd.DataFrame(np.copy(lc_all[fields]))
-
-        # LC selection
-
-        lc.loc[:, 'N_aft'] = (np.sign(lc['phase']) == 1) & (
-            lc['snr_m5'] >= snr_min)
-        lc.loc[:, 'N_bef'] = (np.sign(lc['phase']) == -
-                              1) & (lc['snr_m5'] >= snr_min)
-        # lc.loc[:, 'N_aft'] = (np.sign(lc['phase']) == 1)
-        # lc.loc[:, 'N_bef'] = (np.sign(lc['phase']) == -1)
-        # lc.loc[:,'N_phmin'] = (lc['phase']<=-5.)&(lc['snr_m5']>=5.)
-        # lc.loc[:,'N_phmax'] = (lc['phase']>=20)&(lc['snr_m5']>=5.)
-        lc.loc[:, 'N_phmin'] = (lc['phase'] <= -5.)
-        lc.loc[:, 'N_phmax'] = (lc['phase'] >= 20)
-
-        # transform boolean to int because of some problems in the sum()
-
-        for colname in ['N_aft', 'N_bef', 'N_phmin', 'N_phmax']:
-            lc[colname] = lc[colname].astype(int)
-
-        tosum += ['N_aft', 'N_bef', 'N_phmin', 'N_phmax']
-        sums = lc.groupby(['x1', 'color', 'season', 'healpixID',
-                           'pixRA', 'pixDec', 'z', 'daymax'])[tosum].sum()
-
-        idx = sums['N_aft'] >= N_aft
-        idx &= sums['N_bef'] >= N_bef
-        idx &= sums['N_phmin'] >= N_phase_min
-        idx &= sums['N_phmax'] >= N_phase_max
-        # idx &= sums['F_colorcolor']>=1.e-8
-
-        goodsn = sums.loc[idx]
-        badsn = sums.loc[~idx]
-
-        time_ref = time.time()
-
-        res = self.calcDummy(badsn, params)
-
-        # time_ref = time.time()
-
-        if len(goodsn) > 0:
-            restab = self.calcSigma(goodsn, params)
-            res = np.concatenate((res, restab))
-
-        # print('after sigma',time.time()-time_ref)
-        # time_ref = time.time()
-
-        # print('final result',res)
-
-        self.sn = res
-
-    def calcDummy(self, lc, params):
-
-        df = lc.copy()
-        # for ia, vala in enumerate(params):
-        df.loc[:, 'Cov_colorcolor'] = [100.]*len(lc)
-
-        """
-        groups = lc.groupby(['z','daymax'])
-
-        df = groups.apply(lambda x : fillBad(x))
-        """
-        # names = ['z','daymax','season', 'pixRA', 'pixDec', 'Cov_x0x0', 'Cov_x1x1','Cov_colorcolor']
-        names = ['x1', 'color', 'z', 'daymax', 'season',
-                 'healpixID', 'pixRA', 'pixDec', 'Cov_colorcolor']
-        names += ['N_aft', 'N_bef', 'N_phmin', 'N_phmax']
-        gr = df.groupby(names)
-        # print(gr.keys,list(gr.groups.keys()))
-        restab = np.rec.fromrecords(list(gr.groups.keys()), names=gr.keys)
-
-        return restab
-
-    """
-    def npoints(self,gr):
-
-        # only points with snr>5.
-        ida =  gr['snr_m5']>=5.
-        grsel = gr.loc[ida]
-
-        idx = grsel['phase']<0.
-        gr['N_bef'] = len(grsel.loc[idx])
-        gr['N_aft'] = len(grsel)-len(grsel.loc[idx])
-
-        idxa = grsel['phase']<=-5.
-        idxb = grsel['phase']>=30.
-        
-        gr['N_phmin'] = len(grsel.loc[idxa])
-        gr['N_phmax'] = len(grsel.loc[idxb])
-        return gr
-    """
-
-    def covColor(self, lc):
-
-        a1 = lc['F_x0x0']
-        a2 = lc['F_x0x1']
-        a3 = lc['F_x0daymax']
-        a4 = lc['F_x0color']
-
-        b1 = a2
-        b2 = lc['F_x1x1']
-        b3 = lc['F_x1daymax']
-        b4 = lc['F_x1color']
-
-        c1 = a3
-        c2 = b3
-        c3 = lc['F_daymaxdaymax']
-        c4 = lc['F_daymaxcolor']
-
-        d1 = a4
-        d2 = b4
-        d3 = c4
-        d4 = lc['F_colorcolor']
-
-        detM = a1*self.det(b2, b3, b4, c2, c3, c4, d2, d3, d4)
-        detM -= b1*self.det(a2, a3, a4, c2, c3, c4, d2, d3, d4)
-        detM += c1*self.det(a2, a3, a4, b2, b3, b4, d2, d3, d4)
-        detM -= d1*self.det(a2, a3, a4, b2, b3, b4, c2, c3, c4)
-
-        res = -a3*b2*c1+a2*b3*c1+a3*b1*c2-a1*b3*c2-a2*b1*c3+a1*b2*c3
-
-        return res/detM
-
-    def covColor_old(self, lc):
-
-        a = lc['F_x0x0']
-        e = lc['F_x1x1']
-        i = lc['F_colorcolor']
-        b = lc['F_x0x1']
-        c = lc['F_x0color']
-        f = lc['F_x1color']
-        d = b
-        g = c
-        h = f
-
-        det = a*e*i+b*f*g+c*d*h-c*e*g-f*h*a-i*b*d
-
-        res = (a*e-b*d)/det
-
-        return res
-
-    def det(self, a1, a2, a3, b1, b2, b3, c1, c2, c3):
-
-        resp = a1*b2*c3+b1*c2*a3+c1*a2*b3
-        resm = a3*b2*c1+b3*c2*a1+c3*a2*b1
-
-        return resp-resm
-
-    def calcSigma(self, lc, params):
-
-        # first: group by (z,daymax)
-
-        df = lc.copy()
-
-        df.loc[:, 'Cov_colorcolor'] = self.covColor(lc)
-
-        """
-        gg = df.groupby(['x1','color','z','daymax','season', 'pixRA', 'pixDec']).apply(lambda x: sigma_x0_x1_color_grp(x,params=['x0','x1','daymax','color']))
-
-        print(gg)
-        """
-        names = ['x1', 'color', 'z', 'daymax', 'season',
-                 'healpixID', 'pixRA', 'pixDec', 'Cov_colorcolor']
-        names += ['N_aft', 'N_bef', 'N_phmin', 'N_phmax']
-        grfi = df.groupby(names)
-
-        """
-        # for each group: estimate the sum
-
-        # sums = groups.sum().groupby(['z','daymax','season', 'pixRA', 'pixDec'])
-
-        gr = groups.apply(lambda x: sigma_x0_x1_color_grp(x,params=['x0','x1','color']))
-
-        names = ['z','daymax','season', 'pixRA', 'pixDec', 'Cov_x0x0', 'Cov_x1x1','Cov_colorcolor']
-        grfi = gr.groupby(names)
-        """
-
-        restab = np.rec.fromrecords(list(grfi.groups.keys()), names=grfi.keys)
-        # print('test',restab)
-
-        return restab
-    """
-    def selectLC(self,lc, params):
-        
-        restab = Table(np.unique(lc[['season','pixRA','pixDec','z','daymax']]))
-    
-        valu = np.unique(lc['z','daymax'])
-        diff = lc['daymax']-valu['daymax'][:, np.newaxis]
-        flag = np.abs(diff) < 1.e-5
-        diffb = lc['z']-valu['z'][:, np.newaxis]
-        flag &= np.abs(diffb) < 1.e-5
-
-        tile_band = np.tile(lc['band'], (len(valu), 1))
-        tile_snr = np.tile(lc['snr_m5'], (len(valu), 1))
-
-        flag_snr = tile_snr > 5.
-
-        # difftime = lc['time']-lc['daymax']
-        phase = np.tile(lc['phase'], (len(valu), 1))
-
-        count_bef = self.select_phase(phase, flag, flag_snr,operator.lt,0.)
-        restab.add_column(Column(count_bef,name='N_bef'))
-
-        count_aft = self.select_phase(phase, flag, flag_snr,operator.ge,0.)
-        restab.add_column(Column(count_aft,name='N_aft'))
-
-        count_pmin = self.select_phase(phase, flag, True,operator.le,-5.)
-        restab.add_column(Column(count_pmin,name='N_phmin'))
-        
-        count_pmax = self.select_phase(phase, flag, True,operator.ge,30.)
-        restab.add_column(Column(count_pmax,name='N_phmax'))
-
-        # LC selection here
-        idx = (restab['N_bef']>=2)&(restab['N_aft']>=5)
-        idx &= (restab['N_phmin']>=1)&(restab['N_phmax']>=1)
-        restab_good = Table(restab[idx])
-        restab_bad = Table(restab[~idx])
-        for par in params:
-            restab_bad.add_column(Column([100.]*len(restab_bad),name='Cov_{}{}'.format(par,par)))
-
-        return restab_good, restab_bad
-    """
-
-
+"""
 def calcSN_last(lc_all, params=['x0', 'x1', 'color'], j=-1, output_q=None):
 
     time_ref = time.time()
@@ -1535,17 +1311,6 @@ def calcSN_last(lc_all, params=['x0', 'x1', 'color'], j=-1, output_q=None):
     restab.add_column(Column(count, name='N_aft'))
 
     # print('calc',restab)
-    """
-    flagp = tile_diff>=0.
-    flagn = tile_diff<0.
-   
-    for key,fl in dict(zip(['aft','bef'],[flagp, flagn])).items():
-        fflag = np.copy(flag)
-        fflag &= fl
-        ma_diff = np.ma.array(tile_diff, mask=~fflag)
-        count = ma_diff.count(axis=1)
-        restab.add_column(Column(count,name='N_{}'.format(key)))
-    """
 
     # print('after selection',time.time()-time_ref)
     # Select LCs with a sufficient number of LC points before and after max
@@ -1596,175 +1361,9 @@ def calcSN_last(lc_all, params=['x0', 'x1', 'color'], j=-1, output_q=None):
         output_q.put({j: restab})
     else:
         return restab
+"""
 
-
-def calcSN_old(lc_all, params=['x0', 'x1', 'color'], j=-1, output_q=None):
-
-    time_ref = time.time()
-
-    # print('go man',j,len(lc_all))
-    fields = []
-    for fi in ['season', 'pixRA', 'pixDec', 'z',
-               'daymax', 'snr_m5', 'time', 'fluxerr', 'phase']:
-        fields.append(fi)
-
-    for ia, vala in enumerate(params):
-        for jb, valb in enumerate(params):
-            if jb >= ia:
-                fields.append('F_'+vala+valb)
-    # lc = Table(lc_all[fields])
-
-    # lc.write('lctest.hdf5',path='lc')
-
-    # print(type(lc_all[fields]))
-    df = lc_all[fields].to_pandas()
-
-    """
-    store = pd.HDFStore('lctest.h5')
-    store['df'] = df
-    """
-
-    groups = df.groupby(['season', 'pixRA', 'pixDec', 'z', 'daymax'])
-
-    # print(groups.head(5))
-    groups = groups.apply(npoints)
-
-    # print(groups.head(5))
-    # groups['N_bef']=groups['phase'].filter(lambda x: x<0).size()
-    # groups['N_aft']=groups['phase'].filter(lambda x: x>=0).size()
-
-    idx = (groups['N_bef'] >= 2) & (groups['N_aft'] >= 5)
-
-    group_good = groups.loc[idx]
-    group_bad = groups.loc[~idx]
-
-    group_bad = group_bad.groupby(
-        ['season', 'pixRA', 'pixDec', 'z', 'daymax', 'N_bef', 'N_aft'])
-    restab_bad = Table(rows=list(group_bad.groups.keys()),
-                       names=group_bad.keys)
-    for par in params:
-        restab_bad.add_column(
-            Column([100.]*len(restab_bad), name='Cov_{}{}'.format(par, par)))
-
-    group_good = group_good.groupby(
-        ['season', 'pixRA', 'pixDec', 'z', 'daymax', 'N_bef', 'N_aft'])
-
-    group_good = group_good.apply(
-        lambda x: sigma_x0_x1_color_grp(x, params=['x0', 'x1', 'color']))
-
-    groupfields = ['season', 'pixRA', 'pixDec',
-                   'z', 'daymax', 'N_bef', 'N_aft']
-    for par in params:
-        groupfields.append('Cov_{}{}'.format(par, par))
-    group_good = group_good.groupby(groupfields)
-    restab_good = Table(rows=list(group_good.groups.keys()),
-                        names=group_good.keys)
-    restab = restab_bad
-
-    restab = vstack([restab, restab_good])
-
-    print('done', j)
-    if output_q is not None:
-        output_q.put({j: restab})
-    else:
-        return restab
-    print('yes', group_good)
-
-    print('oooo', group_good)
-
-    restab = Table(np.unique(lc[['season', 'pixRA', 'pixDec', 'z', 'daymax']]))
-
-    """
-    for band in 'ugrizy':
-        idx = lc['band'] == 'LSST::'+band
-        resp = npointBand(lc[idx],band)
-    """
-
-    valu = np.unique(lc['z', 'daymax'])
-    diff = lc['daymax']-valu['daymax'][:, np.newaxis]
-    flag = np.abs(diff) < 1.e-5
-    diffb = lc['z']-valu['z'][:, np.newaxis]
-    flag &= np.abs(diffb) < 1.e-5
-
-    tile_band = np.tile(lc['band'], (len(valu), 1))
-    tile_snr = np.tile(lc['snr_m5'], (len(valu), 1))
-    # tile_flux = np.tile(lc['flux_e_sec'], (len(valu), 1))
-    # tile_flux_5 = np.tile(lc['flux_5'], (len(valu), 1))
-    difftime = lc['time']-lc['daymax']
-    tile_diff = np.tile(difftime, (len(valu), 1))
-
-    flagp = tile_diff >= 0.
-    flagn = tile_diff < 0.
-
-    for key, fl in dict(zip(['aft', 'bef'], [flagp, flagn])).items():
-        fflag = np.copy(flag)
-        fflag &= fl
-        ma_diff = np.ma.array(tile_diff, mask=~fflag)
-        count = ma_diff.count(axis=1)
-        restab.add_column(Column(count, name='N_{}'.format(key)))
-
-    """
-    for band in 'ugrizy':
-        maskb = np.copy(flag)
-        maskb &= tile_band=='LSST::'+band
-        ma_band = np.ma.array(tile_snr, mask=~maskb,fill_value=0.).filled()
-        snr_band = np.sqrt(np.sum(ma_band**2, axis=1))
-        # ratflux = tile_flux/tile_flux_5
-        # ma_flux = np.ma.array(ratflux, mask=~maskb,fill_value=0.).filled()
-        # snr_band_5 = 5.*np.sqrt(np.sum(ma_flux**2, axis=1))
-        restab.add_column(Column(snr_band,name='snr_{}'.format(band)))
-        # restab.add_column(Column(snr_band_5,name='snr_5_{}'.format(band)))
-        for key,fl in dict(zip(['aft','bef'],[flagp, flagn])).items():
-            fflag = np.copy(maskb)
-            fflag &= fl
-            ma_diff = np.ma.array(tile_diff, mask=~fflag)
-            count = ma_diff.count(axis=1)
-            restab.add_column(Column(count,name='N_{}_{}'.format(key,band)))
-    """
-
-    print('after selection', time.time()-time_ref)
-    # Select LCs with a sufficient number of LC points before and after max
-
-    idx = (restab['N_bef'] >= 2) & (restab['N_aft'] >= 5)
-    restab_good = Table(restab[idx])
-    restab_bad = Table(restab[~idx])
-    for par in params:
-        restab_bad.add_column(
-            Column([100.]*len(restab_bad), name='Cov_{}{}'.format(par, par)))
-
-    valu = np.unique(restab_good['z', 'daymax'])
-    diff = lc['daymax']-valu['daymax'][:, np.newaxis]
-    flag = np.abs(diff) < 1.e-5
-    diffb = lc['z']-valu['z'][:, np.newaxis]
-    flag &= np.abs(diffb) < 1.e-5
-    mystr = []
-    for ia, vala in enumerate(params):
-        for jb, valb in enumerate(params):
-            if jb >= ia:
-                mystr.append('F_'+vala+valb)
-    mystr += ['fluxerr']
-
-    resu = np.ma.array(
-        np.tile(np.copy(lc[mystr]), (len(valu), 1)), mask=~(flag & flag_snr))
-
-    # print(resu['snr_m5'])
-    restab = restab_bad
-    time_ref = time.time()
-    """
-    if len(restab_good) > 0:
-
-        sigma_x0_x1_color(resu,restab_good,params=['x0','x1','color'])
-        
-        restab = vstack([restab,restab_good])
-    """
-    print('after sigma', time.time()-time_ref)
-
-    if output_q is not None:
-        output_q.put({j: restab})
-    else:
-        return restab
-
-
+"""
 def npoints(gr):
 
     idx = gr['phase'] < 0.
@@ -1772,8 +1371,9 @@ def npoints(gr):
     gr['N_aft'] = len(gr)-len(gr.loc[idx])
 
     return gr
+"""
 
-
+"""
 def npointBand(lc, band):
 
     valu = np.unique(lc['z', 'daymax'])
@@ -1801,6 +1401,7 @@ def npointBand(lc, band):
             restab.add_column(Column(count, name='N_{}'.format(key, band)))
 
     return restab
+"""
 
 
 def sigmaSNparams(resu, restab, params=['x0', 'x1', 'color']):
@@ -1863,44 +1464,20 @@ def sigmaSNparams(resu, restab, params=['x0', 'x1', 'color']):
     # time_ref = time.time()
 
 
-def sigma_x0_x1_color_grp(grp, params=['x0', 'x1', 'daymax', 'color']):
-
-    # print('grp',grp)
-    parts = {}
-    for ia, vala in enumerate(params):
-        for jb, valb in enumerate(params):
-            if jb >= ia:
-                parts[ia, jb] = grp['F_'+vala+valb]
-
-    # print(parts)
-    size = len(grp)
-    npar = len(params)
-    Fisher_Big = np.zeros((npar*size, npar*size))
-    Big_Diag = np.zeros((npar*size, npar*size))
-    Big_Diag = []
-
-    for iv in range(size):
-        Fisher_Matrix = np.zeros((npar, npar))
-        for ia, vala in enumerate(params):
-            for jb, valb in enumerate(params):
-                if jb >= ia:
-                    Fisher_Big[ia+npar*iv][jb+npar*iv] = parts[ia, jb]
-
-    # pprint.pprint(Fisher_Big)
-
-    Fisher_Big = Fisher_Big + np.triu(Fisher_Big, 1).T
-    Big_Diag = np.diag(np.linalg.inv(Fisher_Big))
-
-    for ia, vala in enumerate(params):
-        indices = range(ia, len(Big_Diag), npar)
-        # restab.add_column(
-        #    Column(np.take(Big_Diag, indices), name='Cov_{}{}'.format(vala,vala)))
-        grp['Co_{}{}'.format(vala, vala)] = np.take(Big_Diag, indices)
-
-    return grp
-
-
 def faster_inverse(A):
+    """
+    Method to invert a matrix in a fast way
+
+    Parameters
+    --------------
+    A: matrix to invert
+
+    Returns
+    ----------
+    A-1: inverse matrix
+
+    """
+
     b = np.identity(A.shape[1], dtype=A.dtype)
     # u, piv, x, info = lapack.dgesv(A, b)
     return la.solve(A, b)
