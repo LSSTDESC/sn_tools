@@ -7,7 +7,7 @@ from sn_tools.sn_utils import GenerateSample, Make_Files_for_Cadence_Metric, X0_
 from sn_tools.sn_utils import DiffFlux, MbCov, GetReference, Gamma
 from sn_tools.sn_cadence_tools import ReferenceData, GenerateFakeObservations
 from sn_tools.sn_cadence_tools import TemplateData, AnaOS, Match_DD
-from sn_tools.sn_calcFast import LCfast, CalcSN, CalcSN_df
+from sn_tools.sn_calcFast import LCfast, CalcSN, CalcSN_df, CovColor
 from sn_tools.sn_telescope import Telescope
 from sn_tools.sn_obs import DDFields
 import os
@@ -685,17 +685,16 @@ class TestSNUtils(unittest.TestCase):
 
 
 class TestSNcalcFast(unittest.TestCase):
-    """
+
     def testLCfast(self):
 
         x1, color = -2.0, 0.2
 
         lc = simuLCfast(x1, color)
 
-        #print(lc.columns)
-        #for col in lc.columns:
+        # print(lc.columns)
+        # for col in lc.columns:
         #    print(col, lc[col].values.tolist())
-
 
         # These are what the result should be
         dictRef = {}
@@ -714,7 +713,6 @@ class TestSNcalcFast(unittest.TestCase):
 
         for key in dictRef.keys():
             assert(np.isclose(dictRef[key], lc[key]).all())
-    """
 
     def testCalcSN(self):
 
@@ -723,12 +721,34 @@ class TestSNcalcFast(unittest.TestCase):
         # Simulate LC
         lc = simuLCfast(x1, color, bands='griz')
 
-        print(lc['band'])
         # instance of CalcSN
 
         sn = CalcSN(Table.from_pandas(lc), nPhamin=0, nPhamax=0).sn
 
-        print(sn)
+        dictRef = {}
+
+        """
+        for col in sn.dtype.names:
+            print('dictRef[\'', col, '\']=', sn[col].tolist())
+        """
+        dictRef['season'] = [1, 1]
+        dictRef['healpixID'] = [10, 10]
+        dictRef['pixRA'] = [0.0, 0.0]
+        dictRef['pixDec'] = [0.0, 0.0]
+        dictRef['z'] = [0.1, 0.2]
+        dictRef['daymax'] = [59023.1, 59025.2]
+        dictRef['n_bef'] = [20, 20]
+        dictRef['n_aft'] = [44, 48]
+        dictRef['n_phmin'] = [12, 16]
+        dictRef['n_phmax'] = [0, 0]
+        dictRef['Cov_x0x0'] = [
+            1.2082989784919376e-13, 3.8313819364419196e-14]
+        dictRef['Cov_x1x1'] = [0.00015952039943579143, 0.0019942190656627324]
+        dictRef['Cov_colorcolor'] = [
+            2.5922180044333713e-06, 2.0975146799526763e-05]
+
+        for key in dictRef.keys():
+            assert(np.isclose(dictRef[key], sn[key]).all())
 
     def testCalcSN_df(self):
 
@@ -737,18 +757,99 @@ class TestSNcalcFast(unittest.TestCase):
         # Simulate LC
         lc = simuLCfast(x1, color, bands='griz')
 
-        print(lc['band'])
         # instance of CalcSN
 
-        sn = CalcSN_df(lc, n_phase_min=0, n_phase_max=0, from_matrix=False).sn
+        # first case : estimated variance color only
+        sn = CalcSN_df(lc, n_phase_min=0, n_phase_max=0,
+                       invert_matrix=False).sn
 
-        print(sn)
+        dictRef = {}
+        """
+        for col in sn.columns:
+            print('dictRef[\'', col, '\']=', sn[col].to_list())
+        """
+        dictRef['color'] = [0.2, 0.2]
+        dictRef['z'] = [0.1, 0.2]
+        dictRef['daymax'] = [59023.1, 59025.2]
+        dictRef['season'] = [1, 1]
+        dictRef['healpixID'] = [10, 10]
+        dictRef['pixRA'] = [0.0, 0.0]
+        dictRef['pixDec'] = [0.0, 0.0]
+        dictRef['level_8'] = [0, 0]
+        dictRef['Cov_x0x0'] = [100.0, 100.0]
+        dictRef['Cov_x1x1'] = [100.0, 100.0]
+        dictRef['Cov_daymaxdaymax'] = [100.0, 100.0]
+        dictRef['Cov_colorcolor'] = [
+            2.630505097669433e-06, 2.109964241118505e-05]
+        dictRef['n_aft'] = [44.0, 48.0]
+        dictRef['n_bef'] = [20.0, 20.0]
+        dictRef['n_phmin'] = [12.0, 16.0]
+        dictRef['n_phmax'] = [12.0, 16.0]
+
+        for key in dictRef.keys():
+            assert(np.isclose(dictRef[key], sn[key]).all())
+
+        # second case : estimated all variances from matrix inverting
+        sn = CalcSN_df(lc, n_phase_min=0, n_phase_max=0,
+                       invert_matrix=True).sn
+
+        dictRef = {}
+        """
+        for col in sn.columns:
+            print('dictRef[\'', col, '\']=', sn[col].to_list())
+        """
+        dictRef['color'] = [0.2, 0.2]
+        dictRef['z'] = [0.1, 0.2]
+        dictRef['daymax'] = [59023.1, 59025.2]
+        dictRef['season'] = [1, 1]
+        dictRef['healpixID'] = [10, 10]
+        dictRef['pixRA'] = [0.0, 0.0]
+        dictRef['pixDec'] = [0.0, 0.0]
+        dictRef['level_8'] = [0, 0]
+        dictRef['Cov_x0x0'] = [1.239736218613944e-13, 3.908852038544615e-14]
+        dictRef['Cov_x1x1'] = [0.0001769038924859473, 0.0021595857993669952]
+        dictRef['Cov_daymaxdaymax'] = [
+            0.00014423656437498333, 0.0017679338165480843]
+        dictRef['Cov_colorcolor'] = [
+            2.6305050976694332e-06, 2.1099642411185038e-05]
+        dictRef['n_aft'] = [44.0, 48.0]
+        dictRef['n_bef'] = [20.0, 20.0]
+        dictRef['n_phmin'] = [12.0, 16.0]
+        dictRef['n_phmax'] = [12.0, 16.0]
+
+        for key in dictRef.keys():
+            assert(np.isclose(dictRef[key], sn[key]).all())
+
+    def testCovColor(self):
+
+        x1, color = -2.0, 0.2
+
+        # Simulate LC
+        lc = simuLCfast(x1, color, bands='griz')
+
+        names = ['x1', 'color', 'z', 'daymax', 'season',
+                 'healpixID', 'pixRA', 'pixDec']
+        params = ['x0', 'x1', 'daymax', 'color']
+        tosum = []
+        for ia, vala in enumerate(params):
+            for jb, valb in enumerate(params):
+                if jb >= ia:
+                    tosum.append('F_'+vala+valb)
+
+        sums = lc.groupby(names)[tosum].sum()
+        # sums = pd.DataFrame([lc.groupby(names)[tosum].sum()], columns=tosum)
+
+        var_color = CovColor(sums).Cov_colorcolor
+
+        var_ref = [2.630505097669433e-06, 2.109964241118505e-05]
+
+        assert(np.isclose(var_ref, var_color.to_list()).all())
 
 
-"""        
+"""
 if __name__ == "__main__":
-   
-    
+
+
 """
 lsst.utils.tests.init()
 snRate = TestSNRate
