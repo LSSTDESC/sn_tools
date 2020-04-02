@@ -11,7 +11,8 @@ class ClusterObs:
         class to identify clusters of points in (RA,Dec)
 
         Parameters
-        ----------
+        ---------------
+
         data: numpy record array
          data to process
         nclusters: int
@@ -56,12 +57,13 @@ class ClusterObs:
         It uses the KMeans algorithm from scipy
 
         Parameters
-        ---------
+        ---------------
+
         nclusters: int
          number of clusters to find
 
         Returns
-        -------
+        -----------
         points: numpy array
           array of (RA,Dec) of the points
         y_km: numpy array
@@ -98,12 +100,12 @@ class ClusterObs:
         Method matching clusters to data
 
         Parameters
-        ----------
+        ---------------
         nclusters: int
          number of clusters to consider
 
         Returns
-        -------
+        -----------
         env: numpy record array
           summary of cluster infos:
           clusid, fieldId, RA, Dec, width_RA, width_Dec, 
@@ -166,12 +168,12 @@ def getVisitsBand(obs):
     for a set of observations
 
     Parameters
-    ----------
+    ---------------
     obs: numpy record array
      array of observations
 
     Returns
-    -------
+    -----------
     Nvisits: dict
      dict with bands as keys and number of visits as values
 
@@ -198,7 +200,7 @@ def getName(df_fields, RA):
     Function to get a field name corresponding to RA
 
     Parameters
-    ----------
+    ---------------
     df_fields: pandas df
      array of fields with the following columns:
      - name: name of the field
@@ -208,7 +210,7 @@ def getName(df_fields, RA):
      - fieldnum: field number
 
     Returns
-    -------
+    ----------
     idx: int
      idx (row number) of the matching field
     name: str
