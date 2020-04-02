@@ -297,7 +297,7 @@ class TestSNCadence(unittest.TestCase):
         config['seasons'] = [1.]  # seasons
         config['season_length'] = 10.  # season_length (days)
         config['bands'] = ['g', 'r', 'i', 'z', 'y']  # bands to consider
-        config['Cadence'] = [3., 3., 3., 3., 3.]  # Cadence[day] per band
+        config['cadence'] = [3., 3., 3., 3., 3.]  # Cadence[day] per band
         config['m5'] = [23.27, 24.58, 24.22, 23.65,
                         22.78, 22.00]  # 5-sigma depth values
         config['Nvisits'] = [1, 1, 1, 1, 1]

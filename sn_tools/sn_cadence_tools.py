@@ -251,7 +251,7 @@ class GenerateFakeObservations:
         """
 
         bands = config['bands']
-        cadence = dict(zip(bands, config['Cadence']))
+        cadence = dict(zip(bands, config['cadence']))
         shift_days = dict(
             zip(bands, [config['shift_days']*io for io in range(len(bands))]))
         m5 = dict(zip(bands, config['m5']))
