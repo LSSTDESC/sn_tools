@@ -8,6 +8,7 @@ from sn_tools.sn_utils import DiffFlux, MbCov, GetReference, Gamma
 from sn_tools.sn_cadence_tools import ReferenceData, GenerateFakeObservations
 from sn_tools.sn_cadence_tools import TemplateData, AnaOS, Match_DD
 from sn_tools.sn_calcFast import LCfast, CalcSN, CalcSN_df, CovColor
+from sn_tools.sn_clusters import ClusterObs
 from sn_tools.sn_telescope import Telescope
 from sn_tools.sn_obs import DDFields
 import os
@@ -846,6 +847,11 @@ class TestSNcalcFast(unittest.TestCase):
         assert(np.isclose(var_ref, var_color.to_list()).all())
 
 
+class TestSNclusters(unittest.TestCase):
+
+    print('ooo')
+
+
 """
 if __name__ == "__main__":
 
@@ -857,4 +863,5 @@ snTelescope = TestSNTelescope
 snCadence = TestSNCadence
 snUtil = TestSNUtils
 calcFast = TestSNcalcFast
+clusters = TestSNclusters
 unittest.main(verbosity=5)
