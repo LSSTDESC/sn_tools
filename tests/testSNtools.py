@@ -16,6 +16,7 @@ from numpy.testing import assert_almost_equal, assert_equal
 import pandas as pd
 import h5py
 from astropy.table import Table, vstack
+import glob
 
 m5_ref = dict(zip('ugrizy', [23.60, 24.83, 24.38, 23.92, 23.35, 22.44]))
 repo_dir = 'https://me.lsst.eu/gris/Reference_Files'
@@ -849,7 +850,77 @@ class TestSNcalcFast(unittest.TestCase):
 
 class TestSNclusters(unittest.TestCase):
 
-    print('ooo')
+    # first grab some data
+    fDir = '.'
+    fName = 'descddf_v1.4_10yrs_DD_twoyears'
+    fExtens = 'npy'
+
+    getFile(fDir, fName, fExtens, 'unittests')
+    data = np.load('{}/{}.{}'.format(fDir, fName, fExtens))
+    nclusters = 5
+    fields = DDFields()
+
+    clus = ClusterObs(data, nclusters, fName, fields)
+
+    # these are the clusters found and the number of visits associated
+    clusters = clus.clusters
+    dfclusters = clus.dfclusters
+    dictRef = {}
+    """
+    for val in clusters.columns:
+        print('dictRef[\'{}\']='.format(val), clusters[val].to_list())
+    """
+
+    dictRef['clusid'] = [0, 1, 2, 3, 4]
+    dictRef['RA'] = [53.1644889383448, 349.4901155249653,
+                     150.0614583198708, 9.500268366570257, 35.74042365422678]
+    dictRef['Dec'] = [-28.090789606070373, -63.26284809752175,
+                      2.1861679024847427, -43.954741632914974, -4.754220734785014]
+    dictRef['width_RA'] = [1.5566493003965718, 3.0166084454850193,
+                           1.3640734093042113, 1.883274130238675, 1.3777211519657158]
+    dictRef['width_Dec'] = [1.3366864617690055, 1.3534620445526713,
+                            1.3297419541315458, 1.353426274694172, 1.3366522961266032]
+    dictRef['area'] = [1.6342188350701072, 3.2066746992925483,
+                       1.424606742986726, 2.001879929708757, 1.4463375323299488]
+    dictRef['dbName'] = ['descddf_v1.4_10yrs_DD_twoyears', 'descddf_v1.4_10yrs_DD_twoyears',
+                         'descddf_v1.4_10yrs_DD_twoyears', 'descddf_v1.4_10yrs_DD_twoyears', 'descddf_v1.4_10yrs_DD_twoyears']
+    dictRef['fieldName'] = ['CDFS', 'SPT', 'COSMOS', 'ELAIS', 'XMM-LSS']
+    dictRef['Nvisits'] = [5145.0, 2791.0, 5313.0, 3701.0, 3534.0]
+    dictRef['Nvisits_all'] = [5145.0, 2791.0, 5313.0, 3701.0, 3534.0]
+    dictRef['Nvisits_u'] = [464.0, 248.0, 224.0, 272.0, 272.0]
+    dictRef['Nvisits_g'] = [240.0, 129.0, 256.0, 174.0, 168.0]
+    dictRef['Nvisits_r'] = [480.0, 254.0, 512.0, 348.0, 336.0]
+    dictRef['Nvisits_i'] = [960.0, 504.0, 1017.0, 688.0, 669.0]
+    dictRef['Nvisits_z'] = [2525.0, 1400.0, 2796.0, 1875.0, 1757.0]
+    dictRef['Nvisits_y'] = [476.0, 256.0, 508.0, 344.0, 332.0]
+
+    # transform in pandas df
+    dfRef = pd.DataFrame.from_dict(dictRef)
+    dfRef = dfRef.sort_values(by=['fieldName'])
+    clusters = clusters.sort_values(by=['fieldName'])
+
+    for key in dictRef.keys():
+        if key != 'dbName' and key != 'fieldName' and key != 'clusid':
+            assert(np.isclose(dfRef[key], clusters[key].to_list()).all())
+
+
+class TestSNclean(unittest.TestCase):
+    def testClean(self):
+
+        def cmdrm(fi):
+            return 'rm {}'.format(fi)
+
+        fDir = '.'
+
+        files_npy = glob.glob('{}/*.npy'.format(fDir))
+        files_hdf5 = glob.glob('{}/*.hdf5'.format(fDir))
+        print('Cleaning - removing the following files:')
+        print('npy files:', files_npy)
+        for fi in files_npy:
+            os.system(cmdrm(fi))
+        print('hdf5 files:', files_hdf5)
+        for fi in files_hdf5:
+            os.system(cmdrm(fi))
 
 
 """
@@ -864,4 +935,5 @@ snCadence = TestSNCadence
 snUtil = TestSNUtils
 calcFast = TestSNcalcFast
 clusters = TestSNclusters
+clean = TestSNclean
 unittest.main(verbosity=5)
