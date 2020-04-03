@@ -115,7 +115,8 @@ def patchObs(observations, fieldType,
         observations = getFields(
             observations, fieldType, fieldIds, nside)
 
-        print('before cluster', len(observations), observations.dtype)
+        print('before cluster', len(observations),
+              observations.dtype, nclusters)
         # get clusters out of these obs
         radius = 4.
 
