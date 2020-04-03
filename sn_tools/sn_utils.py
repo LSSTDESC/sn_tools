@@ -56,7 +56,8 @@ class MultiProc:
 
         # multiprocessing parameters
         nz = len(self.toprocess)
-        t = np.linspace(0, nz-1, self.nproc+1, dtype='int')
+        t = np.linspace(0, nz, self.nproc+1, dtype='int')
+        print('hello', nz, t)
         result_queue = multiprocessing.Queue()
 
         procs = [multiprocessing.Process(name='Subprocess-'+str(j), target=self.process,
