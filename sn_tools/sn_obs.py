@@ -68,7 +68,7 @@ def DDFields(DDfile=None):
 def patchObs(observations, fieldType,
              dbName, nside, RAmin, RAmax, Decmin, Decmax,
              RACol, DecCol,
-             display=False):
+             display=False, nclusters=5):
     """
     Method to grab informations and patches in the sky
 
@@ -109,9 +109,6 @@ def patchObs(observations, fieldType,
     radius = 5.
 
     if fieldType == 'DD':
-        nclusters = 5
-        if 'euclid' in dbName:
-            nclusters = 6
 
         print(np.unique(observations['fieldId']))
         fieldIds = [290, 744, 1427, 2412, 2786]
@@ -120,7 +117,7 @@ def patchObs(observations, fieldType,
 
         print('before cluster', len(observations), observations.dtype)
         # get clusters out of these obs
-        radius = 10.
+        radius = 4.
 
         DD = DDFields()
         clusters = ClusterObs(
