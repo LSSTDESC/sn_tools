@@ -74,7 +74,7 @@ class LCfast:
         # selection: min_rf_phase < phase < max_rf_phase
         # and        blue_cutoff < mean_rest_frame < red_cutoff
         # where mean_rest_frame = telescope.mean_wavelength/(1.+z)
-        self.blue_cutoff = 350.
+        self.blue_cutoff = 380.
         self.red_cutoff = 800.
 
         # SN parameters for Fisher matrix estimation
