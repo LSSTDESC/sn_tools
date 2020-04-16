@@ -391,6 +391,7 @@ class LCfast:
         lc.loc[:, 'n_phmin'] = (lc['phase'] <= -5.)
         lc.loc[:, 'n_phmax'] = (lc['phase'] >= 20)
 
+        lc.loc[:, 'ratio'] = (lc['flux_e_sec']/lc['snr_m5'])/(lc['flux_5']/5.)
         # transform boolean to int because of some problems in the sum()
 
         for colname in ['n_aft', 'n_bef', 'n_phmin', 'n_phmax']:
@@ -575,6 +576,8 @@ class LCfast:
 
         correct_m5 = srand_ref/srand_obs
 
+        print(band, gammaref, gamma_obs, m5,
+              sel_obs[self.m5Col], sel_obs[self.exptimeCol])
         fluxes_obs_err = fluxes_obs_err/correct_m5
 
         # now apply the flag to select LC points
@@ -666,6 +669,11 @@ class LCfast:
             for colname in ['n_aft', 'n_bef', 'n_phmin', 'n_phmax']:
                 lc.loc[:, colname] = lc[colname].astype(int)
 
+            lc.loc[:, 'ratio'] = (
+                lc['flux_e_sec']/lc['snr_m5'])/(lc['flux_5']/5.)
+
+            idb = (lc['z'] > 0.65) & (lc['z'] < 0.9)
+            print(lc[idb][['z', 'ratio', 'm5', 'flux_e_sec', 'snr_m5']])
         if output_q is not None:
             output_q.put({j: lc})
         else:
