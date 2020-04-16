@@ -1,16 +1,16 @@
 import numpy as np
 from sn_tools.sn_rate import SN_Rate
+from sn_tools.sn_throughputs import Throughputs
+from sn_tools.sn_telescope import Telescope
 import os
 import numpy.lib.recfunctions as rf
 from astropy.table import Table, vstack, Column
-from sn_tools.sn_throughputs import Throughputs
 from scipy import interpolate, integrate
 from lsst.sims.photUtils import Sed, PhotometricParameters, Bandpass, Sed
 import sncosmo
 import h5py
 from scipy.interpolate import InterpolatedUnivariateSpline as Spline1d
 from scipy.interpolate import griddata, interp2d
-from sn_tools.sn_telescope import Telescope
 import pandas as pd
 from scipy.interpolate import RegularGridInterpolator
 import multiprocessing
@@ -1590,7 +1590,11 @@ class GetReference:
         if not os.path.exists(gammaName):
             print('gamma file {} does not exist')
             print('will generate it - few minutes')
-            Gamma('ugrizy', telescope, gammaName)
+            mag_range = np.arange(15., 28., 1.)
+            exptimes = np.arange(1., 3000., 10.)
+            Gamma('ugrizy', telescope, gammaName,
+                  mag_range=mag_range,
+                  exptimes=exptimes)
             print('end of gamma estimation')
 
         fgamma = h5py.File(gammaName, 'r')
