@@ -1607,7 +1607,7 @@ class GetReference:
         self.param = {}
 
         bands = np.unique(lc_ref_tot['band'])
-        mag_range = np.arange(10., 38., 0.01)
+        mag_range = np.arange(10., 28., 0.01)
         # exptimes = np.linspace(15.,30.,2)
         # exptimes = [15.,30.,60.,100.]
 
@@ -1680,6 +1680,7 @@ class GetReference:
             gammab = np.reshape(rec[index]['gamma'], (nmag, nexp))
             self.gamma[band] = RegularGridInterpolator(
                 (mag, exp), gammab, method=method, bounds_error=False, fill_value=0.)
+            #print(band, gammab, mag, exp)
 
     def limVals(self, lc, field):
         """ Get unique values of a field in  a table
