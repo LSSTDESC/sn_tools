@@ -576,8 +576,10 @@ class LCfast:
 
         correct_m5 = srand_ref/srand_obs
 
+        """
         print(band, gammaref, gamma_obs, m5,
               sel_obs[self.m5Col], sel_obs[self.exptimeCol])
+        """
         fluxes_obs_err = fluxes_obs_err/correct_m5
 
         # now apply the flag to select LC points
@@ -672,8 +674,10 @@ class LCfast:
             lc.loc[:, 'ratio'] = (
                 lc['flux_e_sec']/lc['snr_m5'])/(lc['flux_5']/5.)
 
+            """
             idb = (lc['z'] > 0.65) & (lc['z'] < 0.9)
             print(lc[idb][['z', 'ratio', 'm5', 'flux_e_sec', 'snr_m5']])
+            """
         if output_q is not None:
             output_q.put({j: lc})
         else:
