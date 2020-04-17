@@ -227,7 +227,7 @@ def loadFile(filename, objtype='pandasDataFrame'):
 
     if ext == '.npy':
         # numpy array in an npy file
-        return np.load(filename)
+        return np.load(filename, allow_pickle=True)
 
     else:
         if ext == '.hdf5':
@@ -588,7 +588,7 @@ def getObservations(dbDir, dbName, dbExtens):
     dbFullName = '{}/{}.{}'.format(dbDir, dbName, dbExtens)
     # if extension is npy -> load
     if dbExtens == 'npy':
-        observations = np.load(dbFullName)
+        observations = np.load(dbFullName, allow_pickle=True)
     else:
         # db as input-> need to transform as npy
         # print('looking for',dbFullName)
