@@ -39,17 +39,28 @@ class ClusterObs:
         self.points, self.clus, self.labels = self.makeClusters(nclusters)
 
         # analyse the clusters
-        clusters, dfclus = self.anaClusters(nclusters)
+        clusters, dfclus, dataclus = self.anaClusters(nclusters)
 
         # this is a summary of the clusters found
         self.clusters = clusters
         self.dfclusters = dfclus
+        self.dataclus = dataclus
 
+        """
         # this dataframe is a matching of initial data and clusters infos
         datadf = pd.DataFrame(np.copy(data))
 
+        print(datadf.columns)
+        print(dfclus[['RA', 'Dec']])
+        datadf[self.RA_name] = datadf[self.RA_name].round(3)
+        datadf[self.Dec_name] = datadf[self.Dec_name].round(3)
+
+        dfclus['RA'] = dfclus['RA'].round(3)
+        dfclus['Dec'] = dfclus['Dec'].round(3)
+
         self.dataclus = datadf.merge(
             dfclus, left_on=[self.RA_name, self.Dec_name], right_on=['RA', 'Dec'])
+        """
 
     def makeClusters(self, nclusters):
         """
@@ -119,12 +130,14 @@ class ClusterObs:
 
         rcluster = pd.DataFrame()
         dfcluster = pd.DataFrame()
+        datacluster = pd.DataFrame()
         for io in range(nclusters):
 
             RA = self.points[self.clus == io, 0]
             Dec = self.points[self.clus == io, 1]
-
+            print('alors', RA, Dec)
             dfclus = pd.DataFrame({'RA': RA, 'Dec': Dec})
+            print('gooo', dfclus[['RA', 'Dec']])
             # ax.scatter(RA,Dec, s=10, c=color[io])
             indx = np.where(self.labels == io)[0]
             sel_obs = self.data[indx]
@@ -138,6 +151,13 @@ class ClusterObs:
             mean_Dec = np.mean(Dec)
             area = np.pi*(max_RA-min_RA)*(max_Dec-min_Dec)/4.
             idx, fieldName = getName(self.fields, mean_RA)
+
+            datacluster_loc = pd.DataFrame(np.copy(sel_obs))
+            datacluster_loc.loc[:, 'fieldName'] = fieldName
+            datacluster_loc.loc[:, 'clusId'] = int(io)
+            datacluster_loc.loc[:, 'RA'] = mean_RA
+            datacluster_loc.loc[:, 'Dec'] = mean_Dec
+            datacluster = pd.concat([datacluster, datacluster_loc], sort=False)
 
             dfclus.loc[:, 'fieldName'] = fieldName
             dfclus.loc[:, 'clusId'] = int(io)
@@ -159,7 +179,7 @@ class ClusterObs:
 
             rcluster = pd.concat((rcluster, rclus))
 
-        return rcluster, dfcluster
+        return rcluster, dfcluster, datacluster
 
 
 def getVisitsBand(obs):
