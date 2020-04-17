@@ -200,8 +200,8 @@ def getVisitsBand(obs):
     bands = 'ugrizy'
     Nvisits = {}
 
+    Nvisits['all'] = 0
     if 'filter' in obs.dtype.names:
-        Nvisits['all'] = 0
         for band in bands:
             ib = obs['filter'] == band
             Nvisits[band] = len(obs[ib])
