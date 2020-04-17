@@ -1039,7 +1039,7 @@ class AnaOS:
         # plt.legend(lista,listb,loc='center left', bbox_to_anchor=(1, 2.0),ncol=1,fontsize=12)
 
 
-def Match_DD(fields_DD, df):
+def Match_DD(fields_DD, df, radius=5):
     """
     Method to match df data to DD fields
 
@@ -1060,7 +1060,7 @@ def Match_DD(fields_DD, df):
     # for field in fields_DD:
     for index, field in fields_DD.iterrows():
         dataSel = DataInside(
-            df.to_records(index=False), field['RA'], field['Dec'], 10., 10., 'pixRA', 'pixDec')
+            df.to_records(index=False), field['RA'], field['Dec'], radius, radius, 'pixRA', 'pixDec')
         if dataSel is not None:
             dfSel = pd.DataFrame(np.copy(dataSel.data))
             dfSel['fieldname'] = field['name']
