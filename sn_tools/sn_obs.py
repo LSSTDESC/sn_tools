@@ -68,7 +68,7 @@ def DDFields(DDfile=None):
 def patchObs(observations, fieldType,
              dbName, nside, RAmin, RAmax, Decmin, Decmax,
              RACol, DecCol,
-             display=False, nclusters=5):
+             display=False, nclusters=5, radius=4.):
     """
     Method to grab informations and patches in the sky
 
@@ -106,7 +106,7 @@ def patchObs(observations, fieldType,
 
     """
 
-    radius = 5.
+    #radius = 5.
 
     if fieldType == 'DD':
 
@@ -118,7 +118,7 @@ def patchObs(observations, fieldType,
         print('before cluster', len(observations),
               observations.dtype, nclusters)
         # get clusters out of these obs
-        radius = 4.
+        #radius = 4.
 
         DD = DDFields()
         clusters = ClusterObs(
@@ -150,7 +150,7 @@ def patchObs(observations, fieldType,
 
         if fieldType == 'Fake':
             # in that case: only one (RA,Dec)
-            radius = 0.1
+            #radius = 0.1
             RA = np.unique(observations[RACol])[0]
             Dec = np.unique(observations[DecCol])[0]
             areas = pavingSky(RA-radius/2., RA+radius/2., Dec -
