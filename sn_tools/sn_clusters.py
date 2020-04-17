@@ -135,9 +135,7 @@ class ClusterObs:
 
             RA = self.points[self.clus == io, 0]
             Dec = self.points[self.clus == io, 1]
-            print('alors', RA, Dec)
             dfclus = pd.DataFrame({'RA': RA, 'Dec': Dec})
-            print('gooo', dfclus[['RA', 'Dec']])
             # ax.scatter(RA,Dec, s=10, c=color[io])
             indx = np.where(self.labels == io)[0]
             sel_obs = self.data[indx]
