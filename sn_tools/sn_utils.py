@@ -1590,7 +1590,7 @@ class GetReference:
         if not os.path.exists(gammaName):
             print('gamma file {} does not exist')
             print('will generate it - few minutes')
-            mag_range = np.arange(15., 28., 1.)
+            mag_range = np.arange(15., 38., 1.)
             exptimes = np.arange(1., 3000., 10.)
             Gamma('ugrizy', telescope, gammaName,
                   mag_range=mag_range,
@@ -1611,7 +1611,7 @@ class GetReference:
         self.param = {}
 
         bands = np.unique(lc_ref_tot['band'])
-        mag_range = np.arange(10., 28., 0.01)
+        mag_range = np.arange(10., 38., 0.01)
         # exptimes = np.linspace(15.,30.,2)
         # exptimes = [15.,30.,60.,100.]
 
