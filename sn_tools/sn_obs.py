@@ -19,6 +19,7 @@ import multiprocessing
 import glob
 import os
 from sn_tools.sn_clusters import ClusterObs
+import copy
 
 
 def DDFields(DDfile=None):
@@ -748,7 +749,19 @@ def renameFields(tab):
     fillCorresp(tab, corresp, 'exptime', 'visitExposureTime')
     fillCorresp(tab, corresp, 'nexp', 'numExposures')
 
-    return rf.rename_fields(tab, corresp)
+    print(tab.dtype)
+
+    rb = np.copy(tab)
+    for vv, vals in corresp.items():
+        rb = rf.drop_fields(rb, vv)
+        if vv != 'band':
+            rb = rf.append_fields(rb, vals, tab[vv])
+        else:
+            rb = rf.append_fields(rb, vals, tab[vv], dtypes='<U9')
+        #rb = rf.rename_fields(rb, {vv: vals})
+
+    # return rf.rename_fields(tab, corresp)
+    return rb
 
 
 def fillCorresp(tab, corres, vara, varb):
@@ -773,6 +786,7 @@ def fillCorresp(tab, corres, vara, varb):
 
     """
 
+    print('there man', vara, varb)
     if vara in tab.dtype.names and varb not in tab.dtype.names:
         corres[vara] = varb
 
