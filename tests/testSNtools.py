@@ -11,7 +11,7 @@ from sn_tools.sn_calcFast import LCfast, CalcSN, CalcSN_df, CovColor
 from sn_tools.sn_lcana import LCtoSN
 from sn_tools.sn_obs import renameFields, patchObs, getPix, pavingSky
 from sn_tools.sn_obs import DataInside, proj_gnomonic_plane, proj_gnomonic_sphere
-from sn_tools.sn_obs import pixelate
+from sn_tools.sn_obs import pixelate, season
 from sn_tools.sn_clusters import ClusterObs
 from sn_tools.sn_telescope import Telescope
 from sn_tools.sn_obs import DDFields
@@ -1126,7 +1126,7 @@ class TestSNobs(unittest.TestCase):
 
         healpixId, pixRA, pixDec = getPix(nside, fieldRA, fieldDec)
 
-        #print(healpixId, pixRA, pixDec)
+        # print(healpixId, pixRA, pixDec)
         healpixId_ref = 137931
         pixRA_ref = 49.921875
         pixDec_ref = -39.838439
@@ -1176,7 +1176,7 @@ class TestSNobs(unittest.TestCase):
             assert(np.isclose(dictRef[col], patches[col].tolist()).all())
 
         # visual check
-        #import matplotlib.pyplot as plt
+        # import matplotlib.pyplot as plt
         # sky.plot()
 
     def testDataInside(self):
@@ -1271,6 +1271,60 @@ class TestSNobs(unittest.TestCase):
         for key in dictRef.keys():
             assert(np.isclose(dictRef[key], np.copy(
                 pixels)[key].tolist()).all())
+
+        diff_RA = list(
+            map(float.__sub__, dictRef['fieldRA'], dictRef['pixRA']))
+
+        diff_Dec = list(
+            map(float.__sub__, dictRef['fieldDec'], dictRef['pixDec']))
+
+        # visu check
+        # import matplotlib.pyplot as plt
+        # fig, ax = plt.subplots()
+        # ax.plot(dictRef['pixRA'], dictRef['pixDec'], 'ro', mfc=None)
+        # ax.plot(dictRef['fieldRA'], dictRef['fieldDec'], 'k*')
+        # plt.show()
+
+    def testSeason(self):
+        # get some observations
+        dbDir = '.'
+        dbName = 'descddf_v1.4_10yrs_DD'
+        dbExtens = 'npy'
+
+        getFile(dbDir, dbName, dbExtens, ref_dir, 'unittests')
+
+        obs = np.load('{}/{}.{}'.format(dbDir, dbName, dbExtens))
+
+        # rename some of the fields
+        obs = renameFields(obs)
+
+        # select a field (here COSMOS)
+        idx = np.abs(obs['fieldRA']-150.36) < 4.
+        idx &= np.abs(obs['fieldDec']-2.84) < 4.
+
+        # get seasons
+        obs = season(obs[idx])
+
+        diff = np.diff(obs['season'])
+        flag = np.where(diff > 0)[0]
+
+        fortest = obs[flag+1]
+        dictRef = {}
+        varnames = ['fieldRA', 'fieldDec', 'observationStartMJD', 'season']
+        """
+        for what in varnames:
+            print('dictRef[\'{}\']='.format(what), fortest[what].tolist())
+        """
+        dictRef['fieldRA'] = [150.29170876551157, 150.36537175642601, 149.41838100971165, 150.21494643771322,
+                              150.42962747936306, 150.26403688022518, 149.86520912950522, 150.31111909947305, 149.89980741941818]
+        dictRef['fieldDec'] = [2.5454172590465762, 2.1041838251395437, 2.309646398454121, 1.8293401068476973,
+                               2.258112925296989, 2.4145625605821475, 2.350960616183958, 2.4306675623352088, 1.5295098852165476]
+        dictRef['observationStartMJD'] = [60281.310608226704, 60649.31193012857, 61013.3125870484, 61377.311062612964,
+                                          61744.312224690744, 62112.30832476759, 62474.30787504029, 62844.29449134687, 63204.30846311501]
+        dictRef['season'] = [2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+        for vv in varnames:
+            assert(np.isclose(dictRef[vv], fortest[vv].tolist()).all())
 
 
 class TestSNclean(unittest.TestCase):
