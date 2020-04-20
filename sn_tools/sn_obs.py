@@ -288,7 +288,7 @@ class pavingSky:
 
         Parameters
         --------------
-        areas: numpy array with 
+        areas: numpy array with
             RA, Dec: coordinate of the patch center
             radius_RA, _Dec: diag distance in RA and Dec
 
@@ -432,7 +432,7 @@ def areap_diamond(RA, Dec, radius_RA, radius_Dec):
     RA: float
       RA of the center of the diamond
     Dec: float
-      Dec of the center of the diamond  
+      Dec of the center of the diamond
     radius_RA: float
       diag value in RA
     radius_Dec: float
@@ -659,7 +659,7 @@ def proj_gnomonic_plane(lamb0, phi1, lamb, phi):
     Parameters
     --------------
     lambd0:  float
-      longitude of the tangent point of the projection (RA) 
+      longitude of the tangent point of the projection (RA)
     phi1: float
       latitude of the tangent point of the projection (Dec)
     lambd:  float
@@ -700,7 +700,7 @@ def proj_gnomonic_sphere(lamb0, phi, x, y):
     Parameters
     --------------
     lambd0:  float
-      longitude  of the tangent point of the projection (RA) 
+      longitude  of the tangent point of the projection (RA)
     phi1: float
       latitude of the tangent point of the projection (Dec)
     x:  float
@@ -717,7 +717,7 @@ def proj_gnomonic_sphere(lamb0, phi, x, y):
     """
     rho = (x**2+y**2)**0.5
     c = np.arctan(rho)
-    #print('c', rho, c, np.rad2deg(c))
+    # print('c', rho, c, np.rad2deg(c))
     lamb = x*np.sin(c)
     lamb /= (rho*np.cos(phi)*np.cos(c)-y*np.sin(phi)*np.sin(c))
     lamb = lamb0+np.arctan(lamb)
@@ -776,7 +776,7 @@ def fillCorresp(tab, corres, vara, varb):
     --------------
     tab: array
       original array of data
-    corresp: dict 
+    corresp: dict
       keys: string, items: string
     vara: str
      colname in tab to change
@@ -807,7 +807,7 @@ def pixelate(data, nside, RACol='RA', DecCol='Dec'):
     RACol: str, opt
       name of the RA col in data to use (default: RA)
      DecCol: str, opt
-      name of the Dec col in data to use (default: Dec)  
+      name of the Dec col in data to use (default: Dec)
 
     Returns
     ----------
@@ -861,6 +861,7 @@ def season(obs, season_gap=80., mjdCol='observationStartMJD'):
 
     obs.sort(order=mjdCol)
 
+    """
     if len(obs) == 1:
         obs = np.atleast_1d(obs)
         obs = rf.append_fields([obs], 'season', [1.])
@@ -878,7 +879,18 @@ def season(obs, season_gap=80., mjdCol='observationStartMJD'):
         obs = rf.append_fields(obs, 'season', seas)
     else:
         obs = rf.append_fields(obs, 'season', [1]*len(obs))
+    """
+    seasoncalc = np.ones(obs.size, dtype=int)
 
+    if len(obs) > 1:
+        diff = np.diff(obs[mjdCol])
+        flag = np.where(diff > season_gap)[0]
+
+        if len(flag) > 0:
+            for i, indx in enumerate(flag):
+                seasoncalc[indx+1:] = i+2
+
+    obs = rf.append_fields(obs, 'season', seasoncalc)
     return obs
 
 
