@@ -76,7 +76,7 @@ def patchObs(observations, fieldType,
              RACol, DecCol,
              display=False, nclusters=5, radius=4.):
     """
-    Method to grab informations and patches in the sky
+    Function to grab informations and patches in the sky
 
     Parameters
     --------------
@@ -376,7 +376,7 @@ def pavingSky_old(ramin, ramax, decmin, decmax, radius):
 
 def area(minRA, maxRA, minDec, maxDec):
     """
-    Method to make a dict of coordinates
+    Function to make a dict of coordinates
 
     Parameters
     --------------
@@ -400,7 +400,7 @@ def area(minRA, maxRA, minDec, maxDec):
 
 def areap(minRA, maxRA, minDec, maxDec):
     """
-    Method to make a polygon out of coordinates
+    Function to make a polygon out of coordinates
 
     Parameters
     --------------
@@ -425,7 +425,7 @@ def areap(minRA, maxRA, minDec, maxDec):
 
 def areap_diamond(RA, Dec, radius_RA, radius_Dec):
     """
-    Method defining a diamond
+    Function defining a diamond
 
     Parameters
     ---------------
@@ -648,7 +648,7 @@ class DataInside:
 
 def proj_gnomonic_plane(lamb0, phi1, lamb, phi):
     """
-    Method to perform a gnomonic projection
+    Function to perform a gnomonic projection
     on a plane of points of the celestial sphere
 
     The formulas coded here are taken from:
@@ -689,7 +689,7 @@ def proj_gnomonic_plane(lamb0, phi1, lamb, phi):
 
 def proj_gnomonic_sphere(lamb0, phi, x, y):
     """
-    Method to perform a gnomonic projection
+    Function to perform a gnomonic projection
     on a sphere of points of a plane.
 
     The formulas coded here are taken from:
@@ -731,7 +731,7 @@ def proj_gnomonic_sphere(lamb0, phi, x, y):
 
 def renameFields(tab):
     """
-    Method to rename fields
+    Function to rename fields
 
     Parameters
     --------------
@@ -770,7 +770,7 @@ def renameFields(tab):
 
 def fillCorresp(tab, corres, vara, varb):
     """
-    Method to fill a dict used to change colnams of a nupy array
+    Function to fill a dict used to change colnams of a nupy array
 
     Parameters
     --------------
@@ -796,7 +796,7 @@ def fillCorresp(tab, corres, vara, varb):
 
 def pixelate(data, nside, RACol='RA', DecCol='Dec'):
     """
-    Method to pixelate the sky
+    Function to pixelate the sky
 
     Parameters
     --------------
@@ -838,7 +838,7 @@ def pixelate(data, nside, RACol='RA', DecCol='Dec'):
 
 def season(obs, season_gap=80., mjdCol='observationStartMJD'):
     """
-    Method to estimate seasons
+    Function to estimate seasons
 
     Parameters
     --------------
@@ -896,7 +896,7 @@ def season(obs, season_gap=80., mjdCol='observationStartMJD'):
 
 def LSSTPointing(xc, yc, angle_rot=0., area=None, maxbound=None):
     """
-    Method to build a focal plane for LSST
+    Function to build a focal plane for LSST
 
     Parameters
     ---------------
@@ -963,7 +963,7 @@ def LSSTPointing(xc, yc, angle_rot=0., area=None, maxbound=None):
 
 def LSSTPointing_circular(xc, yc, angle_rot=0., area=None, maxbound=None):
     """
-    Method to build a focal plane for LSST
+    Function to build a focal plane for LSST
 
     Parameters
     ---------------
@@ -2515,7 +2515,7 @@ class GetShape:
 
 def getFields_fromId(observations, fieldIds):
     """
-    Method to get a set of fields
+    Function to get a set of fields
     from a set of observations using fieldIds (internal scheduler parameter)
 
     Parameters
@@ -2544,7 +2544,7 @@ def getFields_fromId(observations, fieldIds):
 def getFields(observations, fieldType='WFD', fieldIds=None,
               nside=64, RACol='fieldRA', DecCol='fieldDec'):
     """
-    Method to get a type of field (DD, WFD)
+    Function to get a type of field (DD, WFD)
     from a set of observations
 
     Parameters
