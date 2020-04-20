@@ -9,6 +9,9 @@ from sn_tools.sn_cadence_tools import ReferenceData, GenerateFakeObservations
 from sn_tools.sn_cadence_tools import TemplateData, AnaOS, Match_DD
 from sn_tools.sn_calcFast import LCfast, CalcSN, CalcSN_df, CovColor
 from sn_tools.sn_lcana import LCtoSN
+from sn_tools.sn_obs import renameFields, patchObs, getPix, pavingSky
+from sn_tools.sn_obs import DataInside, proj_gnomonic_plane, proj_gnomonic_sphere
+from sn_tools.sn_obs import pixelate
 from sn_tools.sn_clusters import ClusterObs
 from sn_tools.sn_telescope import Telescope
 from sn_tools.sn_obs import DDFields
@@ -917,7 +920,7 @@ class TestSNio(unittest.TestCase):
     def testRead_Sqlite(test):
 
         dbDir = '.'
-        #dbDir = '../../../../DB_Files'
+        # dbDir = '../../../../DB_Files'
         dbName = 'descddf_v1.4_10yrs'
         dbExtens = 'db'
 
@@ -976,6 +979,300 @@ class TestSNlcana(unittest.TestCase):
         assert(test_implemented == True)
 
 
+class TestSNobs(unittest.TestCase):
+    def testDDFields(self):
+
+        DDF = DDFields()
+
+        cols = ['name', 'fieldId', 'RA', 'Dec', 'fieldnum']
+        assert(set(cols) == set(DDF.columns))
+        # print(DDF.to_dict(orient='list'))
+        dictRef = {}
+        dictRef['name'] = ['ELAIS', 'SPT', 'COSMOS',
+                           'XMM-LSS', 'CDFS', 'ADFS1', 'ADFS2']
+        dictRef['fieldId'] = [744, 290, 2786, 2412, 1427, 290, 290]
+        dictRef['RA'] = [10.0, 349.39, 150.36, 34.39, 53.0, 63.59, 58.97]
+        dictRef['Dec'] = [-45.52, -63.32, 2.84, -5.09, -27.44, -47.59, -49.28]
+        dictRef['fieldnum'] = [4, 5, 1, 2, 3, 6, 7]
+
+        for key in dictRef.keys():
+            if key != 'name':
+                assert(np.isclose(
+                    dictRef[key], list(DDF[key])).all())
+            else:
+                assert(set(dictRef[key]) & set(DDF[key]))
+
+    def testpatchObs(self):
+
+        def check(dictRef, tab):
+
+            for key in dictRef.keys():
+                if key != 'dbName' and key != 'fieldName':
+                    assert(np.isclose(
+                        np.sort(dictRef[key]), np.sort(tab[key].to_list())).all())
+                else:
+                    assert(set(dictRef[key]) & set(tab[key]))
+
+        # get some observations
+        dbDir = '.'
+        dbName = 'descddf_v1.4_10yrs_twoyears'
+        dbExtens = 'npy'
+
+        getFile(dbDir, dbName, dbExtens, ref_dir, 'unittests')
+
+        obs = np.load('{}/{}.{}'.format(dbDir, dbName, dbExtens))
+
+        # rename some of the fields
+        obs = renameFields(obs)
+
+        RAmin = 0.
+        RAmax = 360.
+        Decmin = -50.
+        Decmax = 10.
+        RACol = 'fieldRA'
+        DecCol = 'fieldDec'
+
+        nside = 128
+        nclusters = 5
+        radius = 4.
+        obs_DD, patches_DD = patchObs(obs, 'DD',
+                                      dbName=dbName,
+                                      nside=nside,
+                                      RAmin=RAmin,
+                                      RAmax=RAmax,
+                                      Decmin=Decmin,
+                                      Decmax=Decmax,
+                                      RACol=RACol,
+                                      DecCol=DecCol,
+                                      display=False,
+                                      nclusters=nclusters,
+                                      radius=radius)
+
+        """
+        for vv in patches_DD.columns:
+            print('dictRef[\'{}\']='.format(vv), patches_DD[vv].to_list())
+        """
+        dictRef = {}
+
+        dictRef['clusid'] = [0, 1, 2, 3, 4]
+        dictRef['RA'] = [349.4901155249653, 53.1644889383448,
+                         150.0614583198708, 9.504023911471458, 35.74042365422678]
+        dictRef['Dec'] = [-63.26284809752175, -28.090789606070373,
+                          2.1861679024847427, -43.95381458076769, -4.754220734785014]
+        dictRef['radius_RA'] = [4.0, 4.0, 4.0, 4.0, 4.0]
+        dictRef['radius_Dec'] = [4.0, 4.0, 4.0, 4.0, 4.0]
+        dictRef['area'] = [3.2066746992925483, 1.6342188350701072,
+                           1.424606742986726, 2.001879929708757, 1.4463375323299488]
+        dictRef['dbName'] = ['descddf_v1.4_10yrs_twoyears', 'descddf_v1.4_10yrs_twoyears',
+                             'descddf_v1.4_10yrs_twoyears', 'descddf_v1.4_10yrs_twoyears', 'descddf_v1.4_10yrs_twoyears']
+        dictRef['fieldName'] = ['SPT', 'CDFS', 'COSMOS', 'ELAIS', 'XMM-LSS']
+        dictRef['Nvisits'] = [2791.0, 5145.0, 5313.0, 3730.0, 3534.0]
+        dictRef['Nvisits_all'] = [2791.0, 5145.0, 5313.0, 3730.0, 3534.0]
+        dictRef['Nvisits_u'] = [248.0, 464.0, 224.0, 272.0, 272.0]
+        dictRef['Nvisits_g'] = [129.0, 240.0, 256.0, 174.0, 168.0]
+        dictRef['Nvisits_r'] = [254.0, 480.0, 512.0, 348.0, 336.0]
+        dictRef['Nvisits_i'] = [504.0, 960.0, 1017.0, 688.0, 669.0]
+        dictRef['Nvisits_z'] = [1400.0, 2525.0, 2796.0, 1900.0, 1757.0]
+        dictRef['Nvisits_y'] = [256.0, 476.0, 508.0, 348.0, 332.0]
+        dictRef['radius'] = [4.0, 4.0, 4.0, 4.0, 4.0]
+
+        check(dictRef, patches_DD)
+
+        nside = 64
+        nclusters = -1
+        radius = 4.
+        obs_WFD, patches_WFD = patchObs(obs, 'WFD',
+                                        dbName=dbName,
+                                        nside=nside,
+                                        RAmin=RAmin,
+                                        RAmax=RAmax,
+                                        Decmin=Decmin,
+                                        Decmax=Decmax,
+                                        RACol=RACol,
+                                        DecCol=DecCol,
+                                        display=False,
+                                        nclusters=nclusters,
+                                        radius=radius)
+        """
+        for vv in patches_WFD.columns:
+            print('dictRef[\'{}\']='.format(vv),
+                  patches_WFD[:30][vv].to_list())
+        """
+        dictRef = {}
+        dictRef['RA'] = [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0,
+                         2.0, 2.0, 2.0, 6.0, 6.0, 6.0, 6.0, 6.0, 6.0, 6.0, 6.0, 6.0, 6.0, 6.0, 6.0, 6.0, 6.0]
+        dictRef['Dec'] = [-48.0, -44.0, -40.0, -36.0, -32.0, -28.0, -24.0, -20.0, -16.0, -12.0, -8.0, -4.0, 0.0,
+                          4.0, 8.0, 12.0, -48.0, -44.0, -40.0, -36.0, -32.0, -28.0, -24.0, -20.0, -16.0, -12.0, -8.0, -4.0, 0.0, 4.0]
+        dictRef['radius_RA'] = [4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0,
+                                4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0]
+        dictRef['radius_Dec'] = [4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0,
+                                 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0]
+        dictRef['minRA'] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                            0.0, 0.0, 0.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0]
+        dictRef['maxRA'] = [4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0,
+                            4.0, 4.0, 4.0, 8.0, 8.0, 8.0, 8.0, 8.0, 8.0, 8.0, 8.0, 8.0, 8.0, 8.0, 8.0, 8.0, 8.0]
+        dictRef['minDec'] = [-50.0, -46.0, -42.0, -38.0, -34.0, -30.0, -26.0, -22.0, -18.0, -14.0, -10.0, -6.0, -2.0,
+                             2.0, 6.0, 10.0, -50.0, -46.0, -42.0, -38.0, -34.0, -30.0, -26.0, -22.0, -18.0, -14.0, -10.0, -6.0, -2.0, 2.0]
+        dictRef['maxDec'] = [-46.0, -42.0, -38.0, -34.0, -30.0, -26.0, -22.0, -18.0, -14.0, -10.0, -6.0, -2.0, 2.0,
+                             6.0, 10.0, 14.0, -46.0, -42.0, -38.0, -34.0, -30.0, -26.0, -22.0, -18.0, -14.0, -10.0, -6.0, -2.0, 2.0, 6.0]
+
+        check(dictRef, patches_WFD[:30])
+
+    def testgetPix(self):
+
+        nside = 128
+        fieldRA = 50.
+        fieldDec = -40.
+
+        healpixId, pixRA, pixDec = getPix(nside, fieldRA, fieldDec)
+
+        #print(healpixId, pixRA, pixDec)
+        healpixId_ref = 137931
+        pixRA_ref = 49.921875
+        pixDec_ref = -39.838439
+
+        assert(healpixId == healpixId_ref)
+        assert(np.isclose(pixRA, pixRA_ref))
+        assert(np.isclose(pixDec, pixDec_ref))
+
+    def testpavingSky(self):
+
+        minRA = 20.
+        maxRA = 30.
+        minDec = -15.
+        maxDec = 10.
+        radius_RA = 5.
+        radius_Dec = 5.
+
+        sky = pavingSky(minRA, maxRA, minDec, maxDec, radius_RA, radius_Dec)
+
+        patches = sky.patches
+
+        dictRef = {}
+        """
+        for col in patches.dtype.names:
+            print('dictRef[\'{}\']='.format(col), patches[col].tolist())
+        """
+
+        dictRef['RA'] = [22.5, 22.5, 22.5, 22.5,
+                         22.5, 27.5, 27.5, 27.5, 27.5, 27.5]
+
+        dictRef['Dec'] = [-12.5, -7.5, -2.5, 2.5,
+                          7.5, -12.5, -7.5, -2.5, 2.5, 7.5]
+        dictRef['radius_RA'] = [5.0, 5.0, 5.0,
+                                5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0]
+        dictRef['radius_Dec'] = [5.0, 5.0, 5.0,
+                                 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0]
+        dictRef['minRA'] = [20.0, 20.0, 20.0, 20.0,
+                            20.0, 25.0, 25.0, 25.0, 25.0, 25.0]
+        dictRef['maxRA'] = [25.0, 25.0, 25.0, 25.0,
+                            25.0, 30.0, 30.0, 30.0, 30.0, 30.0]
+        dictRef['minDec'] = [-15.0, -10.0, -5.0,
+                             0.0, 5.0, -15.0, -10.0, -5.0, 0.0, 5.0]
+        dictRef['maxDec'] = [-10.0, -5.0, 0.0,
+                             5.0, 10.0, -10.0, -5.0, 0.0, 5.0, 10.0]
+
+        for col in patches.dtype.names:
+            assert(np.isclose(dictRef[col], patches[col].tolist()).all())
+
+        # visual check
+        #import matplotlib.pyplot as plt
+        # sky.plot()
+
+    def testDataInside(self):
+
+        # get some observations
+        dbDir = '.'
+        dbName = 'descddf_v1.4_10yrs_twoyears'
+        dbExtens = 'npy'
+
+        getFile(dbDir, dbName, dbExtens, ref_dir, 'unittests')
+
+        obs = np.load('{}/{}.{}'.format(dbDir, dbName, dbExtens))
+
+        # rename some of the fields
+        obs = renameFields(obs)
+
+        RA = 20.
+        widthRA = 10
+        Dec = -50
+        widthDec = 20
+
+        dataIns = DataInside(obs, RA, Dec, widthRA, widthDec)
+        dictArea = {'minRA': 10.0, 'maxRA': 30.0, 'minDec': -70, 'maxDec': -30}
+        assert(dictArea.keys() & dataIns.areas[0].keys())
+        assert(dictArea.items() & dataIns.areas[0].items())
+
+        """
+        # visual check
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
+        dataIns.plot(ax)
+        plt.show()
+        """
+
+    def testProj_gnomo(self):
+
+        lamb0 = np.deg2rad(-100.)
+        phi1 = np.deg2rad(40.)
+        lamb = np.deg2rad(-110.)
+        phi = np.deg2rad(30.)
+
+        x, y = proj_gnomonic_plane(lamb0, phi1, lamb, phi)
+
+        xref = -0.1542826082868
+        yref = -0.1694738770630
+        assert(np.isclose(x, xref))
+        assert(np.isclose(y, yref))
+
+        lamb_n, phi_n = proj_gnomonic_sphere(lamb0, phi1, x, y)
+        assert(np.isclose(lamb, lamb_n))
+        assert(np.isclose(phi, phi_n))
+
+    def testPixelate(self):
+
+        # get some observations
+        dbDir = '.'
+        dbName = 'descddf_v1.4_10yrs_twoyears'
+        dbExtens = 'npy'
+
+        getFile(dbDir, dbName, dbExtens, ref_dir, 'unittests')
+
+        obs = np.load('{}/{}.{}'.format(dbDir, dbName, dbExtens))
+
+        # rename some of the fields
+        obs = renameFields(obs)
+
+        # select a subset of the data
+
+        obs = obs[:10]
+
+        nside = 128
+        pixels = pixelate(obs, nside, RACol='fieldRA', DecCol='fieldDec')
+
+        dictRef = {}
+        """
+        for name in pixels.dtype.names:
+            print('dictRef[\'{}\']='.format(name), pixels[name].tolist())
+        """
+        dictRef['fieldRA'] = [294.69610457523424, 297.73470761378616, 300.8015282209298, 298.33025759010536,
+                              295.86447426843716, 295.2748042335168, 292.84821409582105, 293.4172383906381, 296.45390700382, 298.92295476890104]
+        dictRef['fieldDec'] = [4.470981704726506, 3.424593021459912, 2.6710247648042724, 0.7349342312086529, -1.0548373274097236,
+                               1.6887725976707535, 0.06880920114729176, -2.740942073461976, -3.7881327358747447, -1.962286622086737]
+        dictRef['healpixID'] = [121956, 120569, 120704, 120513,
+                                120455, 120508, 120490, 119768, 119669, 120347]
+        dictRef['pixRA'] = [294.609375, 297.7734375, 300.9375, 298.4765625,
+                            296.015625, 295.3125, 292.8515625, 293.203125, 296.3671875, 298.828125]
+        dictRef['pixDec'] = [4.480798785982216, 3.5833216984719627, 2.686724185691588, 0.5968418305070173, -
+                             0.8952829865701233, 1.49224628962034, 0.0, -2.6867241856916024, -3.583321698471977, -2.0893716714986112]
+        dictRef['ebv'] = [0.419977605342865, 0.18318484723567963, 0.10688654333353043, 0.1799226850271225, 0.1963985562324524,
+                          0.42131543159484863, 0.3438258171081543, 0.39373722672462463, 0.2425287663936615, 0.3707665205001831]
+
+        for key in dictRef.keys():
+            assert(np.isclose(dictRef[key], np.copy(
+                pixels)[key].tolist()).all())
+
+
 class TestSNclean(unittest.TestCase):
     def testClean(self):
 
@@ -1011,5 +1308,6 @@ calcFast = TestSNcalcFast
 clusters = TestSNclusters
 snio = TestSNio
 lcana = TestSNlcana
+snobs = TestSNobs
 clean = TestSNclean
 unittest.main(verbosity=5)
