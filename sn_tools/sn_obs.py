@@ -31,13 +31,18 @@ def DDFields(DDfile=None):
     Parameters
     ----------------
     DDfile: str, opt
-      csv file with DD infos
-
+      csv file with DD infos: name fieldId      RA    Dec fieldnum
+    name: name of the field (eg COSMOS, ELAIS, ...)
+    fieldID: int
+      internal OpSim value
+    RA: field RA
+    Dec: field Dec
+    fieldnum: int, field number (set by the user)
 
     Returns
     ---------
 
-    fields: pandas DataFrame 
+    fields: pandas DataFrame
       df with the following columns:
      - name: name of the field
      - fieldId: Id of the field
@@ -107,27 +112,26 @@ def patchObs(observations, fieldType,
 
     """
 
-    #radius = 5.
+    # radius = 5.
 
     if fieldType == 'DD':
 
-        print(np.unique(observations['fieldId']))
+        # print(np.unique(observations['fieldId']))
         fieldIds = [290, 744, 1427, 2412, 2786]
         observations = getFields(
             observations, fieldType, fieldIds, nside)
 
-        print('before cluster', len(observations),
-              observations.dtype, nclusters)
+        # print('before cluster', len(observations),observations.dtype, nclusters)
         # get clusters out of these obs
-        #radius = 4.
+        # radius = 4.
 
         DD = DDFields()
         clusters = ClusterObs(
             observations, nclusters=nclusters, dbName=dbName, fields=DD).clusters
 
-        #clusters = rf.append_fields(clusters, 'radius', [radius]*len(clusters))
+        # clusters = rf.append_fields(clusters, 'radius', [radius]*len(clusters))
         clusters['radius'] = radius
-        #areas = rf.rename_fields(clusters, {'RA': 'RA'})
+        # areas = rf.rename_fields(clusters, {'RA': 'RA'})
         areas = clusters.rename(columns={'RA': 'RA'})
         patches = pd.DataFrame(areas)
         patches['width_RA'] = radius
@@ -145,13 +149,13 @@ def patchObs(observations, fieldType,
                 minDec = np.min(observations['fieldDec'])-radius
                 maxDec = np.max(observations['fieldDec'])+radius
             areas = pavingSky(RAmin, RAmax, minDec, maxDec, radius, radius)
-            print(observations.dtype)
+            # print(observations.dtype)
             if display:
                 areas.plot()
 
         if fieldType == 'Fake':
             # in that case: only one (RA,Dec)
-            #radius = 0.1
+            # radius = 0.1
             RA = np.unique(observations[RACol])[0]
             Dec = np.unique(observations[DecCol])[0]
             areas = pavingSky(RA-radius/2., RA+radius/2., Dec -
@@ -319,7 +323,7 @@ class pavingSky:
 
         for val in self.patches:
 
-            #polyb = areap_diamond(val['RA'],val['Dec'],val['radius_RA'],val['radius_Dec'])
+            # polyb = areap_diamond(val['RA'],val['Dec'],val['radius_RA'],val['radius_Dec'])
             minRA = val['RA']-val['radius_RA']/2.
             maxRA = val['RA']+val['radius_RA']/2.
             minDec = val['Dec']-val['radius_Dec']/2.
@@ -628,8 +632,8 @@ class DataInside:
 
         """
 
-        #import matplotlib.pyplot as plt
-        #fig, ax = plt.subplots()
+        # import matplotlib.pyplot as plt
+        # fig, ax = plt.subplots()
 
         ax.plot(self.data[self.RACol], self.data[self.DecCol], 'ko')
 
@@ -713,7 +717,7 @@ def proj_gnomonic_sphere(lamb0, phi, x, y):
     """
     rho = (x**2+y**2)**0.5
     c = np.arctan(rho)
-    print('c', rho, c, np.rad2deg(c))
+    #print('c', rho, c, np.rad2deg(c))
     lamb = x*np.sin(c)
     lamb /= (rho*np.cos(phi)*np.cos(c)-y*np.sin(phi)*np.sin(c))
     lamb = lamb0+np.arctan(lamb)
@@ -749,7 +753,7 @@ def renameFields(tab):
     fillCorresp(tab, corresp, 'exptime', 'visitExposureTime')
     fillCorresp(tab, corresp, 'nexp', 'numExposures')
 
-    print(tab.dtype)
+    # print(tab.dtype)
 
     rb = np.copy(tab)
     for vv, vals in corresp.items():
@@ -758,7 +762,7 @@ def renameFields(tab):
             rb = rf.append_fields(rb, vals, tab[vv])
         else:
             rb = rf.append_fields(rb, vals, tab[vv], dtypes='<U9')
-        #rb = rf.rename_fields(rb, {vv: vals})
+        # rb = rf.rename_fields(rb, {vv: vals})
 
     # return rf.rename_fields(tab, corresp)
     return rb
@@ -786,7 +790,6 @@ def fillCorresp(tab, corres, vara, varb):
 
     """
 
-    print('there man', vara, varb)
     if vara in tab.dtype.names and varb not in tab.dtype.names:
         corres[vara] = varb
 
@@ -1051,7 +1054,7 @@ class DataToPixels:
 
         # if theta >= np.pi/2.:
         #    theta -= np.pi/2.
-        #print('theta', theta, np.rad2deg(theta))
+        # print('theta', theta, np.rad2deg(theta))
         self.fpscale = np.tan(theta)
 
     def __call__(self, data, RA, Dec, widthRA, widthDec, ipoint, nodither=False, display=False):
@@ -1094,7 +1097,7 @@ class DataToPixels:
 
         # select data inside an area centered in (RA,Dec) with width (widthRA+1,widthDec+1)
 
-        #print('searching data inside',RA,Dec,widthRA,widthDec)
+        # print('searching data inside',RA,Dec,widthRA,widthDec)
         dataSel = DataInside(data, RA, Dec, widthRA+1., widthDec+1.,
                              RACol=self.RACol, DecCol=self.DecCol)
 
@@ -1104,7 +1107,7 @@ class DataToPixels:
 
         self.observations = None
 
-        #print('there man',len(dataSel.data))
+        # print('there man',len(dataSel.data))
         if len(dataSel.data) == 0:
             return None
 
@@ -1191,12 +1194,12 @@ class DataToPixels:
 
         # gnomonic projection of pixels on the focal plane
         x, y = proj_gnomonic_plane(pRA_rad, pDec_rad, pixRA_rad, pixDec_rad)
-        #x, y = proj_gnomonic_plane(np.deg2rad(self.LSST_RA-pRA),np.deg2rad(self.LSST_Dec-pDec), pixRA_rad, pixDec_rad)
+        # x, y = proj_gnomonic_plane(np.deg2rad(self.LSST_RA-pRA),np.deg2rad(self.LSST_Dec-pDec), pixRA_rad, pixDec_rad)
 
         # get LSST FP with the good scale
-        #pnew = LSSTPointing(0., 0., area=np.pi*self.fpscale**2)
+        # pnew = LSSTPointing(0., 0., area=np.pi*self.fpscale**2)
         fpnew = LSSTPointing(0., 0., maxbound=self.fpscale)
-        #fpnew = LSSTPointing(np.deg2rad(self.LSST_RA-pRA),np.deg2rad(self.LSST_Dec-pDec),area=np.pi*self.fpscale**2)
+        # fpnew = LSSTPointing(np.deg2rad(self.LSST_RA-pRA),np.deg2rad(self.LSST_Dec-pDec),area=np.pi*self.fpscale**2)
         # maxbound=self.fpscale)
 
         """
@@ -1216,7 +1219,7 @@ class DataToPixels:
         pixRA_matched = list(pixRA[idf])
         pixDec_matched = list(pixDec[idf])
 
-        #names = [grp.name]*len(pixID_matched)
+        # names = [grp.name]*len(pixID_matched)
         df_pix = pd.DataFrame({'healpixID': pixID_matched,
                                'pixRA': pixRA_matched,
                                'pixDec': pixDec_matched, })
@@ -1344,20 +1347,20 @@ class ProcessPixels:
         print('number of pixels', len(pixels),
               len(pixels['healpixID'].unique()))
         for ipixel, vv in enumerate(pixels['healpixID'].unique()):
-            #print('processing pixel',ipixel,vv)
-            #time_ref = time.time()
+            # print('processing pixel',ipixel,vv)
+            # time_ref = time.time()
             ipix += 1
             idf = pixels['healpixID'] == vv
             selpix = pixels[idf]
             dataPixels = self.getData(data, selpix)
-            #print('got datapixels',time.time()-time_ref,selpix)
-            #dataPixels = data.iloc[selpix['index'].tolist()].copy()
+            # print('got datapixels',time.time()-time_ref,selpix)
+            # dataPixels = data.iloc[selpix['index'].tolist()].copy()
 
             for val in ['healpixID', 'pixRA', 'pixDec']:
                 dataPixels[val] = selpix[val].unique().tolist()*len(dataPixels)
-            #time_ref = time.time()
+            # time_ref = time.time()
             self.runMetrics(dataPixels)
-            #print('pixel processed',ipixel,time.time()-time_ref)
+            # print('pixel processed',ipixel,time.time()-time_ref)
             if self.saveData and ipix >= 20:
                 isave += 1
                 self.dump(ip, isave)
@@ -1384,7 +1387,7 @@ class ProcessPixels:
         dataPixel: pandas df of selected observations
 
         """
-        #idfb = [((data[self.RACol] - lat)**2 + (data[self.DecCol] - lon)**2).idxmin() for index,lat, lon in selpix[[self.RACol,self.DecCol]].itertuples()]
+        # idfb = [((data[self.RACol] - lat)**2 + (data[self.DecCol] - lon)**2).idxmin() for index,lat, lon in selpix[[self.RACol,self.DecCol]].itertuples()]
         dataPixel = pd.DataFrame()
         dataset = pd.DataFrame(data)
 
@@ -1497,7 +1500,7 @@ class ProcessArea:
 
         # if theta >= np.pi/2.:
         #    theta -= np.pi/2.
-        #print('theta', theta, np.rad2deg(theta))
+        # print('theta', theta, np.rad2deg(theta))
         self.fpscale = np.tan(theta)
 
     def __call__(self, data, metricList, RA, Dec, widthRA, widthDec, ipoint, nodither=False, display=False):
@@ -1602,7 +1605,7 @@ class ProcessArea:
             print('after matching', time.time()-time_ref,
                   len(matched_pixels['healpixID'].unique()))
 
-            #print('number of pixels',len(matched_pixels['healpixID'].unique()))
+            # print('number of pixels',len(matched_pixels['healpixID'].unique()))
             ipix = -1
             isave = -1
             for healpixID in matched_pixels['healpixID'].unique():
@@ -1637,7 +1640,7 @@ class ProcessArea:
                         if resfi[key] is None:
                             resfi[key] = resdict[key]
                         else:
-                            #print('here pal',type(resdict[key]),type(resfi[key]))
+                            # print('here pal',type(resdict[key]),type(resfi[key]))
                             resfi[key] = np.concatenate(
                                 (resfi[key], resdict[key]))
 
@@ -1680,7 +1683,7 @@ class ProcessArea:
             if tabnames[-1]-tabnames[-2] <= 10:
                 tabnames.remove(tabnames[-2])
 
-        #print(tabnames, len(tabnames))
+        # print(tabnames, len(tabnames))
         result_queue = multiprocessing.Queue()
 
         for j in range(len(tabnames)-1):
@@ -1688,7 +1691,7 @@ class ProcessArea:
             ida = tabnames[j]
             idb = tabnames[j+1]
 
-            #print('Field', names[ida:idb])
+            # print('Field', names[ida:idb])
             p = multiprocessing.Process(name='Subprocess-'+str(j), target=self.concat, args=(groups,
                                                                                              names[ida:idb], j, result_queue))
             p.start()
@@ -1740,11 +1743,11 @@ class ProcessArea:
         pDec_rad = np.deg2rad(pDec)
 
         # gnomonic projection of pixels on the focal plane
-        #x, y = proj_gnomonic_plane(pRA_rad, pDec_rad, pixRA_rad, pixDec_rad)
+        # x, y = proj_gnomonic_plane(pRA_rad, pDec_rad, pixRA_rad, pixDec_rad)
         x, y = proj_gnomonic_plane(pDec_rad, pRA_rad, pixDec_rad, pixRA_rad)
 
-        #print('after gnomonic')
-        #print(x, y)
+        # print('after gnomonic')
+        # print(x, y)
         # get LSST FP with the good scale
         fpnew = LSSTPointing_circular(0., 0., maxbound=self.fpscale)
 
@@ -1812,7 +1815,7 @@ class ProcessArea:
 
         arr_index = grp.index.values
 
-        #arr_index = np.reshape(arr_index,(len(arr_index),1))
+        # arr_index = np.reshape(arr_index,(len(arr_index),1))
         # print('hhh',arr_index)
         df_pix = pd.DataFrame({'healpixID': pixID_matched,
                                'pixRA': pixRA_matched,
@@ -1824,7 +1827,7 @@ class ProcessArea:
         #    print('here',n_index,type(grp.index.values))
 
         n_pix = len(df_pix)
-        #n_index = len(df_index)
+        # n_index = len(df_index)
         # print('indices',n_index,n_pix)
         if n_pix > 1:
             arr_index = arr_index.repeat(n_pix)
@@ -2499,6 +2502,22 @@ class GetShape:
 
 
 def getFields_fromId(observations, fieldIds):
+    """
+    Method to get a set of fields
+    from a set of observations using fieldIds (internal scheduler parameter)
+
+    Parameters
+    ---------------
+    observations: array
+       data to process
+    fieldIds: list(int), opt
+       list of fieldIds to consider (dafault: None)
+
+    Returns
+    ----------
+    array of observations corresponding to fieldIds
+
+    """
 
     obs = None
     for fieldId in fieldIds:
@@ -2512,8 +2531,30 @@ def getFields_fromId(observations, fieldIds):
 
 def getFields(observations, fieldType='WFD', fieldIds=None,
               nside=64, RACol='fieldRA', DecCol='fieldDec'):
+    """
+    Method to get a type of field (DD, WFD)
+    from a set of observations
 
-    print(observations.dtype)
+    Parameters
+    ---------------
+    observations: array
+       data to process
+    fieldType: str, opt
+       type of field (DD or WFD) to consider
+    fieldIds: list(int), opt
+       list of fieldIds to consider (dafault: None)
+    nside: int, opt
+       healpix nside parameter (default: 64)
+    RACol: str, opt
+       RA column name (default: fieldRA)
+    DecCol: str, opt
+       Dec column name (default: fieldDef)
+
+    Returns
+    ----------
+    array
+
+    """
 
     obs = None
 
