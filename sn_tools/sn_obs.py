@@ -910,7 +910,7 @@ def LSSTPointing(xc, yc, angle_rot=0., area=None, maxbound=None):
     area: float
       area for the FP (default: None)
     maxbound: float
-      ???? (default: None)
+      to reduce area  (default: None)
     Returns
     ----------
     LSST FP (geometry.Polygon)
@@ -977,7 +977,7 @@ def LSSTPointing_circular(xc, yc, angle_rot=0., area=None, maxbound=None):
     area: float
       area for the FP (default: None)
     maxbound: float
-      ???? (default: None)
+      to reduce area (default: None)
     Returns
     ----------
     LSST FP (geometry.Polygon)
@@ -1020,40 +1020,36 @@ def LSSTPointing_circular(xc, yc, angle_rot=0., area=None, maxbound=None):
 
 
 class DataToPixels:
-    def __init__(self, nside, RACol, DecCol, num, outDir, dbName,
-                 obsIdCol='observationId'):
-        """
-        class to match observations to sky pixels
+    """
+    class to match observations to sky pixels
 
-        Parameters
-        ---------------
-        nside: int
-          nside parameter for healpix tessalation
-        RACol: str
-          name of the RA field
-        DecCol: str
-          name of the Dec field      
-        num: int
-          index (related to multiprocessing)
-        outDir: str
-           output dir path
-        dbName: str
-           observing strategy name
-        obsIdCol: str, opt
-          observation Id column
-        saveData: bool, opt
-           to save (True) the data or not (False) (default: False)
+    Parameters
+    ---------------
+    nside: int
+      nside parameter for healpix tessalation
+    RACol: str
+     name of the RA field
+    DecCol: str
+      name of the Dec field      
+    num: int
+      index (related to multiprocessing)
+    outDir: str
+      output dir path
+    dbName: str
+      observing strategy name
+    saveData: bool, opt
+       to save (True) the data or not (False) (default: False)
+    """
 
-
-        """
+    def __init__(self, nside, RACol, DecCol, outDir, dbName):
 
         # load parameters
         self.nside = nside
         self.RACol = RACol
         self.DecCol = DecCol
-        self.obsIdCol = obsIdCol
-        self.num = num
-        self.outDir = outDir
+        #self.obsIdCol = obsIdCol
+        #self.num = num
+        #self.outDir = outDir
 
         self.dbName = dbName
 
@@ -1069,7 +1065,7 @@ class DataToPixels:
         # print('theta', theta, np.rad2deg(theta))
         self.fpscale = np.tan(theta)
 
-    def __call__(self, data, RA, Dec, widthRA, widthDec, ipoint, nodither=False, display=False):
+    def __call__(self, data, RA, Dec, widthRA, widthDec, nodither=False, display=False):
         """
         call method: this is where the processing is.
 
@@ -1077,8 +1073,6 @@ class DataToPixels:
         --------------
         data: numpy array
           data to process
-        metricList: list(metric)
-           list of metric to process
         RA: float
            RA position (center of the area to process)
         Dec: float
@@ -1087,7 +1081,6 @@ class DataToPixels:
           width in RA of the area to process
         widthDec: float
           width in Dec of the area to process
-        ipoint: int
         nodither: bool,opt
           to remove dithering (default: False)
         display: bool, opt
@@ -1166,9 +1159,10 @@ class DataToPixels:
         matched_pixels = groups.apply(
             lambda x: self.match(x, self.healpixIDs, self.pixRA, self.pixDec)).reset_index()
 
+        """
         print('after matching', time.time()-time_ref,
               len(matched_pixels['healpixID'].unique()))
-
+        """
         return matched_pixels
 
     def match(self, grp, healpixIDs, pixRA, pixDec):
@@ -1254,14 +1248,13 @@ class DataToPixels:
         return df_pix
         """
 
-    def plot(self, pixels):
+    def plot(self, pixels, plt):
         """
          Method to plot matching results
          For each observation, the LSST FP is drawn as well as the center of matched pixels
 
          """
 
-        import matplotlib.pyplot as plt
         print(np.unique(pixels[[self.RACol, self.DecCol]], axis=0))
         for vv in np.unique(pixels[[self.RACol, self.DecCol]], axis=0):
             fig, ax = plt.subplots()
@@ -1278,7 +1271,6 @@ class DataToPixels:
             idf = np.abs(pixels[self.RACol]-vv[0]) < 1.e-5
             idf &= np.abs(pixels[self.DecCol]-vv[1]) < 1.e-5
             ax.plot(pixels[idf]['pixRA'], pixels[idf]['pixDec'], 'r*')
-
             plt.show()
 
 
@@ -1356,8 +1348,10 @@ class ProcessPixels:
         # run the metrics on those pixels
         ipix = -1  # counter to estimate when to dump
         isave = -1  # counter to estimate how many dumps
+        """
         print('number of pixels', len(pixels),
               len(pixels['healpixID'].unique()))
+        """
         for ipixel, vv in enumerate(pixels['healpixID'].unique()):
             # print('processing pixel',ipixel,vv)
             # time_ref = time.time()
@@ -1614,9 +1608,10 @@ class ProcessArea:
             matched_pixels = groups.apply(
                 lambda x: self.match(x, healpixIDs, pixRA, pixDec)).reset_index()
 
+            """
             print('after matching', time.time()-time_ref,
                   len(matched_pixels['healpixID'].unique()))
-
+            """
             # print('number of pixels',len(matched_pixels['healpixID'].unique()))
             ipix = -1
             isave = -1
@@ -1862,6 +1857,9 @@ class ProcessArea:
 
 
 class ObsPixel:
+    """
+    This class is deprecated
+    """
 
     def __init__(self, nside, data, RACol='RA', DecCol='Dec'):
         self.nside = nside
@@ -2060,6 +2058,10 @@ class ObsPixel:
 
 
 class ObsPixel_old:
+    """
+    This class is deprecated
+    """
+
     def __init__(self, nside, data, scanzone=None, RACol='RA', DecCol='Dec'):
         self.nside = nside
         self.data = data
@@ -2237,6 +2239,10 @@ class ObsPixel_old:
 
 
 class OverlapGnomonic:
+    """
+    This class is deprecated
+    """
+
     def __init__(self, nside, dRA=0., dDec=0.):
 
         self.nside = nside
@@ -2313,6 +2319,10 @@ class OverlapGnomonic:
 
 
 class GetOverlap:
+    """
+    This class is deprecated
+    """
+
     def __init__(self, nside, dRA=0., dDec=0.):
 
         self.nside = nside
@@ -2415,6 +2425,10 @@ class GetOverlap:
 
 
 class GetShape:
+    """
+    This class is deprecated
+    """
+
     def __init__(self, nside, overlap):
 
         self.nside = nside
@@ -2575,7 +2589,7 @@ def getFields(observations, fieldType='WFD', fieldIds=None,
     for pName in ['proposalId', 'survey_id']:
         if pName in observations.dtype.names:
 
-            print(np.unique(observations[pName]))
+            # print(np.unique(observations[pName]))
             propId = list(np.unique(observations[pName]))
 
             # loop on proposal id
@@ -2590,7 +2604,7 @@ def getFields(observations, fieldType='WFD', fieldIds=None,
             if fieldType == 'WFD':
                 # Take the propId with the largest number of fields
                 propId_WFD = propIds[np.argmax(res['Nobs'])]
-                print(res, np.argmax(res['Nobs']), propId_WFD)
+                #print(res, np.argmax(res['Nobs']), propId_WFD)
                 return observations[observations[pName] == propId_WFD]
             if fieldType == 'DD':
                 # could be tricky here depending on the database structure
