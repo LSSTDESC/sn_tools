@@ -11,11 +11,11 @@ from sn_tools.sn_calcFast import LCfast, CalcSN, CalcSN_df, CovColor
 from sn_tools.sn_lcana import LCtoSN
 from sn_tools.sn_obs import renameFields, patchObs, getPix, pavingSky
 from sn_tools.sn_obs import DataInside, proj_gnomonic_plane, proj_gnomonic_sphere
-from sn_tools.sn_obs import pixelate, season
+from sn_tools.sn_obs import pixelate, season, DataToPixels, ProcessPixels, ProcessArea, getFields
 from sn_tools.sn_clusters import ClusterObs
 from sn_tools.sn_telescope import Telescope
 from sn_tools.sn_obs import DDFields
-from sn_tools.sn_io import Read_Sqlite
+from sn_tools.sn_io import Read_Sqlite, getObservations
 import os
 from numpy.testing import assert_almost_equal, assert_equal
 import pandas as pd
@@ -1325,6 +1325,285 @@ class TestSNobs(unittest.TestCase):
 
         for vv in varnames:
             assert(np.isclose(dictRef[vv], fortest[vv].tolist()).all())
+
+    def testDataToPixelsandProcessPixels(self):
+
+        # define a metric class (requested to test ProcessPixels)
+
+        class metric:
+            def __init__(self, name):
+
+                self.name = name
+
+            def run(self, datapixels):
+                tab = pd.DataFrame(np.copy(datapixels))
+                summ = tab.groupby(['season']).sum().reset_index()
+                med = tab.groupby(['season']).median().reset_index()
+                return pd.DataFrame({'healpixID': med['healpixID'],
+                                     'season': med['season'],
+                                     'Nvisits': summ['numExposures']})
+
+        # get some observations
+        dbDir = '.'
+        dbName = 'descddf_v1.4_10yrs_DD'
+        dbExtens = 'npy'
+
+        getFile(dbDir, dbName, dbExtens, ref_dir, 'unittests')
+
+        obs = np.load('{}/{}.{}'.format(dbDir, dbName, dbExtens))
+
+        # rename some of the fields
+        obs = renameFields(obs)
+
+        # select a field (here COSMOS)
+        idx = np.abs(obs['fieldRA']-150.36) < 4.
+        idx &= np.abs(obs['fieldDec']-2.84) < 4.
+
+        # get seasons
+        obs = season(obs[idx])
+
+        ###################################################################
+        # First step : test DataToPixels
+        ####################################################################
+
+        # instantiating DataToPixels class
+        nside = 128
+        RACol = 'fieldRA'
+        DecCol = 'fieldDec'
+        outDir = '.'
+        data_pixels = DataToPixels(nside, RACol, DecCol, outDir, dbName)
+
+        # get the pixels here
+        RA = np.mean(obs['fieldRA'])
+        Dec = np.mean(obs['fieldDec'])
+        widthRA = 4.
+        widthDec = 4.
+
+        pixels = data_pixels(obs, RA, Dec, widthRA, widthDec)
+
+        assert(len(pixels) == 68398)
+
+        healpixIDs = list(np.unique(pixels['healpixID']))
+
+        healpixIDs_ref = [108949, 108950, 108951, 108953, 108954, 108955, 108956, 108957, 108958, 108959, 108965, 108973, 108976, 108977, 108978, 108979, 108980, 108981, 108982, 108983, 108984, 108985, 108986, 108987, 108988, 108989, 108990, 108991, 108993, 108994, 108995, 108998, 109000, 109001, 109002, 109003, 109004, 109005, 109006, 109007, 109018, 109024, 109025, 109026, 109027, 109028, 109029,
+                          109030, 109031, 109032, 109033, 109034, 109035, 109036, 109037, 109038, 109039, 109040, 109041, 109042, 109043, 109046, 109048, 109049, 109050, 109051, 109052, 109054, 109329, 109332, 109333, 109334, 109335, 109340, 109341, 109376, 109377, 109378, 109379, 109380, 109381, 109382, 109383, 109384, 109385, 109386, 109387, 109388, 109389, 109390, 109391, 109392, 109393, 109394, 109395, 109396, 109400]
+
+        assert(set(healpixIDs) == set(healpixIDs_ref))
+
+        idx = pixels['healpixID'] == 109026
+
+        sel = pixels[idx]
+        assert(len(sel) == 1397)
+
+        indx = range(1, len(sel), 100)
+        selb = sel.iloc[indx, :]
+
+        """
+        for col in selb.columns:
+            print('dictRef[\'{}\']='.format(col), selb[col].tolist())
+        """
+        dictRef = {}
+        dictRef['fieldRA'] = [149.4102, 149.5775, 149.6916, 149.7733, 149.8627, 149.9418,
+                              150.016, 150.0894, 150.1559, 150.2423, 150.3238, 150.4181, 150.5116, 150.628]
+        dictRef['fieldDec'] = [2.2899, 1.9401, 2.4913, 2.3169, 1.6148, 1.8242,
+                               2.5419, 2.6691, 2.7623, 2.5537, 2.1937, 2.7137, 2.4346, 2.3416]
+        dictRef['level_2'] = [16, 25, 15, 19, 31,
+                              26, 16, 11, 12, 15, 22, 12, 18, 21]
+        dictRef['healpixID'] = [109026, 109026, 109026, 109026, 109026, 109026,
+                                109026, 109026, 109026, 109026, 109026, 109026, 109026, 109026]
+        dictRef['pixRA'] = [150.1171875, 150.1171875, 150.1171875, 150.1171875, 150.1171875, 150.1171875,
+                            150.1171875, 150.1171875, 150.1171875, 150.1171875, 150.1171875, 150.1171875, 150.1171875, 150.1171875]
+        dictRef['pixDec'] = [1.7907846593289491, 1.7907846593289491, 1.7907846593289491, 1.7907846593289491, 1.7907846593289491, 1.7907846593289491, 1.7907846593289491,
+                             1.7907846593289491, 1.7907846593289491, 1.7907846593289491, 1.7907846593289491, 1.7907846593289491, 1.7907846593289491, 1.7907846593289491]
+
+        for key, vals in dictRef.items():
+            assert(np.isclose(selb[key].tolist(), vals).all())
+
+        # visu inspection
+        # import matplotlib.pyplot as plt
+        # data_pixels.plot(pixels, plt)
+
+        #########################################################################
+        # Second step : test ProcessPixels
+        ########################################################################
+
+        # instance of class
+
+        metricList = [metric('mymetric')]
+        ipoint = 0
+        process = ProcessPixels(
+            metricList, ipoint, outDir='.', dbName=dbName, saveData=True)
+
+        process(pixels, np.copy(obs), 1)
+
+        # check results
+        # a file must have been generated
+        finame = 'descddf_v1.4_10yrs_DD_mymetric_0.hdf5'
+        assert(os.path.isfile(finame))
+
+        # if yes, check what is inside (at least part of it)
+
+        fFile = h5py.File(finame, 'r')
+        keys = list(fFile.keys())
+
+        data = Table()
+        for key in keys:
+            data = vstack([data, Table.read(fFile, path=key)])
+            break
+
+        healpixIDs = list(np.unique(data['healpixID']))
+
+        healpixIDs_ref = [108958.0, 108977.0, 108978.0, 108979.0, 108980.0, 108981.0, 108982.0, 108983.0, 108984.0, 108985.0,
+                          108986.0, 108987.0, 108988.0, 108989.0, 108990.0, 108991.0, 109002.0, 109024.0, 109025.0, 109026.0, 109027.0]
+
+        assert(set(healpixIDs) & set(healpixIDs_ref))
+
+        dictRef = {}
+        """
+        for col in data.colnames:
+            print('dictRef[\'{}\']='.format(col), list(data[col]))
+        """
+        dictRef['season'] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2,
+                             3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        dictRef['Nvisits'] = [2019, 1407, 2002, 2302, 1915, 1682, 1990, 1645, 1474, 2213, 1679, 1206, 1580, 1800, 1390, 1331, 1632, 1310, 1168, 1835, 468, 526, 451, 830, 584, 412, 568, 475, 532, 513, 1902, 1343, 1762, 2064, 1705, 1241, 1712, 1621, 1635, 2123, 2693, 2011, 2634, 2907, 2611, 2321, 2678, 2435, 2304, 3114, 3089, 2224, 2948, 3147, 2982, 2512, 3025, 2897, 2656, 3309, 2829, 2036, 2805, 2931, 2725, 2291, 2756, 2761, 2465, 3154, 3089, 2224, 2948, 3147, 2982, 2512, 3025, 2897, 2656, 3309, 567, 495, 327, 623, 536, 248, 436, 295, 411, 433, 1734, 1431, 1638, 1761, 1383, 1237, 1773, 1298, 1285, 1837, 296, 380, 287, 449, 328,
+                              240, 332, 249, 321, 320, 1345, 1097, 1164, 1474, 1048, 872, 1217, 1214, 1214, 1518, 2915, 1963, 2692, 2846, 2728, 2292, 2718, 2624, 2319, 3109, 3089, 2224, 2948, 3147, 2982, 2512, 3025, 2897, 2656, 3309, 2544, 1864, 2368, 2502, 2128, 1983, 2441, 2469, 2237, 2819, 3089, 2224, 2948, 3147, 2982, 2512, 3025, 2897, 2656, 3309, 2765, 1899, 2685, 2962, 2731, 2400, 2726, 2545, 2438, 3002, 3089, 2224, 2948, 3147, 2982, 2512, 3025, 2897, 2656, 3309, 3089, 2224, 2948, 3147, 2982, 2512, 3025, 2897, 2656, 3309, 3089, 2224, 2948, 3147, 2982, 2512, 3025, 2897, 2656, 3309, 3089, 2224, 2948, 3147, 2982, 2512, 3025, 2897, 2656, 3309]
+
+        for key, vals in dictRef.items():
+            assert(set(vals) & set(list(data[key])))
+
+    def testProcessArea(self):
+
+        # define a metric class
+
+        class metric:
+            def __init__(self, name):
+
+                self.name = name
+
+            def run(self, datapixels):
+                tab = pd.DataFrame(np.copy(datapixels))
+                summ = tab.groupby(['season']).sum().reset_index()
+                med = tab.groupby(['season']).median().reset_index()
+                df = pd.DataFrame(med['healpixID'], columns=['healpixID'])
+                df['season'] = med['season']
+                df['Nvisits'] = summ['numExposures']
+
+                return df.to_records(index=False)
+
+        # get some observations
+        dbDir = '.'
+        dbName = 'descddf_v1.4_10yrs_DD'
+        dbExtens = 'npy'
+
+        getFile(dbDir, dbName, dbExtens, ref_dir, 'unittests')
+
+        obs = np.load('{}/{}.{}'.format(dbDir, dbName, dbExtens))
+
+        # rename some of the fields
+        obs = renameFields(obs)
+
+        # select a field (here COSMOS)
+        idx = np.abs(obs['fieldRA']-150.36) < 4.
+        idx &= np.abs(obs['fieldDec']-2.84) < 4.
+
+        # get seasons
+        obs = season(obs[idx])
+
+        nside = 128
+        RACol = 'fieldRA'
+        DecCol = 'fieldDec'
+        RA = np.mean(obs[RACol])
+        Dec = np.mean(obs[DecCol])
+        widthRA = 0.5
+        widthDec = 0.5
+        num = 1
+
+        # instance of ProcessArea
+        procArea = ProcessArea(nside, RACol, DecCol, num,
+                               outDir='.', dbName=dbName, saveData=True)
+
+        # instance of metric
+        metricList = [metric('mymetric')]
+
+        procArea(obs, metricList, RA, Dec, widthRA, widthDec, 1)
+
+        # analyze the results
+        # a file should have been produced
+        finame = 'descddf_v1.4_10yrs_DD_mymetric_1.hdf5'
+        assert(os.path.isfile(finame))
+
+        # if yes, check what is inside (at least part of it)
+
+        fFile = h5py.File(finame, 'r')
+        keys = list(fFile.keys())
+
+        data = Table()
+        for key in keys:
+            data = vstack([data, Table.read(fFile, path=key)])
+            break
+
+        dictRef = {}
+        """
+        for col in data.colnames:
+            print('dictRef[\'{}\']='.format(col), list(data[col]))
+        """
+        dictRef['healpixID'] = [108981.0, 108981.0, 108981.0, 108981.0, 108981.0, 108981.0, 108981.0, 108981.0, 108981.0, 108981.0, 108982.0, 108982.0, 108982.0, 108982.0, 108982.0, 108982.0, 108982.0, 108982.0, 108982.0, 108982.0, 108983.0, 108983.0, 108983.0, 108983.0, 108983.0, 108983.0, 108983.0, 108983.0, 108983.0, 108983.0, 108988.0, 108988.0, 108988.0, 108988.0, 108988.0, 108988.0, 108988.0, 108988.0, 108988.0, 108988.0, 108989.0, 108989.0, 108989.0, 108989.0, 108989.0, 108989.0, 108989.0, 108989.0, 108989.0, 108989.0, 108991.0, 108991.0, 108991.0, 108991.0,
+                                108991.0, 108991.0, 108991.0, 108991.0, 108991.0, 108991.0, 109002.0, 109002.0, 109002.0, 109002.0, 109002.0, 109002.0, 109002.0, 109002.0, 109002.0, 109002.0, 109003.0, 109003.0, 109003.0, 109003.0, 109003.0, 109003.0, 109003.0, 109003.0, 109003.0, 109003.0, 109024.0, 109024.0, 109024.0, 109024.0, 109024.0, 109024.0, 109024.0, 109024.0, 109024.0, 109024.0, 109025.0, 109025.0, 109025.0, 109025.0, 109025.0, 109025.0, 109025.0, 109025.0, 109025.0, 109025.0, 109026.0, 109026.0, 109026.0, 109026.0, 109026.0, 109026.0, 109026.0, 109026.0, 109026.0, 109026.0]
+        dictRef['season'] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2,
+                             3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        dictRef['Nvisits'] = [3089, 2224, 2948, 3147, 2982, 2512, 3025, 2897, 2656, 3309, 3089, 2224, 2948, 3147, 2982, 2512, 3025, 2897, 2656, 3309, 3089, 2224, 2948, 3147, 2982, 2512, 3025, 2897, 2656, 3309, 3089, 2224, 2948, 3147, 2982, 2512, 3025, 2897, 2656, 3309, 3089, 2224, 2948, 3147, 2982, 2512, 3025, 2897, 2656, 3309, 3089, 2224, 2948,
+                              3147, 2982, 2512, 3025, 2897, 2656, 3309, 3089, 2224, 2948, 3147, 2982, 2512, 3025, 2897, 2656, 3309, 3089, 2224, 2948, 3147, 2982, 2512, 3025, 2897, 2656, 3309, 3089, 2224, 2948, 3147, 2982, 2512, 3025, 2897, 2656, 3309, 3089, 2224, 2948, 3147, 2982, 2512, 3025, 2897, 2656, 3309, 3089, 2224, 2948, 3147, 2982, 2512, 3025, 2897, 2656, 3309]
+
+        for key, vals in dictRef.items():
+            assert(set(vals) & set(list(data[key])))
+
+    def testgetFields(self):
+
+        dbDir = '.'
+        dbName = 'descddf_v1.4_10yrs_twoyears'
+        dbExtens = 'npy'
+        nclusters = 5
+        fieldType = 'DD'
+        nside = 64
+
+        getFile(dbDir, dbName, dbExtens, ref_dir, 'unittests')
+
+        # loading observations
+
+        observations = getObservations(dbDir, dbName, dbExtens)
+
+        observations = renameFields(observations)
+
+        fieldIds = [290, 744, 1427, 2412, 2786]
+        observations = getFields(observations, fieldType, fieldIds, nside)
+
+        sel = observations[:10]
+
+        """
+        names = ['observationId', 'numExposures', 'airmass',
+                 'fieldRA', 'fieldDec', 'pixRA', 'pixDec']
+        
+        for name in names:
+            print('dictRef[\'{}\']='.format(name), sel[name].tolist())
+        """
+
+        dictRef = {}
+        dictRef['observationId'] = [324, 325, 326,
+                                    327, 328, 329, 330, 331, 332, 333]
+        dictRef['numExposures'] = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+        dictRef['airmass'] = [1.0966219814866531, 1.0958608026924606, 1.0924408700941448, 1.0917071597704562,
+                              1.0909783310331298, 1.0902543705331267, 1.0870034369549904, 1.0863063803843198, 1.0856141067826373, 1.0849266035895995]
+        dictRef['fieldRA'] = [10.323732389844585, 10.323732389844585, 10.323732389844585, 10.323732389844585,
+                              10.323732389844585, 10.323732389844585, 10.323732389844585, 10.323732389844585, 10.323732389844585, 10.323732389844585]
+        dictRef['fieldDec'] = [-44.11670006140491, -44.11670006140491, -44.11670006140491, -44.11670006140491, -
+                               44.11670006140491, -44.11670006140491, -44.11670006140491, -44.11670006140491, -44.11670006140491, -44.11670006140491]
+        dictRef['pixRA'] = [10.887096774193546, 10.887096774193546, 10.887096774193546, 10.887096774193546, 10.887096774193546,
+                            10.887096774193546, 10.887096774193546, 10.887096774193546, 10.887096774193546, 10.887096774193546]
+        dictRef['pixDec'] = [-43.40685848593699, -43.40685848593699, -43.40685848593699, -43.40685848593699, -
+                             43.40685848593699, -43.40685848593699, -43.40685848593699, -43.40685848593699, -43.40685848593699, -43.40685848593699]
+
+        for key in dictRef.keys():
+            assert(np.isclose(dictRef[key], sel[key].tolist()).all())
 
 
 class TestSNclean(unittest.TestCase):
