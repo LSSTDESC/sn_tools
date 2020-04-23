@@ -10,38 +10,54 @@ from sn_tools.sn_obs import LSSTPointing, renameFields
 import time
 import itertools
 import numpy.lib.recfunctions as rf
+import pandas as pd
+
 
 def fieldType(obs, RACol, DecCol):
-        
-    rDDF = []
-    for ra, dec in np.unique(obs[[RACol, DecCol]]):
-        idx = np.abs(obs[RACol]-ra) < 1.e-5
-        idx &= np.abs(obs[DecCol]-dec) < 1.e-5
-        sel = obs[idx]
-        if len(sel) >= 10:
-            rDDF.append((ra,dec))
+    """
+    Function estimateing the type of field - DD or WFD -
+    according to the number of exposures
 
-    nddf = len(rDDF)
-    rtype = np.array(['WFD']*len(obs))
-    if len(rDDF) > 0:
-        RADecDDF = np.rec.fromrecords(rDDF, names=[RACol, DecCol])
-        for (ra,dec) in RADecDDF[[RACol, DecCol]]:
-            idx = np.argwhere((np.abs(obs[RACol]-ra)<1.e-5)&(np.abs(obs[DecCol]-dec)<1.e-5))
-            rtype[idx] = 'DD'
-            
-    obs = rf.append_fields(obs,'fieldType',rtype)
-    return obs
+    Parameters
+    ---------------
+    obs: numpy array
+      array of observations
+    RACol: str
+       RA col name
+    DecCol: str
+       Dec col name
+
+    Returns
+    -----------
+    original numpy array with type appended
+
+    """
+
+    df = pd.DataFrame(np.copy(obs))
+
+    df = df.round({RACol: 3, DecCol: 3})
+
+    df['sumExposures'] = df.groupby([RACol, DecCol])[
+        'numExposures'].transform('sum')
+
+    idx = df['sumExposures'] >= 20
+
+    df.loc[idx, 'fieldType'] = 'DD'
+    df.loc[~idx, 'fieldType'] = 'WFD'
+
+    return df.to_records(index=False)
+
 
 def area(polylist):
     """Estimate area of a set of polygons (without overlaps)
 
     Parameters
-    -----------
+    ----------------
     polylist: list
      list of polygons
 
     Returns
-    -------
+    -----------
     area: float
      area corresponding to this set of polygons.
     """
@@ -51,7 +67,29 @@ def area(polylist):
 
 
 class SnapNight:
-    def __init__(self, dbDir, dbName, nights=1, saveFig=False, areaTime=False, realTime=False):
+    """
+    class to get a snapshot of the (RA, Dec) pointings (LSST FP) observed map per night
+
+    Parameters
+    ---------------
+    dbDir: str
+       location dir of the db file
+    dbName: str
+        name of the db of interest. Extension: npy!
+    night_min: int, opt
+      min night to consider (default: 1)
+    night_max: int, opt
+      max night to consider (default: 3)
+    saveFig: bool, opt
+      to save the figure result or not (default: False)
+    areaTime: bool, opt
+      to estimate area covered during the night (time consuming) (default: False)
+    realTime: bool, opt
+      if True results are displayed in 'real time' (default: False)
+
+    """
+
+    def __init__(self, dbDir, dbName, nightmin=1, nightmax=3, saveFig=False, areaTime=False, realTime=False):
 
         self.dbName = dbName
         self.saveFig = saveFig
@@ -64,17 +102,17 @@ class SnapNight:
         obs.sort(order='observationStartMJD')
 
         # Select observations
-        idx = obs['night'] <= nights
+        idx = obs['night'] <= nightmax
+        idx &= obs['night'] >= nightmin
         obs = obs[idx]
-        
 
-        for night in range(np.min(obs['night']), np.max(obs['night'])):
-            #if night > np.min(obs['night']):
+        for night in range(np.min(obs['night']), np.max(obs['night'])+1):
+            # if night > np.min(obs['night']):
             #    self.ax.clear()
             idx = obs['night'] == night
             obs_disp = obs[idx]
             # get fieldtype(WFD or DDF)
-            obs_disp = fieldType(obs_disp,'fieldRA','fieldDec')
+            obs_disp = fieldType(obs_disp, 'fieldRA', 'fieldDec')
             self.frame()
             mjd0 = np.min(obs_disp['observationStartMJD'])
             polylist = []
@@ -82,9 +120,10 @@ class SnapNight:
             mjds = obs_disp['observationStartMJD']-mjd0
             nchanges = len(list(itertools.groupby(obs_disp['filter'])))-1
             iwfd = obs_disp['fieldType'] == 'WFD'
-            nchanges_noddf = len(list(itertools.groupby(obs_disp[iwfd]['filter'])))-1
+            nchanges_noddf = len(
+                list(itertools.groupby(obs_disp[iwfd]['filter'])))-1
             self.fig.suptitle(
-                'night {} - filter changes: {}/{}'.format(night, nchanges_noddf,nchanges))
+                'night {} - filter changes: {}/{}'.format(night, nchanges_noddf, nchanges))
 
             # area observed versus time
             for val in obs_disp:
@@ -94,7 +133,7 @@ class SnapNight:
                         pointing, facecolor=self.colors[val['filter']], edgecolor=self.colors[val['filter']])
                 else:
                     p = PolygonPatch(
-                        pointing, facecolor='k', edgecolor='k') 
+                        pointing, facecolor='k', edgecolor='k')
                 self.ax.add_patch(p)
                 # area observed versus time
                 if self.areaTime:
@@ -105,16 +144,20 @@ class SnapNight:
                 self.ax2.plot(24.*mjds, polyarea, 'b.')
             if self.realTime:
                 plt.draw()
-                plt.pause(1.)
+                plt.pause(3.)
                 if saveFig:
                     plt.savefig('{}_night_{}.png'.format(self.dbName, night))
                 plt.close()
-            
-            #self.ax.clear()
+
+            # self.ax.clear()
             if self.areaTime:
                 self.ax2.clear()
 
     def frame(self):
+        """
+        Frame to display the results
+
+        """
         # Prepare the frame
         self.plotParams()
         self.fig = plt.figure()
@@ -168,49 +211,41 @@ class SnapNight:
             colorfilters.append(mpatches.Patch(
                 color=self.colors[band], label='{}'.format(band)))
         colorfilters.append(mpatches.Patch(
-                color='k', label='ddf'))
+            color='k', label='ddf'))
         plt.legend(handles=colorfilters, loc='upper left',
                    bbox_to_anchor=(1., 0.5))
 
 
 class CadenceMovie:
+    """ Display obs footprint vs time
+
+    Parameters
+    ---------------
+    dbDir : str
+      database directory
+    dbName : str
+      database name
+    nights : int,opt
+      nights to process (default: 1)
+    title : str,opt
+         title of the movie (default : '')
+    total: int,opt
+       default: 600
+    sub: int, opt
+      default: 100
+    fps: int, opt
+      default: 24
+    saveMovie: bool, opt
+     save the movie as mp4 file (default: False)
+    realTime: bool, opt
+      display results in real-time (default: False)
+    saveFig: bool, opt
+      save fig at the end of each night (default: False)
+    areaTime: bool, opt
+      draw observed area vs time in an embedded histo (default: False)
+    """
+
     def __init__(self, dbDir, dbName, nights=1, title='', total=600, sub=100, fps=24, saveMovie=False, realTime=False, saveFig=False, areaTime=False):
-        """ Display obs footprint vs time
-
-        Parameters
-        ----------
-        dbDir : str
-         database directory
-        dbName : str
-         database name
-        nights : int,opt
-         nights to process
-         default: 1
-        title : str,opt
-         title of the movie
-         default : ''
-        total: int,opt
-
-         default: 600
-        sub: int, opt
-
-         default: 100
-        fps: int, opt
-
-         default: 24
-        saveMovie: bool, opt
-         save the movie as mp4 file
-         default: False
-        realTime: bool, opt
-         display results in real-time
-         default: False
-        saveFig: bool, opt
-         save fig at the end of each night
-         default: false
-        areaTime: bool, opt
-         draw observed area vs time in an embedded histo
-         default: False
-        """
 
         self.realTime = realTime
         self.plotParams()
@@ -250,7 +285,7 @@ class CadenceMovie:
                 fps=fps, metadata=metadata, bitrate=6000)
             writer = anim.FFMpegWriter(fps=30, codec='hevc')
             Name_mp4 = title
-            with writer.saving(fig, Name_mp4, 250):
+            with writer.saving(self.fig, Name_mp4, 250):
                 self.loopObs(obs, writer=writer)
         else:
             self.loopObs(obs)
@@ -259,7 +294,7 @@ class CadenceMovie:
         """ Display observation (RA, Dec) as time (MJD) evolves.
 
         Parameters
-        ----------
+        ---------------
         obs: array
          array of observation
         nchanges: int
@@ -276,7 +311,7 @@ class CadenceMovie:
         night = obs['night']
 
         self.fig.suptitle(
-            'night {} - MJD {} \n filter changes: {}/{}'.format(night, np.round(mjd, 3), nchanges_noddf,nchanges))
+            'night {} - MJD {} \n filter changes: {}/{}'.format(night, np.round(mjd, 3), nchanges_noddf, nchanges))
 
         # LSST focal plane corresponding to this pointing
         pointing = LSSTPointing(obs['fieldRA'], obs['fieldDec'])
@@ -285,7 +320,7 @@ class CadenceMovie:
                 pointing, facecolor=self.colors[obs['filter']], edgecolor=self.colors[obs['filter']])
         else:
             p = PolygonPatch(
-                pointing, facecolor='k', edgecolor='k') 
+                pointing, facecolor='k', edgecolor='k')
         self.ax.add_patch(p)
 
         # area observed versus time
@@ -304,11 +339,11 @@ class CadenceMovie:
          default: None
         """
 
-        for night in range(np.min(obs['night']), np.max(obs['night'])):
+        for night in range(np.min(obs['night']), np.max(obs['night'])+1):
             idx = obs['night'] == night
-            obs_disp = obs[idx] 
+            obs_disp = obs[idx]
             # get fieldtype(WFD or DDF)
-            obs_disp = fieldType(obs_disp,'fieldRA','fieldDec')
+            obs_disp = fieldType(obs_disp, 'fieldRA', 'fieldDec')
             mjd0 = np.min(obs_disp['observationStartMJD'])
             if len(obs_disp) > 0:
                 for k in range(len(obs_disp)):
@@ -316,15 +351,16 @@ class CadenceMovie:
                     sel = obs_disp[:k]
                     nchanges = len(list(itertools.groupby(sel['filter'])))-1
                     ifw = sel['fieldType'] == 'WFD'
-                    nchanges_noddf = len(list(itertools.groupby(sel[ifw]['filter'])))-1
+                    nchanges_noddf = len(
+                        list(itertools.groupby(sel[ifw]['filter'])))-1
                     # show observations
                     if self.areaTime:
                         self.polylist.append(LSSTPointing(
                             obs_disp[k]['fieldRA'], obs_disp[k]['fieldDec']))
-                        self.showObs(obs_disp[k], nchanges,nchanges_noddf,
+                        self.showObs(obs_disp[k], nchanges, nchanges_noddf,
                                      area(self.polylist), mjd0)
                     else:
-                        self.showObs(obs_disp[k], nchanges,nchanges_noddf,
+                        self.showObs(obs_disp[k], nchanges, nchanges_noddf,
                                      0., mjd0)
                     self.fig.canvas.flush_events()
                     if writer:
@@ -378,6 +414,6 @@ class CadenceMovie:
             colorfilters.append(mpatches.Patch(
                 color=self.colors[band], label='{}'.format(band)))
         colorfilters.append(mpatches.Patch(
-                color='k', label='ddf'))
+            color='k', label='ddf'))
         plt.legend(handles=colorfilters, loc='upper left',
                    bbox_to_anchor=(1., 0.5))
