@@ -9,12 +9,12 @@ from sn_tools.sn_cadence_tools import ReferenceData, GenerateFakeObservations
 from sn_tools.sn_cadence_tools import TemplateData, AnaOS, Match_DD
 from sn_tools.sn_calcFast import LCfast, CalcSN, CalcSN_df, CovColor
 from sn_tools.sn_lcana import LCtoSN
-from sn_tools.sn_obs import renameFields, patchObs, getPix, pavingSky
+from sn_tools.sn_obs import renameFields, patchObs, getPix, pavingSky, DDFields
 from sn_tools.sn_obs import DataInside, proj_gnomonic_plane, proj_gnomonic_sphere
 from sn_tools.sn_obs import pixelate, season, DataToPixels, ProcessPixels, ProcessArea, getFields
 from sn_tools.sn_clusters import ClusterObs
 from sn_tools.sn_telescope import Telescope
-from sn_tools.sn_obs import DDFields
+from sn_tools.sn_visu import fieldType, SnapNight, CadenceMovie
 from sn_tools.sn_io import Read_Sqlite, getObservations
 import os
 from numpy.testing import assert_almost_equal, assert_equal
@@ -1582,7 +1582,7 @@ class TestSNobs(unittest.TestCase):
         """
         names = ['observationId', 'numExposures', 'airmass',
                  'fieldRA', 'fieldDec', 'pixRA', 'pixDec']
-        
+
         for name in names:
             print('dictRef[\'{}\']='.format(name), sel[name].tolist())
         """
@@ -1606,6 +1606,59 @@ class TestSNobs(unittest.TestCase):
             assert(np.isclose(dictRef[key], sel[key].tolist()).all())
 
 
+class TestSNVisu(unittest.TestCase):
+
+    def testfieldType(self):
+
+        # get some observations
+        dbDir = '.'
+        dbName = 'descddf_v1.4_10yrs_twoyears'
+        dbExtens = 'npy'
+
+        getFile(dbDir, dbName, dbExtens, ref_dir, 'unittests')
+
+        obs = np.load('{}/{}.{}'.format(dbDir, dbName, dbExtens))
+
+        obs = renameFields(obs)
+        obs_type = fieldType(obs, 'fieldRA', 'fieldDec')
+
+        idx = obs_type['fieldType'] == 'DD'
+        nDD = len(obs[idx])
+        nWFD = len(obs[~idx])
+        assert(nDD == 13467)
+        assert(nWFD == 400975)
+
+    def testSnapNight(self):
+
+        # get some observations
+        dbDir = '.'
+        dbName = 'descddf_v1.4_10yrs_twoyears'
+        dbExtens = 'npy'
+
+        getFile(dbDir, dbName, dbExtens, ref_dir, 'unittests')
+
+        snapnight = SnapNight(dbDir, dbName, saveFig=True,
+                              areaTime=False, realTime=True)
+
+        # with these options three figs must have been created
+        for i in range(3):
+            assert(os.path.isfile('{}_night_{}.png'.format(dbName, i+1)))
+
+    def testCadenceMovie(self):
+        # get some observations
+        dbDir = '.'
+        dbName = 'descddf_v1.4_10yrs_twoyears'
+        dbExtens = 'npy'
+
+        getFile(dbDir, dbName, dbExtens, ref_dir, 'unittests')
+
+        cadencemovie = CadenceMovie(dbDir, dbName, saveFig=True,
+                                    areaTime=False, realTime=False, saveMovie=False)
+        # saveMovie = True crashes (environment problem)
+
+        assert(os.path.isfile('{}_night_{}.png'.format(dbName, 1)))
+
+
 class TestSNclean(unittest.TestCase):
     def testClean(self):
 
@@ -1619,7 +1672,7 @@ class TestSNclean(unittest.TestCase):
         fDir = '.'
 
         files_to_rm = []
-        for extens in ['npy', 'hdf5', 'db']:
+        for extens in ['npy', 'hdf5', 'db', 'png']:
             searchf = glob.glob('{}/*.{}'.format(fDir, extens))
             if len(searchf) > 0:
                 files_to_rm += searchf
@@ -1642,5 +1695,6 @@ clusters = TestSNclusters
 snio = TestSNio
 lcana = TestSNlcana
 snobs = TestSNobs
+visu = TestSNVisu
 clean = TestSNclean
 unittest.main(verbosity=5)
