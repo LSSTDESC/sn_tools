@@ -2595,17 +2595,24 @@ def getFields(observations, fieldType='WFD', fieldIds=None,
             # loop on proposal id
             # and take the one with the highest number of evts
             propIds = list(np.unique(observations[pName]))
+            """
             r = []
             for propId in propIds:
                 idx = observations[pName] == propId
                 r.append((propId, len(observations[idx])))
 
             res = np.rec.fromrecords(r, names=['propId', 'Nobs'])
+            """
             if fieldType == 'WFD':
                 # Take the propId with the largest number of fields
-                propId_WFD = propIds[np.argmax(res['Nobs'])]
+                #print('hello', res)
+                #propId_WFD = propIds[np.argmax(res['Nobs'])]
                 #print(res, np.argmax(res['Nobs']), propId_WFD)
-                return observations[observations[pName] == propId_WFD]
+                #a = observations['note']
+                df = pd.DataFrame(np.copy(observations))
+                idx = df['note'].str.contains('DD')
+                return df[~idx].to_records(index=False)
+                # return observations[observations[pName] == propId_WFD]
             if fieldType == 'DD':
                 # could be tricky here depending on the database structure
                 if 'fieldId' in observations.dtype.names:

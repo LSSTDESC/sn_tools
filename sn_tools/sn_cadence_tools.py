@@ -859,9 +859,10 @@ class AnaOS:
         # load observations
         observations = self.load_obs()
 
+        print('total number of obs', len(observations))
         # WDF obs
-        obs_WFD = getFields(observations, 'WFD',
-                            RACol=self.RACol, DecCol=self.DecCol)
+        obs_WFD = np.copy(getFields(observations, 'WFD',
+                                    RACol=self.RACol, DecCol=self.DecCol))
         df['WFD'] = len(obs_WFD)
         df_bands = pd.DataFrame(obs_WFD).groupby(
             ['filter']).size().to_frame('count').reset_index()
