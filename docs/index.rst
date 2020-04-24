@@ -22,8 +22,6 @@ Welcome to sn_tools's documentation!
    sn_lcana <api/sn_tools.sn_lcana>
    sn_obs <api/sn_tools.sn_obs>
    sn_visu <api/sn_tools.sn_visu>
-   observations <api/sn_tools.observations>
-   design_dd_survey <api/sn_tools.design_dd_survey>
 
 
 Indices and tables
