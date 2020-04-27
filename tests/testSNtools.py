@@ -29,6 +29,26 @@ ref_dir = 'Reference_Files'
 db_dir = 'Scheduler_DB'
 
 
+def getRefDir(dirname):
+    fullname = '{}/{}/{}'.format(main_repo, ref_dir, dirname)
+
+    if not os.path.exists(dirname):
+        print('wget path:', fullname)
+        cmd = 'wget --no-verbose --recursive {} --directory-prefix={} --no-clobber --no-parent -nH --cut-dirs=3 -R \'index.html*\''.format(
+            fullname+'/', dirname)
+        os.system(cmd)
+
+
+def getRefFile(refdir, fname):
+    fullname = '{}/{}/{}/{}'.format(main_repo, ref_dir, refdir, fname)
+
+    # check whether the file is available; if not-> get it!
+    if not os.path.isfile(fname):
+        print('wget path:', fullname)
+        cmd = 'wget --no-clobber --no-verbose {}'.format(fullname)
+        os.system(cmd)
+
+
 def getFile(dbDir, dbName, dbExtens, repmain, repofile=''):
 
     repo_reffiles = '{}/{}'.format(main_repo, repmain)
@@ -40,7 +60,7 @@ def getFile(dbDir, dbName, dbExtens, repmain, repofile=''):
         path = '{}/{}.{}'.format(repo_reffiles,
                                  dbName, dbExtens)
         print('wget path:', path)
-        cmd = 'wget {}'.format(path)
+        cmd = 'wget --no-clobber --no-verbose {}'.format(path)
         os.system(cmd)
 
 
@@ -91,7 +111,10 @@ def getReference(x1, color):
     Instrument['aerosol'] = False  # aerosol
 
     lc_reference = {}
-    gamma_reference = '../../reference_files/gamma.hdf5'
+
+    gamma_reference = 'gamma.hdf5'
+
+    getRefFile('reference_files', gamma_reference)
 
     fDir = '.'
     fName = 'LC_{}_{}_vstack'.format(x1, color)
@@ -166,8 +189,11 @@ def simuLCfast(x1, color, bands='r'):
 
     # and simulation parameters
     sn_parameters, cosmo_parameters = snSimuParam(x1, color)
+
+    getRefDir('reference_files')
+
     gen_par = GenerateSample(
-        sn_parameters, cosmo_parameters, mjdCol='observationStartMJD', dirFiles='../reference_files')
+        sn_parameters, cosmo_parameters, mjdCol='observationStartMJD', dirFiles='reference_files')
     params = gen_par(obs)
 
     # perform simulation
@@ -274,7 +300,8 @@ class TestSNCadence(unittest.TestCase):
 
     def testReferenceData(self):
         # dirfiles = os.getenv('REF_FILES')
-        dirfiles = '../reference_files'
+        dirfiles = 'reference_files'
+        getRefDir(dirfiles)
         Li_files = [dirfiles+'/Li_SNCosmo_-2.0_0.2.npy']
         Mag_files = [dirfiles+'/Mag_to_Flux_SNCosmo.npy']
         band = 'r'
@@ -386,13 +413,16 @@ class TestSNCadence(unittest.TestCase):
 
     def testTemplateData(self):
         # refname = 'LC_Ref_-2.0_0.2.hdf5'
-        refname = 'reference_files/LC_-2.0_0.2.hdf5'
+
         band = 'r'
         z = 0.3
         min_rf_phase = -20
         max_rf_phase = 60.
 
-        templdata = TemplateData('../{}'.format(refname), band)
+        refname = 'LC_-2.0_0.2.hdf5'
+
+        getRefDir('reference_files')
+        templdata = TemplateData('reference_files/{}'.format(refname), band)
 
         daymin = 59000
         season_length = 180.
@@ -458,10 +488,11 @@ class TestSNCadence(unittest.TestCase):
                      fields).stat
 
         # this is to get the reference data
-        # print(stat.values.tolist(), stat.columns)
+        #print(stat.values.tolist(), stat.columns)
 
-        valrefs = ['descddf_v1.4_10yrs_twoyears', 339316, 26443, 73015, 70055, 21483, 80777, 67543, 339316, 20513, 0.05700763418179191, 967, 3838, 1930, 1480, 1920, 10378, 20513, 3730.0, 272.0, 174.0, 348.0, 688.0, 1900.0, 348.0, 2.001879929708757, 1.883274130238675, 1.353426274694172, 2791.0, 248.0, 129.0, 254.0, 504.0, 1400.0, 256.0, 3.2066746992925483, 3.0166084454850193, 1.3534620445526713, 5313.0, 224.0, 256.0,
+        valrefs = ['descddf_v1.4_10yrs_twoyears', 393929, 33174, 84973, 81143, 26010, 89868, 78761, 393929, 20513, 0.04949546619309819, 967, 3838, 1930, 1480, 1920, 10378, 20513, 3730.0, 272.0, 174.0, 348.0, 688.0, 1900.0, 348.0, 2.001879929708757, 1.883274130238675, 1.353426274694172, 2791.0, 248.0, 129.0, 254.0, 504.0, 1400.0, 256.0, 3.2066746992925483, 3.0166084454850193, 1.3534620445526713, 5313.0, 224.0, 256.0,
                    512.0, 1017.0, 2796.0, 508.0, 1.424606742986726, 1.3640734093042113, 1.3297419541315458, 5145.0, 464.0, 240.0, 480.0, 960.0, 2525.0, 476.0, 1.6342188350701072, 1.5566493003965718, 1.3366864617690055, 3534.0, 272.0, 168.0, 336.0, 669.0, 1757.0, 332.0, 1.4463375323299488, 1.3777211519657158, 1.3366522961266032, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
         names = ['cadence', 'WFD', 'WFD_g', 'WFD_i', 'WFD_r', 'WFD_u', 'WFD_y', 'WFD_z',
                  'WFD_all', 'DD', 'frac_DD', 'DD_g', 'DD_i', 'DD_r', 'DD_u', 'DD_y',
                  'DD_z', 'DD_all', 'ELAIS', 'ELAIS_u', 'ELAIS_g', 'ELAIS_r', 'ELAIS_i',
@@ -586,8 +617,9 @@ class TestSNUtils(unittest.TestCase):
         cosmo_parameters['wa'] = 0.0                   # wa
 
         # instantiate GenerateSample
+        getRefDir('reference_files')
         genpar = GenerateSample(
-            sn_parameters, cosmo_parameters, mjdCol='observationStartMJD', dirFiles='../reference_files')
+            sn_parameters, cosmo_parameters, mjdCol='observationStartMJD', dirFiles='reference_files')
 
         # get some observations
         observations = Observations()
@@ -628,9 +660,11 @@ class TestSNUtils(unittest.TestCase):
 
     def testX0_norm(self):
 
-        salt2Dir = '../../SALT2_Files'
+        salt2Dir = 'SALT2_Files'
+
+        getRefDir(salt2Dir)
         outFile = 'X0_norm.npy'
-        # X0_norm(salt2Dir=salt2Dir, outfile=outFile)
+        X0_norm(salt2Dir=salt2Dir, outfile=outFile)
 
         assert(os.path.isfile(outFile))
 
@@ -679,6 +713,9 @@ class TestSNUtils(unittest.TestCase):
         bands = 'r'
         telescope = Telescope(airmass=1.2)
         outName = 'gamma_test.hdf5'
+        if os.path.isfile(outName):
+            os.system('rm {}'.format(outName))
+
         mag_range = np.arange(20., 25., 1.)
         exptimes = np.array([15., 30.])
         Gamma(bands, telescope, outName,
@@ -707,19 +744,21 @@ class TestSNcalcFast(unittest.TestCase):
         lc = simuLCfast(x1, color)
 
         # print(lc.columns)
-        # for col in lc.columns:
-        #    print(col, lc[col].values.tolist())
-
+        """
+        for col in lc.columns:
+            print(col, lc[col].values.tolist())
+        """
         # These are what the result should be
         dictRef = {}
+
         dictRef['flux'] = [4.511147986335053e-06, 1.2317188232550995e-05, 2.550111662322939e-05, 3.7578119573455526e-05, 4.55531457559699e-05, 4.891115014639708e-05, 4.7133300685124935e-05, 4.158604026288241e-05, 3.409213315546674e-05, 2.8570455907048627e-05, 2.5038831188298558e-05, 2.1858035689046604e-05, 1.879011450752236e-05, 1.577897479370136e-05, 1.2660074510369872e-05, 9.969941676665338e-06,
                            5.397161397972984e-07, 1.967780860222931e-06, 4.340271623278295e-06, 7.16463061377825e-06, 9.4576858760202e-06, 1.074632739127063e-05, 1.0806717280098711e-05, 1.0358122558068462e-05, 9.29955918584795e-06, 7.726015475790287e-06, 6.461230015881104e-06, 5.541974962087858e-06, 4.687433939533106e-06, 3.907532488461168e-06, 3.2920828790886484e-06, 2.726609113336508e-06, 2.199381111769534e-06, 1.7924998997463632e-06]
-        dictRef['fluxerr'] = [1.3821321678798889e-07, 1.5590732755617273e-07, 1.8192455445555648e-07, 2.0285059931323458e-07, 2.1555825057784464e-07, 2.2069012111866136e-07, 2.1798814946172864e-07, 2.0933344110851897e-07, 1.9703905993883528e-07, 1.8746494699300317e-07, 1.8107622426999082e-07, 1.7512278927588011e-07, 1.6918224778846632e-07, 1.6314139119634574e-07, 1.5663895504416641e-07, 1.5080545075808596e-07,
-                              1.2827790544421312e-07, 1.319367353776003e-07, 1.3780067391562013e-07, 1.444714740719694e-07, 1.4966887217260837e-07, 1.525119664284462e-07, 1.5264390402315115e-07, 1.5166109046153174e-07, 1.4931627272214047e-07, 1.4576103156036853e-07, 1.428392606613501e-07, 1.4067762168236507e-07, 1.3863793314338187e-07, 1.3674984997871739e-07, 1.3524128572955553e-07, 1.3384023244235643e-07, 1.3252059639045936e-07, 1.3149313102973464e-07]
+        dictRef['fluxerr'] = [1.392078301131224e-07, 1.5855538429294586e-07, 1.867341224819313e-07, 2.0924362116801088e-07, 2.2286484029713726e-07, 2.2835723839164575e-07, 2.2546600672753466e-07, 2.1619643615366878e-07, 2.0300314387060767e-07, 1.9270479838749599e-07, 1.8581907285402417e-07, 1.7939130478141504e-07, 1.7296546725166e-07, 1.6641740835731415e-07, 1.593516146520308e-07, 1.5299534996930728e-07, 1.282492630747172e-07,
+                              1.322944286542738e-07, 1.387543328679261e-07, 1.4607259278790437e-07, 1.5175482298157888e-07, 1.5485661548030596e-07, 1.5500045287161913e-07, 1.5392877531532006e-07, 1.5136982992469748e-07, 1.4748395311029048e-07, 1.4428471036593497e-07, 1.4191422660101663e-07, 1.3967454356583682e-07, 1.3759867053323253e-07, 1.3593814449537107e-07, 1.3439437253465088e-07, 1.3293886490742405e-07, 1.318046082162595e-07]
         dictRef['phase'] = [-12.818181818180495, -10.090909090907767, -7.36363636363504, -4.636363636362313, -1.909090909089586, 0.8181818181831411, 3.545454545455868, 6.272727272728595, 9.000000000001322, 11.72727272727405, 14.454545454546777, 17.181818181819505, 19.90909090909223, 22.63636363636496, 25.363636363637685, 28.09090909091041, -13.499999999997575, -
                             10.999999999997575, -8.499999999997575, -5.999999999997575, -3.499999999997575, -0.9999999999975747, 1.5000000000024254, 4.000000000002426, 6.500000000002426, 9.000000000002427, 11.500000000002427, 14.000000000002427, 16.500000000002427, 19.000000000002427, 21.500000000002427, 24.000000000002427, 26.500000000002427, 29.000000000002427]
-        dictRef['snr_m5'] = [32.6390492253349, 79.0032670408847, 140.17413262077946, 185.25022701771144, 211.32638455663877, 221.6281811730865, 216.2195550607211, 198.6593257277231, 173.02220770871315, 152.40425671747036, 138.27785116043069, 124.81548392089903, 111.0643389193895, 96.71962877103869, 80.82328247657294, 66.11128196326659, 4.207397508778439,
-                             14.914578980533221, 31.496737279644844, 49.59200880174548, 63.190733909673284, 70.46219154424494, 70.79691356989717, 68.29782462032185, 62.28094913106561, 53.00467067969722, 45.23427232796791, 39.39485822841845, 33.81061613696503, 28.574309142344976, 24.342292084326132, 20.372118783571523, 16.5965228928586, 13.631890013638992]
+        dictRef['snr_m5'] = [32.40584946025828, 77.68382188645099, 136.56377465611257, 179.59027550609252, 204.39808134488874, 214.18699267378446, 209.04836773058818, 192.35303320783584, 167.93894175942788, 148.2602205348223, 134.74844537604906, 121.84556946993732, 108.63506343831777, 94.81565029436335, 79.4474190802216, 65.16499801245874,
+                             4.20833716200664, 14.87425343787795, 31.28026010841478, 49.04842501276887, 62.322143640655455, 69.39533941084555, 69.72055293960655, 67.29165834555658, 61.43601529098789, 52.38546508183618, 44.78111367097823, 39.05158133066383, 33.559686825277815, 28.398039554585882, 24.217506361510985, 20.288119672819686, 16.544304882557398, 13.599675489382772]
         dictRef['time'] = [59009.0, 59012.0, 59015.0, 59018.0, 59021.0, 59024.0, 59027.0, 59030.0, 59033.0, 59036.0, 59039.0, 59042.0, 59045.0, 59048.0, 59051.0, 59054.0,
                            59009.0, 59012.0, 59015.0, 59018.0, 59021.0, 59024.0, 59027.0, 59030.0, 59033.0, 59036.0, 59039.0, 59042.0, 59045.0, 59048.0, 59051.0, 59054.0, 59057.0, 59060.0]
         dictRef['mag'] = [22.264347936828727, 21.17378667626179, 20.383667628776795, 19.962728012255248, 19.75376968891716, 19.676545933826414, 19.71674598749469, 19.85269669801393, 20.06843018222962, 20.26027269577972, 20.403530491878712, 20.551037795464264, 20.715242055501704, 20.904868666274634, 21.143974968002418, 21.40333407795156, 24.569652108525073,
@@ -743,7 +782,7 @@ class TestSNcalcFast(unittest.TestCase):
 
         """
         for col in sn.dtype.names:
-            print('dictRef[\'', col, '\']=', sn[col].tolist())
+            print('dictRef[\'{}\']='.format(col), sn[col].tolist())
         """
         dictRef['season'] = [1, 1]
         dictRef['healpixID'] = [10, 10]
@@ -755,11 +794,10 @@ class TestSNcalcFast(unittest.TestCase):
         dictRef['n_aft'] = [44, 48]
         dictRef['n_phmin'] = [12, 16]
         dictRef['n_phmax'] = [0, 0]
-        dictRef['Cov_x0x0'] = [
-            1.2082989784919376e-13, 3.8313819364419196e-14]
-        dictRef['Cov_x1x1'] = [0.00015952039943579143, 0.0019942190656627324]
+        dictRef['Cov_x0x0'] = [1.223597855577808e-13, 3.8627655216214425e-14]
+        dictRef['Cov_x1x1'] = [0.00016174286076638242, 0.0020030002150465773]
         dictRef['Cov_colorcolor'] = [
-            2.5922180044333713e-06, 2.0975146799526763e-05]
+            2.6208290665105743e-06, 2.1050920753550444e-05]
 
         for key in dictRef.keys():
             assert(np.isclose(dictRef[key], sn[key]).all())
@@ -778,9 +816,10 @@ class TestSNcalcFast(unittest.TestCase):
                        invert_matrix=False).sn
 
         dictRef = {}
+
         """
         for col in sn.columns:
-            print('dictRef[\'', col, '\']=', sn[col].to_list())
+            print('dictRef[\'{}\']='.format(col), sn[col].to_list())
         """
         dictRef['color'] = [0.2, 0.2]
         dictRef['z'] = [0.1, 0.2]
@@ -794,7 +833,7 @@ class TestSNcalcFast(unittest.TestCase):
         dictRef['Cov_x1x1'] = [100.0, 100.0]
         dictRef['Cov_daymaxdaymax'] = [100.0, 100.0]
         dictRef['Cov_colorcolor'] = [
-            2.630505097669433e-06, 2.109964241118505e-05]
+            2.6602780705309944e-06, 2.1176420857347407e-05]
         dictRef['n_aft'] = [44.0, 48.0]
         dictRef['n_bef'] = [20.0, 20.0]
         dictRef['n_phmin'] = [12.0, 16.0]
@@ -808,10 +847,12 @@ class TestSNcalcFast(unittest.TestCase):
                        invert_matrix=True).sn
 
         dictRef = {}
+
         """
         for col in sn.columns:
-            print('dictRef[\'', col, '\']=', sn[col].to_list())
+            print('dictRef[\'{}\']='.format(col), sn[col].to_list())
         """
+
         dictRef['color'] = [0.2, 0.2]
         dictRef['z'] = [0.1, 0.2]
         dictRef['daymax'] = [59023.1, 59025.2]
@@ -820,12 +861,12 @@ class TestSNcalcFast(unittest.TestCase):
         dictRef['pixRA'] = [0.0, 0.0]
         dictRef['pixDec'] = [0.0, 0.0]
         dictRef['level_8'] = [0, 0]
-        dictRef['Cov_x0x0'] = [1.239736218613944e-13, 3.908852038544615e-14]
-        dictRef['Cov_x1x1'] = [0.0001769038924859473, 0.0021595857993669952]
+        dictRef['Cov_x0x0'] = [1.2556727173847517e-13, 3.940921112025599e-14]
+        dictRef['Cov_x1x1'] = [0.00017951638746726162, 0.002169144337622918]
         dictRef['Cov_daymaxdaymax'] = [
-            0.00014423656437498333, 0.0017679338165480843]
+            0.0001469421723520269, 0.0017798915037562462]
         dictRef['Cov_colorcolor'] = [
-            2.6305050976694332e-06, 2.1099642411185038e-05]
+            2.6602780705309914e-06, 2.1176420857347404e-05]
         dictRef['n_aft'] = [44.0, 48.0]
         dictRef['n_bef'] = [20.0, 20.0]
         dictRef['n_phmin'] = [12.0, 16.0]
@@ -855,8 +896,9 @@ class TestSNcalcFast(unittest.TestCase):
 
         var_color = CovColor(sums).Cov_colorcolor
 
-        var_ref = [2.630505097669433e-06, 2.109964241118505e-05]
-
+        # print(var_color.to_list())
+        #var_ref = [2.630505097669433e-06, 2.109964241118505e-05]
+        var_ref = [2.6602780705309944e-06, 2.1176420857347407e-05]
         assert(np.isclose(var_ref, var_color.to_list()).all())
 
 
@@ -880,31 +922,31 @@ class TestSNclusters(unittest.TestCase):
         dictRef = {}
         """
         for val in clusters.columns:
-        print('dictRef[\'{}\']='.format(val), clusters[val].to_list())
+            print('dictRef[\'{}\']='.format(val), clusters[val].to_list())
         """
 
         dictRef['clusid'] = [0, 1, 2, 3, 4]
-        dictRef['RA'] = [53.1644889383448, 349.4901155249653,
-                         150.0614583198708, 9.500268366570257, 35.74042365422678]
-        dictRef['Dec'] = [-28.090789606070373, -63.26284809752175,
-                          2.1861679024847427, -43.954741632914974, -4.754220734785014]
-        dictRef['width_RA'] = [1.5566493003965718, 3.0166084454850193,
-                               1.3640734093042113, 1.883274130238675, 1.3777211519657158]
-        dictRef['width_Dec'] = [1.3366864617690055, 1.3534620445526713,
-                                1.3297419541315458, 1.353426274694172, 1.3366522961266032]
-        dictRef['area'] = [1.6342188350701072, 3.2066746992925483,
-                           1.424606742986726, 2.001879929708757, 1.4463375323299488]
+        dictRef['RA'] = [349.4901155249653, 35.74042365422678,
+                         150.0614583198708, 9.500268366570257, 53.1644889383448]
+        dictRef['Dec'] = [-63.26284809752175, -4.754220734785014,
+                          2.1861679024847427, -43.954741632914974, -28.090789606070373]
+        dictRef['width_RA'] = [3.0166084454850193, 1.3777211519657158,
+                               1.3640734093042113, 1.883274130238675, 1.5566493003965718]
+        dictRef['width_Dec'] = [1.3534620445526713, 1.3366522961266032,
+                                1.3297419541315458, 1.353426274694172, 1.3366864617690055]
+        dictRef['area'] = [3.2066746992925483, 1.4463375323299488,
+                           1.424606742986726, 2.001879929708757, 1.6342188350701072]
         dictRef['dbName'] = ['descddf_v1.4_10yrs_DD_twoyears', 'descddf_v1.4_10yrs_DD_twoyears',
                              'descddf_v1.4_10yrs_DD_twoyears', 'descddf_v1.4_10yrs_DD_twoyears', 'descddf_v1.4_10yrs_DD_twoyears']
-        dictRef['fieldName'] = ['CDFS', 'SPT', 'COSMOS', 'ELAIS', 'XMM-LSS']
-        dictRef['Nvisits'] = [5145.0, 2791.0, 5313.0, 3701.0, 3534.0]
-        dictRef['Nvisits_all'] = [5145.0, 2791.0, 5313.0, 3701.0, 3534.0]
-        dictRef['Nvisits_u'] = [464.0, 248.0, 224.0, 272.0, 272.0]
-        dictRef['Nvisits_g'] = [240.0, 129.0, 256.0, 174.0, 168.0]
-        dictRef['Nvisits_r'] = [480.0, 254.0, 512.0, 348.0, 336.0]
-        dictRef['Nvisits_i'] = [960.0, 504.0, 1017.0, 688.0, 669.0]
-        dictRef['Nvisits_z'] = [2525.0, 1400.0, 2796.0, 1875.0, 1757.0]
-        dictRef['Nvisits_y'] = [476.0, 256.0, 508.0, 344.0, 332.0]
+        dictRef['fieldName'] = ['SPT', 'XMM-LSS', 'COSMOS', 'ELAIS', 'CDFS']
+        dictRef['Nvisits'] = [2791.0, 3534.0, 5313.0, 3701.0, 5145.0]
+        dictRef['Nvisits_all'] = [2791.0, 3534.0, 5313.0, 3701.0, 5145.0]
+        dictRef['Nvisits_u'] = [248.0, 272.0, 224.0, 272.0, 464.0]
+        dictRef['Nvisits_g'] = [129.0, 168.0, 256.0, 174.0, 240.0]
+        dictRef['Nvisits_r'] = [254.0, 336.0, 512.0, 348.0, 480.0]
+        dictRef['Nvisits_i'] = [504.0, 669.0, 1017.0, 688.0, 960.0]
+        dictRef['Nvisits_z'] = [1400.0, 1757.0, 2796.0, 1875.0, 2525.0]
+        dictRef['Nvisits_y'] = [256.0, 332.0, 508.0, 344.0, 476.0]
 
         # transform in pandas df
         dfRef = pd.DataFrame.from_dict(dictRef)
@@ -1638,7 +1680,7 @@ class TestSNVisu(unittest.TestCase):
         getFile(dbDir, dbName, dbExtens, ref_dir, 'unittests')
 
         snapnight = SnapNight(dbDir, dbName, saveFig=True,
-                              areaTime=False, realTime=True)
+                              areaTime=False, realTime=False)
 
         # with these options three figs must have been created
         for i in range(3):
@@ -1678,6 +1720,11 @@ class TestSNclean(unittest.TestCase):
                 files_to_rm += searchf
         print('Cleaning - removing the following files:', files_to_rm)
         looprm(files_to_rm)
+
+        for ddir in ['SALT2_Files', 'reference_files']:
+            if os.path.exists(ddir):
+                cmd = 'rm -rf {}'.format(ddir)
+                os.system(cmd)
 
 
 """

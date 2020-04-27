@@ -651,6 +651,8 @@ class LCfast:
                     lc['mag'])
                 lc['flux_5'] = self.reference_lc.mag_to_flux_e_sec[band](
                     lc['m5'])
+                lc.loc[:, 'ratio'] = (
+                    lc['flux_e_sec']/lc['snr_m5'])/(lc['flux_5']/5.)
             for key, vals in Fisher_Mat.items():
                 lc.loc[:, 'F_{}'.format(
                     key)] = vals[~vals.mask]/(lc['fluxerr'].values**2)
@@ -670,9 +672,6 @@ class LCfast:
 
             for colname in ['n_aft', 'n_bef', 'n_phmin', 'n_phmax']:
                 lc.loc[:, colname] = lc[colname].astype(int)
-
-            lc.loc[:, 'ratio'] = (
-                lc['flux_e_sec']/lc['snr_m5'])/(lc['flux_5']/5.)
 
             """
             idb = (lc['z'] > 0.65) & (lc['z'] < 0.9)
