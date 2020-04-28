@@ -148,7 +148,7 @@ def patchObs(observations, fieldType,
                 # in that case min and max dec are given by obs strategy
                 minDec = np.min(observations['fieldDec'])-radius
                 maxDec = np.max(observations['fieldDec'])+radius
-            areas = pavingSky(RAmin, RAmax, minDec, maxDec, radius, radius)
+            areas = PavingSky(RAmin, RAmax, minDec, maxDec, radius, radius)
             # print(observations.dtype)
             if display:
                 areas.plot()
@@ -158,7 +158,7 @@ def patchObs(observations, fieldType,
             # radius = 0.1
             RA = np.unique(observations[RACol])[0]
             Dec = np.unique(observations[DecCol])[0]
-            areas = pavingSky(RA-radius/2., RA+radius/2., Dec -
+            areas = PavingSky(RA-radius/2., RA+radius/2., Dec -
                               radius/2., Dec+radius/2., radius, radius)
 
         patches = pd.DataFrame(areas.patches)
@@ -198,7 +198,7 @@ def getPix(nside, fieldRA, fieldDec):
     return healpixId, pixRA, pixDec
 
 
-class pavingSky:
+class PavingSky:
     def __init__(self, minRA, maxRA, minDec, maxDec, radius_RA, radius_Dec):
         """ class to perform a paving of the sky with rectangles
 

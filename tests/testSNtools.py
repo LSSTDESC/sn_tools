@@ -9,7 +9,7 @@ from sn_tools.sn_cadence_tools import ReferenceData, GenerateFakeObservations
 from sn_tools.sn_cadence_tools import TemplateData, AnaOS, Match_DD
 from sn_tools.sn_calcFast import LCfast, CalcSN, CalcSN_df, CovColor
 from sn_tools.sn_lcana import LCtoSN
-from sn_tools.sn_obs import renameFields, patchObs, getPix, pavingSky, DDFields
+from sn_tools.sn_obs import renameFields, patchObs, getPix, PavingSky, DDFields
 from sn_tools.sn_obs import DataInside, proj_gnomonic_plane, proj_gnomonic_sphere
 from sn_tools.sn_obs import pixelate, season, DataToPixels, ProcessPixels, ProcessArea, getFields
 from sn_tools.sn_clusters import ClusterObs
@@ -1177,7 +1177,7 @@ class TestSNobs(unittest.TestCase):
         assert(np.isclose(pixRA, pixRA_ref))
         assert(np.isclose(pixDec, pixDec_ref))
 
-    def testpavingSky(self):
+    def testPavingSky(self):
 
         minRA = 20.
         maxRA = 30.
@@ -1186,7 +1186,7 @@ class TestSNobs(unittest.TestCase):
         radius_RA = 5.
         radius_Dec = 5.
 
-        sky = pavingSky(minRA, maxRA, minDec, maxDec, radius_RA, radius_Dec)
+        sky = PavingSky(minRA, maxRA, minDec, maxDec, radius_RA, radius_Dec)
 
         patches = sky.patches
 
