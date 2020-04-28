@@ -22,15 +22,93 @@ This is open source software, available for re-use under the modified BSD licens
 Copyright (c) 2019, the sn_tools contributors on GitHub, https://github.com/LSSTDESC/sn_tools/graphs/contributors.
 All rights reserved.
 ```
-## Content od sn_tools ##
+## Content of sn_tools ##
 
-* docs : python documentation
- * \_\_init\_\_.py
- * LICENCE: licence infos
- * notebooks
- * setup.py: setup file for pip installation
- * README.md: README file
- * doc_package: md files docs.
- * [sn_tools](doc_package/sn_tools.md): set of python scripts
+ * **docs** :  python documentation
+ * **\_\_init\_\_.py**
+ * **LICENCE** licence infos
+ * **notebooks**
+ * **setup.py**: setup file for pip installation
+ * **README.md**: README file
+ * **doc_package**: md files docs.
+ * [**sn_tools**](doc_package/sn_tools.md): set of python scripts
+
+
+## Complete tree ##
+
+
+ ```bash
+
+├── doc_package 
+│   ├── sn_tools.md  
+├── docs 
+│   ├── api  
+│   │   ├── sn_tools.rst  
+│   │   ├── sn_tools.sn_analyze_simu.rst  
+│   │   ├── sn_tools.sn_cadence_tools.rst  
+│   │   ├── sn_tools.sn_calcFast.rst 
+│   │   ├── sn_tools.sn_clusters.rst 
+│   │   ├── sn_tools.sn_io.rst 
+│   │   ├── sn_tools.sn_lcana.rst  
+│   │   ├── sn_tools.sn_obs.rst 
+│   │   ├── sn_tools.sn_rate.rst 
+│   │   ├── sn_tools.sn_telescope.rst  
+│   │   ├── sn_tools.sn_throughputs.rst  
+│   │   ├── sn_tools.sn_utils.rst 
+│   │   └── sn_tools.sn_visu.rst 
+│   ├── _build 
+│   │   ├── doctrees 
+│   │   │   ├── api 
+│   │   │   │   ├── sn_tools.cadence_tools.doctree 
+│   │   │   │   ├── sn_tools.doctree 
+│   │   │   │   ├── sn_tools.observations.doctree 
+│   │   │   │   ├── sn_tools.sn_analyze_simu.doctree 
+│   │   │   │   ├── sn_tools.sn_cadence_tools.doctree 
+│   │   │   │   ├── sn_tools.sn_rate.doctree 
+│   │   │   │   ├── sn_tools.sn_telescope.doctree 
+│   │   │   │   ├── sn_tools.sn_throughputs.doctree 
+│   │   │   │   └── sn_tools.sn_utils.doctree 
+│   │   │   ├── environment.pickle 
+│   │   │   └── index.doctree 
+│   │   └── html 
+│   │       ├── api 
+│   │       │   ├── sn_tools.cadence_tools.html 
+│   │       │   ├── sn_tools.html 
+│   │       │   ├── sn_tools.observations.html 
+│   │       │   ├── sn_tools.sn_analyze_simu.html 
+│   │       │   ├── sn_tools.sn_cadence_tools.html 
+│   │       │   ├── sn_tools.sn_rate.html 
+│   │       │   ├── sn_tools.sn_telescope.html 
+│   │       │   ├── sn_tools.sn_throughputs.html 
+│   │       │   └── sn_tools.sn_utils.html 
+│   ├── conf.py 
+│   ├── index.rst
+│   ├── make.bat 
+│   └── Makefile 
+├── __init__.py 
+├── LICENCE 
+├── notebooks 
+│   ├── Check_dist.ipynb 
+│   ├── Display_LC.ipynb 
+│   └── SN_Analyze_Simu.ipynb 
+├── README.md 
+├── setup.py 
+├── sn_tools 
+│   ├── __init__.py 
+│   ├── sn_analyze_simu.py 
+│   ├── sn_cadence_tools.py 
+│   ├── sn_calcFast.py 
+│   ├── sn_clusters.py 
+│   ├── sn_io.py 
+│   ├── sn_lcana.py 
+│   ├── sn_obs.py 
+│   ├── sn_rate.py 
+│   ├── sn_telescope.py 
+│   ├── sn_throughputs.py 
+│   ├── sn_utils.py 
+│   └── sn_visu.py 
+└── tests 
+    └── testSNtools.py
+ ```    
 
 
