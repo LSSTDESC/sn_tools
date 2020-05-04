@@ -12,6 +12,7 @@ from sn_tools.sn_lcana import LCtoSN
 from sn_tools.sn_obs import renameFields, patchObs, getPix, PavingSky, DDFields
 from sn_tools.sn_obs import DataInside, proj_gnomonic_plane, proj_gnomonic_sphere
 from sn_tools.sn_obs import pixelate, season, DataToPixels, ProcessPixels, ProcessArea, getFields
+from sn_tools.sn_process import Process
 from sn_tools.sn_clusters import ClusterObs
 from sn_tools.sn_telescope import Telescope
 from sn_tools.sn_visu import fieldType, SnapNight, CadenceMovie
@@ -488,7 +489,7 @@ class TestSNCadence(unittest.TestCase):
                      fields).stat
 
         # this is to get the reference data
-        #print(stat.values.tolist(), stat.columns)
+        # print(stat.values.tolist(), stat.columns)
 
         valrefs = ['descddf_v1.4_10yrs_twoyears', 393929, 33174, 84973, 81143, 26010, 89868, 78761, 393929, 20513, 0.04949546619309819, 967, 3838, 1930, 1480, 1920, 10378, 20513, 3730.0, 272.0, 174.0, 348.0, 688.0, 1900.0, 348.0, 2.001879929708757, 1.883274130238675, 1.353426274694172, 2791.0, 248.0, 129.0, 254.0, 504.0, 1400.0, 256.0, 3.2066746992925483, 3.0166084454850193, 1.3534620445526713, 5313.0, 224.0, 256.0,
                    512.0, 1017.0, 2796.0, 508.0, 1.424606742986726, 1.3640734093042113, 1.3297419541315458, 5145.0, 464.0, 240.0, 480.0, 960.0, 2525.0, 476.0, 1.6342188350701072, 1.5566493003965718, 1.3366864617690055, 3534.0, 272.0, 168.0, 336.0, 669.0, 1757.0, 332.0, 1.4463375323299488, 1.3777211519657158, 1.3366522961266032, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -897,7 +898,7 @@ class TestSNcalcFast(unittest.TestCase):
         var_color = CovColor(sums).Cov_colorcolor
 
         # print(var_color.to_list())
-        #var_ref = [2.630505097669433e-06, 2.109964241118505e-05]
+        # var_ref = [2.630505097669433e-06, 2.109964241118505e-05]
         var_ref = [2.6602780705309944e-06, 2.1176420857347407e-05]
         assert(np.isclose(var_ref, var_color.to_list()).all())
 
@@ -1701,6 +1702,104 @@ class TestSNVisu(unittest.TestCase):
         assert(os.path.isfile('{}_night_{}.png'.format(dbName, 1)))
 
 
+class TestSNProcess(unittest.TestCase):
+
+    def testProcess(self):
+
+        class metric:
+            def __init__(self):
+                self.name = 'testMetric'
+
+            def run(self, observations):
+                var_med = ['numExposures', 'airmass', 'seeingFwhm500', 'seeingFwhmEff', 'seeingFwhmGeom',
+                           'sky', 'night', 'fiveSigmaDepth', 'moonPhase', 'observationStartMJD', 'pixRA', 'pixDec']
+
+                obsdf = pd.DataFrame(np.copy(observations))
+
+                res = obsdf.groupby(['healpixID'])[
+                    var_med].median().reset_index()
+
+                return res
+
+        # grab some data
+        dbDir = '.'
+        dbName = 'descddf_v1.4_10yrs_twoyears'
+        dbExtens = 'npy'
+        nclusters = 5
+        nprocs = 4
+        nside = 64
+        RAmin = 30.
+        RAmax = 32.
+        Decmin = -47.
+        Decmax = -45.
+        remove_dithering = 0
+        saveData = 1
+        outDir = '.'
+        fieldType = 'WFD'
+        getFile(dbDir, dbName, dbExtens, ref_dir, 'unittests')
+
+        mymetric = metric()
+        metricList = [mymetric]
+
+        Process(dbDir, dbName, dbExtens,
+                fieldType, nside,
+                RAmin, RAmax,
+                Decmin, Decmax,
+                saveData, remove_dithering,
+                outDir, nprocs, metricList,
+                pixelmap_dir='', npixels=0,
+                nclusters=nclusters, radius=1.)
+
+        # after this files dbName_metricname_*.hdf5 must have been generated in outDir
+
+        fi = '{}/{}_{}_*.hdf5'.format(outDir, dbName, mymetric.name)
+
+        fNames = glob.glob(fi)
+        assert((len(fNames) > 0))
+
+        data = Table()
+        for fName in fNames:
+
+            # check the content of this file
+            fFile = h5py.File(fName, 'r')
+            keys = list(fFile.keys())
+
+            for key in keys:
+                data = vstack([data, Table.read(fFile, path=key)])
+
+        """
+        for col in data.columns:
+            print('dictRef[\'{}\']='.format(col), data[col].tolist())
+        """
+        dictRef = {}
+        dictRef['healpixID'] = [35122, 35117, 35128]
+        dictRef['numExposures'] = [1, 1, 1]
+        dictRef['airmass'] = [1.0747176432719823,
+                              1.0714165087126517, 1.0680236668903138]
+        dictRef['seeingFwhm500'] = [0.6497019216104826,
+                                    0.6620616111824902, 0.6280208668699482]
+        dictRef['seeingFwhmEff'] = [0.868967529123832,
+                                    0.8700945690021802, 0.8475501955312515]
+        dictRef['seeingFwhmGeom'] = [0.7662913089397899,
+                                     0.7672177357197921, 0.7486862607266888]
+        dictRef['sky'] = [19.40994419707803,
+                          19.787288276424675, 19.97947894641904]
+        dictRef['night'] = [360, 360, 360]
+        dictRef['fiveSigmaDepth'] = [23.26533308769796,
+                                     23.394831087726786, 23.475629113872266]
+        dictRef['moonPhase'] = [63.120351071229464,
+                                57.1956151355722, 51.837966744094985]
+        dictRef['observationStartMJD'] = [
+            60209.26687181253, 60209.22450262563, 60209.21580961598]
+        dictRef['pixRA'] = [31.810344827586203,
+                            30.25862068965517, 31.271186440677965]
+        dictRef['pixDec'] = [-46.5718474134496, -
+                             46.5718474134496, -45.783967161775024]
+
+        for key in dictRef.keys():
+            assert(np.isclose(dictRef[key], data[key]).all())
+
+
 class TestSNclean(unittest.TestCase):
     def testClean(self):
 
@@ -1743,5 +1842,6 @@ snio = TestSNio
 lcana = TestSNlcana
 snobs = TestSNobs
 visu = TestSNVisu
+process = TestSNProcess
 clean = TestSNclean
 unittest.main(verbosity=5)
