@@ -11,8 +11,6 @@ Submodules
 
 .. toctree::
 
-   sn_tools.design_dd_survey
-   sn_tools.observations
    sn_tools.sn_analyze_simu
    sn_tools.sn_cadence_tools
    sn_tools.sn_calcFast
@@ -20,6 +18,7 @@ Submodules
    sn_tools.sn_io
    sn_tools.sn_lcana
    sn_tools.sn_obs
+   sn_tools.sn_process
    sn_tools.sn_rate
    sn_tools.sn_telescope
    sn_tools.sn_throughputs
