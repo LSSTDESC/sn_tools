@@ -1377,6 +1377,18 @@ class ProcessPixels:
             self.dump(ip, isave)
             ipix = -1
 
+        self.finish()
+
+    def finish(self):
+        """
+        Method to save metadata for simulation
+
+
+        """
+        for metric in self.metricList:
+            if metric.name == 'simulation':
+                metric.finish()
+
     def getData(self, data, selpix):
         """
         Method to select data from a list
