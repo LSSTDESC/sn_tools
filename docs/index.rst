@@ -22,7 +22,7 @@ Welcome to sn_tools's documentation!
    sn_lcana <api/sn_tools.sn_lcana>
    sn_obs <api/sn_tools.sn_obs>
    sn_visu <api/sn_tools.sn_visu>
-
+   sn_process <api/sn_tools.sn_process>
 
 Indices and tables
 ==================
