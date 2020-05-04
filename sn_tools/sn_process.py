@@ -85,9 +85,9 @@ class Process:
         idx &= observations[self.DecCol] >= Decmin-5.
         idx &= observations[self.DecCol] < Decmax+5.
 
-        print('before', len(observations), RAmin, RAmax, Decmin, Decmax)
+        #print('before', len(observations), RAmin, RAmax, Decmin, Decmax)
         #observations = observations[idx]
-        print('after', len(observations))
+        #print('after', len(observations))
 
         """
         import matplotlib.pyplot as plt
@@ -176,16 +176,16 @@ class Process:
         npixels = int(len(healpixels))
 
         tabpix = np.linspace(0, npixels, self.nprocs+1, dtype='int')
-        print(tabpix, len(tabpix))
+        #print(tabpix, len(tabpix))
         result_queue = multiprocessing.Queue()
 
-        print('in multi process', npixels, self.nprocs)
+        #print('in multi process', npixels, self.nprocs)
         # multiprocessing
         for j in range(len(tabpix)-1):
             ida = tabpix[j]
             idb = tabpix[j+1]
 
-            print('Field', j, len(healpixels[ida:idb]))
+            #print('Field', j, len(healpixels[ida:idb]))
 
             field = healpixels[ida:idb]
 
@@ -213,7 +213,7 @@ class Process:
           queue of the multiprocessing (default: None)
         """
 
-        print('processing area', j, pointings)
+        #print('processing area', j, pointings)
 
         time_ref = time.time()
         ipoint = 1
@@ -226,7 +226,7 @@ class Process:
 
         for index, pointing in pointings.iterrows():
             ipoint += 1
-            print('pointing', ipoint)
+            #print('pointing', ipoint)
 
             # print('there man', np.unique(observations[[self.RACol, self.DecCol]]), pointing[[
             #      'RA', 'Dec', 'radius_RA', 'radius_Dec']])
@@ -248,14 +248,16 @@ class Process:
                         ) < pointing['radius_Dec']/2.
                 pixels_run = pixels[idx]
 
+            """
             print('cut', pointing['RA'], pointing['radius_RA'],
                   pointing['Dec'], pointing['radius_Dec'])
+            """
 
             # datapixels.plot(pixels)
-            print('after selection', len(pixels_run), datapixels.observations)
+            #print('after selection', len(pixels_run), datapixels.observations)
             procpix(pixels_run, datapixels.observations, ipoint)
 
-        print('end of processing for', j, time.time()-time_ref)
+        #print('end of processing for', j, time.time()-time_ref)
 
     def processPixels(self, pixels, observations, j=0, output_q=None):
         """
