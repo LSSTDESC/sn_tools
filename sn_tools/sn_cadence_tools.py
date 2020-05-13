@@ -164,6 +164,9 @@ class GenerateFakeObservations:
         inter_season_gap = 100.
         seeingEff = dict(zip(bands, config['seeingEff']))
         seeingGeom = dict(zip(bands, config['seeingGeom']))
+        airmass = dict(zip(bands, config['airmass']))
+        sky = dict(zip(bands, config['sky']))
+        moonphase = dict(zip(bands, config['moonphase']))
         RA = config['RA']
         Dec = config['Dec']
         rtot = []
@@ -205,6 +208,8 @@ class GenerateFakeObservations:
                         [seeingEff[band]]*len(myarr), [seeingGeom[band]]*len(myarr)])
                     myarr = rf.append_fields(myarr, self.visitTime, [
                                              Nvisits[band]*Single_Exposure_Time[band]]*len(myarr))
+                    myarr = rf.append_fields(myarr, ['airmass', 'sky', 'moonPhase'], [
+                        [airmass[band]]*len(myarr), [sky[band]]*len(myarr), [moonphase[band]]*len(myarr)])
                     rtot.append(myarr)
 
             """
@@ -260,6 +265,9 @@ class GenerateFakeObservations:
         inter_season_gap = 300.
         seeingEff = dict(zip(bands, config['seeingEff']))
         seeingGeom = dict(zip(bands, config['seeingGeom']))
+        airmass = dict(zip(bands, config['airmass']))
+        sky = dict(zip(bands, config['sky']))
+        moonphase = dict(zip(bands, config['moonphase']))
         RA = config['RA']
         Dec = config['Dec']
         rtot = []
@@ -285,6 +293,8 @@ class GenerateFakeObservations:
                                          [m5_coadded]*len(myarr), [Nvisits[band]]*len(myarr), [Nvisits[band]*Exposure_Time[band]]*len(myarr), [season]*len(myarr)])
                 myarr = rf.append_fields(myarr, [self.seeingEffCol, self.seeingGeomCol], [
                                          [seeingEff[band]]*len(myarr), [seeingGeom[band]]*len(myarr)])
+                myarr = rf.append_fields(myarr, ['airmass', 'sky', 'moonPhase'], [
+                                         [airmass[band]]*len(myarr), [sky[band]]*len(myarr), [moonphase[band]]*len(myarr)])
                 rtot.append(myarr)
 
         res = np.copy(np.concatenate(rtot))
@@ -942,14 +952,14 @@ class AnaOS:
         -------
 
         numpy record array with scheduler information like
-         observationId, fieldRA, fieldDec, observationStartMJD, 
-         flush_by_mjd, visitExposureTime, filter, rotSkyPos, 
-         numExposures, airmass, seeingFwhm500, seeingFwhmEff, 
-         seeingFwhmGeom, sky, night, slewTime, visitTime, 
-         slewDistance, fiveSigmaDepth, altitude, azimuth, 
+         observationId, fieldRA, fieldDec, observationStartMJD,
+         flush_by_mjd, visitExposureTime, filter, rotSkyPos,
+         numExposures, airmass, seeingFwhm500, seeingFwhmEff,
+         seeingFwhmGeom, sky, night, slewTime, visitTime,
+         slewDistance, fiveSigmaDepth, altitude, azimuth,
          paraAngle, cloud, moonAlt, sunAlt, note, fieldId,
-         proposalId, block_id, observationStartLST, rotTelPos, 
-         moonAz, sunAz, sunRA, sunDec, moonRA, moonDec, 
+         proposalId, block_id, observationStartLST, rotTelPos,
+         moonAz, sunAz, sunRA, sunDec, moonRA, moonDec,
          moonDistance, solarElong, moonPhase
          This list may change from file to file.
 
