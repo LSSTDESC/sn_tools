@@ -449,6 +449,331 @@ class GenerateSample:
         plt.show()
 
 
+class SimuParameters:
+    """ Generates a sample of parameters for simulation
+    Parameters
+    ---------------
+    sn_parameters : dict
+      supernovae parameters: x1, color, z, daymax, ...
+    cosmo_parameters: dict
+      cosmology parameters: H0, Om0
+    mjdCol : str,opt
+       name of the column corresponding to MJD
+       Default : 'mjd'
+    seasonCol : str, opt
+      name of the column corresponding to season
+      Default : 'season'
+    filterCol : str, opt
+      name of the column corresponding to filter
+      Default : 'filter'
+    min_rf_phase : float, opt
+       min rest-frame phase for supernovae
+       Default : -15.
+    max_rf_phase : float, opt
+       max rest-frame phase for supernovae
+       Default : 30.
+    area : float, opt
+       area of the survey (in deg\^2)
+       Default : 9.6 deg\^2
+    """
+
+    def __init__(self, sn_parameters, cosmo_parameters,
+                 mjdCol='mjd', seasonCol='season', filterCol='filter',
+                 min_rf_phase=-15., max_rf_phase=30., area=9.6, dirFiles='reference_files'):
+        self.dirFiles = dirFiles
+        self.params = sn_parameters
+        self.sn_rate = SN_Rate(rate=self.params['z']['rate'],
+                               H0=cosmo_parameters['H0'],
+                               Om0=cosmo_parameters['Omega_m'])
+
+        self.x1_color = self.getDist(self.params['x1_color']['rate'])
+        self.mjdCol = mjdCol
+        self.seasonCol = seasonCol
+        self.filterCol = filterCol
+        self.area = area
+        self.min_rf_phase = min_rf_phase
+        self.max_rf_phase = max_rf_phase
+
+    def getDist(self, rate):
+        """ get (x1,color) distributions
+        Parameters
+        --------------
+        rate: str
+            name of the x1_color distrib (JLA, ...)
+        Returns
+        -----------
+        dict of (x1,color) rates
+        keys : 'low_z' and 'high_z'
+        values (float) : recarray with X1,Color,weight_X1,weight_Color,weight
+        """
+
+        # prefix = os.getenv('SN_UTILS_DIR')+'/input/Dist_X1_Color_'+rate+'_'
+        prefix = '{}/Dist_X1_Color_{}'.format(self.dirFiles, rate)
+        suffix = '.txt'
+        # names=['x1','c','weight_x1','weight_c','weight_tot']
+        dtype = np.dtype([('x1', np.float), ('color', np.float),
+                          ('weight_x1', np.float), ('weight_color', np.float),
+                          ('weight', np.float)])
+        x1_color = {}
+        for val in ['low_z', 'high_z']:
+            x1_color[val] = np.loadtxt('{}_{}{}'.format(
+                prefix, val, suffix), dtype=dtype)
+
+        return x1_color
+
+    def getparams(self, obs):
+        """
+        Method to estimate simulation parameters according to obs and config
+
+        Parameters
+        ---------------
+        obs: numpy array
+          array of data
+
+        Returns
+        ----------
+        numpy array with the following columns:
+        color, z, daymax, x1, epsilon_x0, epsilon_x1,
+       epsilon_color, epsilon_daymax, min_rf_phase, max_rf_phase
+
+        """
+
+        # first estimation: z distribution - will rule daymax distribution
+        daymin = np.min(obs[self.mjdCol])
+        daymax = np.max(obs[self.mjdCol])
+        duration = daymax-daymin
+        pars = self.zdist(duration)
+
+        # add daymax, which is z-dependent (boundaries effects)
+
+        pars = self.daymaxdist(pars, daymin, daymax)
+
+        if len(pars) == 0:
+            return None
+
+        # add x1 dist
+        pars = self.pdist(pars, 'x1')
+
+        # add color dist
+        pars = self.pdist(pars, 'color')
+
+        # add epsilon_*
+        if self.params['differential_flux']:
+            epsilon = 1.e-8
+            epsi = pd.DataFrame([0]*1+[-1.0, 1.0]+[0.0]*6,
+                                columns=['epsilon_x0'])
+            epsi['epsilon_x1'] = [0]*3+[-1.0, 1.0]+[0.0]*4
+            epsi['epsilon_color'] = [0]*5+[-1.0, 1.0]+[0.0]*2
+            epsi['epsilon_daymax'] = [0]*7+[-1.0, 1.0]
+
+            epscat = pd.DataFrame()
+            for i in range(len(pars)):
+                dfcc = pd.DataFrame(epsi*epsilon)
+                dfcc['inum'] = i
+                epscat = pd.concat((epscat, dfcc))
+
+            pars['inum'] = pars.reset_index().index
+
+            pars = pars.merge(epscat, left_on=['inum'], right_on=['inum'])
+
+            pars = pars.drop(columns=['inum'])
+        else:
+            for pp in ['x0', 'x1', 'color', 'daymax']:
+                pars['epsilon_{}'.format(pp)] = 0.0
+
+        # finally add min and max rf
+        pars['min_rf_phase'] = self.min_rf_phase
+        pars['max_rf_phase'] = self.max_rf_phase
+
+        print('total number of SN to simulate:', len(pars))
+        return pars.to_records(index=False)
+
+    def zdist(self, duration):
+        """
+        Method to estimate the redshift distribution
+
+        Parameters
+        ---------------
+        duration: float
+          duration of the survey (season length)
+
+        Returns
+        -----------
+        pandas df with z distribution
+
+        """
+        ztype = self.params['z']['type']
+        zmin = self.params['z']['min']
+        zmax = self.params['z']['max']
+        zstep = self.params['z']['step']
+
+        if ztype == 'unique':
+            zvals = [zmin]
+
+        if ztype == 'uniform':
+            zvals = np.arange(zmin, zmax+zstep, zstep)
+
+        if ztype == 'random':
+            # get sn rate for this z range
+
+            if zmin < 1.e-6:
+                zmin = 0.01
+            print(zmin, zmax, duration, self.area)
+            zz, rate, err_rate, nsn, err_nsn = self.sn_rate(
+                zmin=zmin, zmax=zmax,
+                duration=duration,
+                survey_area=self.area,
+                account_for_edges=True, dz=0.001)
+            # get number of supernovae
+            N_SN = int(np.cumsum(nsn)[-1])
+            if np.cumsum(nsn)[-1] < 0.5:
+                return r
+            weight_z = np.cumsum(nsn)/np.sum(np.cumsum(nsn))
+
+            if N_SN < 1:
+                N_SN = 1
+                # weight_z = 1
+            print('nsn from rate', N_SN)
+            zvals = np.random.choice(zz, N_SN, p=weight_z)
+
+        return pd.DataFrame(zvals, columns=['z'])
+
+    def daymaxdist(self, pars, daymin, daymax):
+        """
+        Method to estimate the daymax distribution
+
+        Parameters
+        ---------------
+        pars: pandas df
+           with at least a 'z' column
+        daymin: float
+           min day of observations
+        daymax: float
+           max day of observations
+
+        Returns
+        -----------
+        initial df (pars) plus daymax dist column
+
+        """
+
+        assert('z' in pars.columns)
+
+        daymaxtype = self.params['daymax']['type']
+        daymaxstep = self.params['daymax']['step']
+
+        if daymaxtype == 'unique':
+            daymaxdf = pd.DataFrame(pars)
+            daymaxdf['daymax'] = daymin+21
+
+        if daymaxtype == 'uniform':
+            daymaxdf = pd.DataFrame()
+            for z in pars['z'].values:
+                daymax_min = daymin-(1.+z)*self.min_rf_phase
+                daymax_max = daymax-(1.+z)*self.max_rf_phase
+                ndaymax = int((daymax_max-daymax_min)/daymaxstep)+1
+                df = pd.DataFrame(np.linspace(
+                    daymax_min, daymax_max, ndaymax), columns=['daymax'])
+                df['z'] = z
+                daymaxdf = pd.concat((daymaxdf, df))
+
+        if daymaxtype == 'random':
+            daymaxdf = pd.DataFrame(pars)
+            daymaxdf['daymax_min'] = daymin-(1.+pars['z'])*self.min_rf_phase
+            daymaxdf['daymax_max'] = daymax-(1.+pars['z'])*self.max_rf_phase
+            idx = daymaxdf['daymax_max']-daymaxdf['daymax_min'] >= 10.
+            daymaxdf = daymaxdf[idx]
+            if len(daymaxdf) > 0:
+                daymaxdf['daymax'] = np.random.uniform(
+                    daymaxdf['daymax_min'], daymaxdf['daymax_max'], size=(1, len(daymaxdf)))[0]
+                daymaxdf = daymaxdf.drop(columns=['daymax_min', 'daymax_max'])
+
+        return daymaxdf
+
+    def pdist(self, pars, pname):
+        """
+        Method to estimate distribution of a parameter (x1 or color)
+
+        Parameters
+        --------------
+        pars: pandas df
+          input data
+        pname: str
+          parameter name: x1 or color
+
+        Returns
+        -----------
+        original df (pars) + parameter col
+
+        """
+
+        assert((pname == 'x1') or (pname == 'color'))
+
+        ptype = self.params[pname]['type']
+        pmin = self.params[pname]['min']
+        pmax = self.params[pname]['max']
+        pstep = self.params[pname]['step']
+
+        if ptype == 'unique':
+            pdf = pd.DataFrame(pars)
+            pdf[pname] = pmin
+
+        if ptype == 'uniform':
+            pdf = pd.DataFrame()
+            vals = np.arange(pmin, pmax+pstep, pstep)
+            valsdf = pd.DataFrame(vals, columns=[pname])
+            for i in range(len(pars)):
+                rr = pd.DataFrame(valsdf)
+                rr['inum'] = i
+                pdf = pd.concat((pdf, rr))
+            pars['inum'] = pars.reset_index().index
+            pdf = pdf.merge(pars, left_on=['inum'], right_on=['inum'])
+            pdf = pdf.drop(columns=['inum'])
+
+        if ptype == 'random':
+            pdf = pd.DataFrame()
+            # have to separate between low and high z-range
+            # distributions may be different
+            for key, vv in dict(zip(['low_z', 'high_z'], [[0., 0.1], [0.1, 1.5]])).items():
+                idx = pars['z'] > vv[0]
+                idx &= pars['z'] < vv[1]
+                sel = pd.DataFrame(pars[idx])
+                if sel.size > 0:
+                    norm = np.sum(self.x1_color[key]['weight'])
+                    sel[pname] = np.random.choice(
+                        self.x1_color[key][pname], len(sel), p=self.x1_color[key]['weight']/norm)
+                    pdf = pd.concat((pdf, sel))
+
+        return pdf
+
+    def plot(self, gen_params):
+        """ Plot the generated parameters
+        (z,x1,color,daymax)
+
+        Parameters
+        --------------
+        gen_params : array
+          array of parameters
+          should at least contain ['z', 'x1', 'color', 'daymax'] fields
+
+        """
+        import pylab as plt
+
+        fig, ax = plt.subplots(ncols=2, nrows=2, figsize=(10, 9))
+
+        todraw = ['z', 'x1', 'color', 'daymax']
+        idx = dict(zip(todraw, [(0, 0), (0, 1), (1, 1), (1, 0)]))
+
+        for name in todraw:
+            i = idx[name][0]
+            j = idx[name][1]
+            ax[i][j].hist(gen_params[name], histtype='step')
+            ax[i][j].set_xlabel(name)
+            ax[i][j].set_ylabel('Number of entries')
+
+        plt.show()
+
+
 class Make_Files_for_Cadence_Metric:
     """ Class to generate two files that will be used as input for the Cadence metric
 
