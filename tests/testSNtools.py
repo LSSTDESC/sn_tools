@@ -4,6 +4,7 @@ import unittest
 import lsst.utils.tests
 from sn_tools.sn_rate import SN_Rate
 from sn_tools.sn_utils import GenerateSample, Make_Files_for_Cadence_Metric, X0_norm
+from sn_tools.sn_utils import SimuParameters
 from sn_tools.sn_utils import DiffFlux, MbCov, GetReference, Gamma
 from sn_tools.sn_cadence_tools import ReferenceData, GenerateFakeObservations
 from sn_tools.sn_cadence_tools import TemplateData, AnaOS, Match_DD
@@ -640,6 +641,84 @@ class TestSNUtils(unittest.TestCase):
 
         for name in params_ref.dtype.names:
             assert(np.isclose(params[name], params_ref[name]).all())
+
+    def testSimuParameters(self):
+        sn_parameters = {}
+        # redshift
+        sn_parameters['z'] = {}
+        sn_parameters['z']['type'] = 'uniform'
+        sn_parameters['z']['min'] = 0.1
+        sn_parameters['z']['max'] = 0.2
+        sn_parameters['z']['step'] = 0.1
+        sn_parameters['z']['rate'] = 'Perrett'
+        # X1_Color
+        sn_parameters['x1_color'] = {}
+        sn_parameters['x1_color']['rate'] = 'JLA'
+        # x1
+        sn_parameters['x1'] = {}
+        sn_parameters['x1']['type'] = 'unique'
+        sn_parameters['x1']['min'] = -2.0
+        sn_parameters['x1']['max'] = 2.0
+        sn_parameters['x1']['step'] = 0.2
+        # color
+        sn_parameters['color'] = {}
+        sn_parameters['color']['type'] = 'unique'
+        sn_parameters['color']['min'] = 0.2
+        sn_parameters['color']['max'] = 0.3
+        sn_parameters['color']['step'] = 0.1
+
+        # DayMax
+        sn_parameters['daymax'] = {}
+        sn_parameters['daymax']['type'] = 'unique'
+        sn_parameters['daymax']['step'] = 1.
+        # Miscellaneous
+        sn_parameters['min_rf_phase'] = -20.   # obs min phase (rest frame)
+        sn_parameters['max_rf_phase'] = 60.  # obs max phase (rest frame)
+        sn_parameters['min_rf_phase_qual'] = - \
+            15.   # obs min phase (rest frame)
+        sn_parameters['max_rf_phase_qual'] = 45.  # obs max phase (rest frame)
+        sn_parameters['absmag'] = -19.0906      # peak abs mag
+        sn_parameters['band'] = 'bessellB'     # band for absmag
+        sn_parameters['magsys'] = 'vega'      # magsys for absmag
+        sn_parameters['differential_flux'] = False
+        # Cosmology
+        cosmo_parameters = {}
+        cosmo_parameters['model'] = 'w0waCDM'      # Cosmological model
+        cosmo_parameters['Omega_m'] = 0.30             # Omega_m
+        cosmo_parameters['Omega_l '] = 0.70             # Omega_l
+        cosmo_parameters['H0'] = 72.0                  # H0
+        cosmo_parameters['w0'] = -1.0                  # w0
+        cosmo_parameters['wa'] = 0.0                   # wa
+
+        # instantiate GenerateSample
+        getRefDir('reference_files')
+        genpar = SimuParameters(
+            sn_parameters, cosmo_parameters, mjdCol='observationStartMJD', dirFiles='reference_files')
+
+        # get some observations
+        observations = Observations()
+
+        # get simulation parameters from these observations
+        params = genpar.Params(observations)
+
+        """
+        for col in params.dtype.names:
+            print('dictRef[\'{}\']='.format(col), params[col].tolist())
+        """
+        dictRef = {}
+        dictRef['z'] = [0.1, 0.2, 0.30000000000000004]
+        dictRef['daymax'] = [59023.1, 59025.2, 59027.3]
+        dictRef['x1'] = [-2.0, -2.0, -2.0]
+        dictRef['color'] = [0.2, 0.2, 0.2]
+        dictRef['epsilon_x0'] = [0.0, 0.0, 0.0]
+        dictRef['epsilon_x1'] = [0.0, 0.0, 0.0]
+        dictRef['epsilon_color'] = [0.0, 0.0, 0.0]
+        dictRef['epsilon_daymax'] = [0.0, 0.0, 0.0]
+        dictRef['min_rf_phase'] = [-15.0, -15.0, -15.0]
+        dictRef['max_rf_phase'] = [30.0, 30.0, 30.0]
+
+        for key, vv in dictRef.items():
+            assert(np.isclose(vv, params[key].tolist()).all())
 
     def testMake_Files_for_Cadence_Metric(self):
 
