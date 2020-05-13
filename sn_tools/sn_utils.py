@@ -521,7 +521,7 @@ class SimuParameters:
 
         return x1_color
 
-    def getparams(self, obs):
+    def Params(self, obs):
         """
         Method to estimate simulation parameters according to obs and config
 
@@ -664,7 +664,7 @@ class SimuParameters:
 
         if daymaxtype == 'unique':
             daymaxdf = pd.DataFrame(pars)
-            daymaxdf['daymax'] = daymin+21
+            daymaxdf['daymax'] = daymin+21*(1.+daymaxdf['z'])
 
         if daymaxtype == 'uniform':
             daymaxdf = pd.DataFrame()
