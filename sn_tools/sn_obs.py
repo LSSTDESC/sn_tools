@@ -144,9 +144,10 @@ def patchObs(observations, fieldType,
             observations = getFields(observations, 'WFD')
             minDec = Decmin
             maxDec = Decmax
-            if minDec == -1.0 and maxDec == -1.0:
-                # in that case min and max dec are given by obs strategy
+            if minDec == -1.0:  # in that case min and max dec are given by obs strategy
                 minDec = np.min(observations['fieldDec'])-radius
+                minDec = max(minDec, -90.)
+            if maxDec == -1.0:
                 maxDec = np.max(observations['fieldDec'])+radius
             areas = PavingSky(RAmin, RAmax, minDec, maxDec, radius, radius)
             # print(observations.dtype)
