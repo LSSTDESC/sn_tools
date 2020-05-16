@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import multiprocessing
 import glob
+import random
 
 class Process:
     """
@@ -296,6 +297,6 @@ class Process:
         """
 
         hIDs = np.unique(self.pixelmap['healpixID'])
-        healpixIDs = np.random.sample(hIDs.tolist(), self.npixels)
+        healpixIDs = random.sample(hIDs.tolist(), self.npixels)
 
         return healpixIDs
