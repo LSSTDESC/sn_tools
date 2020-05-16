@@ -296,6 +296,6 @@ class Process:
         """
 
         hIDs = np.unique(self.pixelmap['healpixID'])
-        healpixIDs = random.sample(hIDs.tolist(), self.npixels)
+        healpixIDs = np.random.sample(hIDs.tolist(), self.npixels)
 
         return healpixIDs
