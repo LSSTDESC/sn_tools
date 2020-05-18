@@ -633,12 +633,12 @@ class LCfast:
                 lc['mag'] = mag_obs[~mag_obs.mask]
                 lc['magerr'] = (2.5/np.log(10.))/snr_m5[~snr_m5.mask]
                 lc['time'] = obs_time[~obs_time.mask]
-                lc['exposuretime'] = exp_time[~exp_time.mask]
+                lc['exptime'] = exp_time[~exp_time.mask]
 
             lc['band'] = ['LSST::'+band]*len(lc)
-            lc.loc[:, 'zp'] = self.zp[band]
-            # lc['zp'] = [2.5*np.log10(3631)]*len(lc)
-            # lc['zpsys'] = ['ab']*len(lc)
+            lc['zp'] = self.zp[band]
+            lc['zp'] = 2.5*np.log10(3631)
+            lc['zpsys'] = 'ab'
             lc['season'] = seasons[~seasons.mask]
             lc['season'] = lc['season'].astype(int)
             lc['healpixID'] = healpixIds[~healpixIds.mask]
