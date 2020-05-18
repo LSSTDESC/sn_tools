@@ -103,15 +103,21 @@ def Observations(daymin=59000, cadence=3., season_length=140., band='r'):
 
 def getReference(x1, color):
     # first step: get reference files
-    Instrument = {}
-    Instrument['name'] = 'LSST'  # name of the telescope (internal)
+    tel_par = {}
+    tel_par['name'] = 'LSST'  # name of the telescope (internal)
     # dir of throughput
-    Instrument['throughput_dir'] = 'LSST_THROUGHPUTS_BASELINE'
-    Instrument['atmos_dir'] = 'THROUGHPUTS_DIR'  # dir of atmos
-    Instrument['airmass'] = 1.2  # airmass value
-    Instrument['atmos'] = True  # atmos
-    Instrument['aerosol'] = False  # aerosol
+    tel_par['throughput_dir'] = 'LSST_THROUGHPUTS_BASELINE'
+    tel_par['atmos_dir'] = 'THROUGHPUTS_DIR'  # dir of atmos
+    tel_par['airmass'] = 1.2  # airmass value
+    tel_par['atmos'] = True  # atmos
+    tel_par['aerosol'] = False  # aerosol
 
+    telescope = Telescope(name=tel_par['name'],
+                          throughput_dir=tel_par['throughput_dir'],
+                          atmos_dir=tel_par['atmos_dir'],
+                          atmos=tel_par['atmos'],
+                          aerosol=tel_par['aerosol'],
+                          airmass=tel_par['airmass'])
     lc_reference = {}
 
     gamma_reference = 'gamma.hdf5'
@@ -126,7 +132,7 @@ def getReference(x1, color):
     fullname = '{}/{}.{}'.format(fDir, fName, fExtens)
 
     lc_ref = GetReference(
-        fullname, gamma_reference, Instrument)
+        fullname, gamma_reference, telescope)
 
     return lc_ref
 

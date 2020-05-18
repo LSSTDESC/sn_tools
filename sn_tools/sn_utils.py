@@ -1891,7 +1891,7 @@ class GetReference:
 
     """""
 
-    def __init__(self, lcName, gammaName, tel_par, param_Fisher=['x0', 'x1', 'color', 'daymax']):
+    def __init__(self, lcName, gammaName, telescope, param_Fisher=['x0', 'x1', 'color', 'daymax']):
 
         # Load the file - lc reference
 
@@ -1904,13 +1904,14 @@ class GetReference:
         lc_ref_tot = np.copy(lc_ref_tot[idx])
 
         # telescope requested
+        """
         telescope = Telescope(name=tel_par['name'],
                               throughput_dir=tel_par['throughput_dir'],
                               atmos_dir=tel_par['atmos_dir'],
                               atmos=tel_par['atmos'],
                               aerosol=tel_par['aerosol'],
                               airmass=tel_par['airmass'])
-
+        """
         # Load the file - gamma values
         if not os.path.exists(gammaName):
             print('gamma file {} does not exist')
