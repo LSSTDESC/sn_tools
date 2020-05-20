@@ -98,7 +98,43 @@ class LCfast:
 
     def __call__(self, obs, gen_par=None, bands='grizy'):
         """ Simulation of the light curve
-        This methid uses multiprocessing (one band per process) to increase speed
+
+
+        Parameters
+        ----------------
+        obs: array
+         array of observations
+        gen_par: array, opt
+         simulation parameters (default: None)
+        bands: str, opt
+          filters to consider for simulation (default: grizy)
+
+        Returns
+        ------------
+        astropy table with:
+        columns: band, flux, fluxerr, snr_m5,flux_e,zp,zpsys,time
+        metadata : SNID,RA,Dec,DayMax,X1,Color,z
+        """
+
+        if len(obs) == 0:
+            return None
+
+        # result in this df
+        tab_tot = pd.DataFrame()
+
+        # loop on the bands
+        for band in bands:
+            idx = obs[self.filterCol] == band
+            if len(obs[idx]) > 0:
+                resband = self.processBand(obs[idx], band, gen_par)
+                tab_tot = tab_tot.append(resband, ignore_index=True)
+
+        # return produced LC
+        return tab_tot
+
+    def call_multiproc(self, obs, gen_par=None, bands='grizy'):
+        """ Simulation of the light curve
+        This method uses multiprocessing (one band per process) to increase speed
 
         Parameters
         ----------------
@@ -1038,7 +1074,7 @@ class CalcSN_df:
 
         tosuma = list(tosam)
         tosuma += ['n_aft', 'n_bef', 'n_phmin', 'n_phmax']
-        #sums = grp[tosuma].sum().to_frame()
+        # sums = grp[tosuma].sum().to_frame()
         sums = pd.DataFrame([grp[tosuma].sum()], columns=tosuma)
 
         # selection cuts
