@@ -81,13 +81,23 @@ class Process:
         observations, patches = self.load()
 
         # select observation in this area
-        idx = observations[self.RACol] >= RAmin-5.
-        idx &= observations[self.RACol] < RAmax+5.
-        idx &= observations[self.DecCol] >= Decmin-5.
-        idx &= observations[self.DecCol] < Decmax+5.
+        delta_coord = 5.
+        idx = observations[self.RACol] >= RAmin-delta_coord
+        idx &= observations[self.RACol] < RAmax+delta_coord
+        idx &= observations[self.DecCol] >= Decmin-delta_coord
+        idx &= observations[self.DecCol] < Decmax+delta_coord
 
         #print('before', len(observations), RAmin, RAmax, Decmin, Decmax)
-        #observations = observations[idx]
+        obs = observations[idx]
+
+        if RAmin<delta_coord:
+            idx = observations[self.RACol] >= 360.-delta_coord
+            obs = np.concatenate((obs, observations[idx]))
+
+        if RAmax>=360.-delta_coord:
+            idx = observations[self.RACol]<= delta_coord
+            obs = np.concatenate((obs, observations[idx]))
+
         #print('after', len(observations))
 
         """
@@ -97,7 +107,7 @@ class Process:
         """
 
         if self.pixelmap_dir == '':
-            self.multiprocess(patches, observations, self.processPatch)
+            self.multiprocess(patches, obs, func=self.processPatch)
         else:
             # load the pixel maps
             print('pixel map loading', self.pixelmap_dir, self.fieldType,
@@ -117,8 +127,8 @@ class Process:
                         np.unique(self.pixelmap['healpixID']))
                 random_pixels = self.randomPixels()
                 print('number of pixels to process', len(random_pixels))
-                self.multiprocess(random_pixels, observations,
-                                  self.processPixels)
+                self.multiprocess(random_pixels, obs,
+                                  func=self.procix)
 
     def load(self):
         """
@@ -186,16 +196,19 @@ class Process:
             ida = tabpix[j]
             idb = tabpix[j+1]
 
-            #print('Field', j, len(healpixels[ida:idb]))
+            #print('Field', j, len(healpixels[ida:idb]),len(observations))
 
-            field = healpixels[ida:idb]
+            #field = healpixels[ida:idb]
 
             """
             idx = field['fieldName'] == 'SPT'
             if len(field[idx]) > 0:
             """
+            print('go for multiprocessing',j,func)
             p = multiprocessing.Process(name='Subprocess-'+str(j), target=func, args=(
                 healpixels[ida:idb], observations, j, result_queue))
+            print('starting')
+            #p.daemon = True
             p.start()
 
     def processPatch(self, pointings, observations, j=0, output_q=None):
@@ -260,7 +273,7 @@ class Process:
 
         #print('end of processing for', j, time.time()-time_ref)
 
-    def processPixels(self, pixels, observations, j=0, output_q=None):
+    def procix(self, pixels, observations, j=0, output_q=None):
         """
         Method to process a pixel
 
@@ -276,11 +289,14 @@ class Process:
           queue of the multiprocessing (default: None)
         """
         time_ref = time.time()
+        #print('there we go instance procpix')
         procpix = ProcessPixels(
             self.metricList, j, outDir=self.outDir, dbName=self.dbName, saveData=self.saveData)
 
+        #print('continuing')
         valsdf = pd.DataFrame(self.pixelmap)
         ido = valsdf['healpixID'].isin(pixels)
+        #print('processing pixel',valsdf[ido])
         procpix(valsdf[ido], np.copy(observations), self.npixels)
 
         print('end of processing for', j, time.time()-time_ref)
