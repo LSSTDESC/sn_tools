@@ -80,12 +80,13 @@ class Process:
 
         observations, patches = self.load()
 
+        #print('coordinates for patch',RAmin,RAmax,Decmin,Decmax)
         # select observation in this area
         delta_coord = 5.
         idx = observations[self.RACol] >= RAmin-delta_coord
         idx &= observations[self.RACol] < RAmax+delta_coord
-        idx &= observations[self.DecCol] >= Decmin-delta_coord
-        idx &= observations[self.DecCol] < Decmax+delta_coord
+        #idx &= observations[self.DecCol] >= Decmin-delta_coord
+        #idx &= observations[self.DecCol] < Decmax+delta_coord
 
         #print('before', len(observations), RAmin, RAmax, Decmin, Decmax)
         obs = observations[idx]
@@ -296,8 +297,15 @@ class Process:
         #print('continuing')
         valsdf = pd.DataFrame(self.pixelmap)
         ido = valsdf['healpixID'].isin(pixels)
-        #print('processing pixel',valsdf[ido])
-        procpix(valsdf[ido], np.copy(observations), self.npixels)
+        if len(valsdf[ido]) > 0:
+            minDec = np.min(valsdf[ido]['pixDec'])
+            maxDec = np.max(valsdf[ido]['pixDec'])
+            minDecobs = np.min(observations[self.DecCol])
+            maxDecobs = np.max(observations[self.DecCol])
+            print('processing pixel',len(valsdf[ido]),minDec,maxDec,minDecobs,maxDecobs)
+            procpix(valsdf[ido], np.copy(observations), self.npixels)
+        else:
+            print('pb here no data in ',pixels)
 
         print('end of processing for', j, time.time()-time_ref)
 
