@@ -56,31 +56,6 @@ All rights reserved.
 │   │   ├── sn_tools.sn_throughputs.rst  
 │   │   ├── sn_tools.sn_utils.rst 
 │   │   └── sn_tools.sn_visu.rst 
-│   ├── _build 
-│   │   ├── doctrees 
-│   │   │   ├── api 
-│   │   │   │   ├── sn_tools.cadence_tools.doctree 
-│   │   │   │   ├── sn_tools.doctree 
-│   │   │   │   ├── sn_tools.observations.doctree 
-│   │   │   │   ├── sn_tools.sn_analyze_simu.doctree 
-│   │   │   │   ├── sn_tools.sn_cadence_tools.doctree 
-│   │   │   │   ├── sn_tools.sn_rate.doctree 
-│   │   │   │   ├── sn_tools.sn_telescope.doctree 
-│   │   │   │   ├── sn_tools.sn_throughputs.doctree 
-│   │   │   │   └── sn_tools.sn_utils.doctree 
-│   │   │   ├── environment.pickle 
-│   │   │   └── index.doctree 
-│   │   └── html 
-│   │       ├── api 
-│   │       │   ├── sn_tools.cadence_tools.html 
-│   │       │   ├── sn_tools.html 
-│   │       │   ├── sn_tools.observations.html 
-│   │       │   ├── sn_tools.sn_analyze_simu.html 
-│   │       │   ├── sn_tools.sn_cadence_tools.html 
-│   │       │   ├── sn_tools.sn_rate.html 
-│   │       │   ├── sn_tools.sn_telescope.html 
-│   │       │   ├── sn_tools.sn_throughputs.html 
-│   │       │   └── sn_tools.sn_utils.html 
 │   ├── conf.py 
 │   ├── index.rst
 │   ├── make.bat 
