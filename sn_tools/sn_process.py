@@ -7,6 +7,7 @@ import multiprocessing
 import glob
 import random
 
+
 class Process:
     """
     Class to process data ie run metrics on a set of pixels
@@ -91,12 +92,12 @@ class Process:
         #print('before', len(observations), RAmin, RAmax, Decmin, Decmax)
         obs = observations[idx]
 
-        if RAmin<delta_coord:
+        if RAmin < delta_coord:
             idx = observations[self.RACol] >= 360.-delta_coord
             obs = np.concatenate((obs, observations[idx]))
 
-        if RAmax>=360.-delta_coord:
-            idx = observations[self.RACol]<= delta_coord
+        if RAmax >= 360.-delta_coord:
+            idx = observations[self.RACol] <= delta_coord
             obs = np.concatenate((obs, observations[idx]))
 
         #print('after', len(observations))
@@ -127,6 +128,7 @@ class Process:
                     self.npixels = len(
                         np.unique(self.pixelmap['healpixID']))
                 random_pixels = self.randomPixels()
+                #random_pixels = [0]
                 print('number of pixels to process', len(random_pixels))
                 self.multiprocess(random_pixels, obs,
                                   func=self.procix)
@@ -205,7 +207,7 @@ class Process:
             idx = field['fieldName'] == 'SPT'
             if len(field[idx]) > 0:
             """
-            print('go for multiprocessing',j,func)
+            print('go for multiprocessing', j, func)
             p = multiprocessing.Process(name='Subprocess-'+str(j), target=func, args=(
                 healpixels[ida:idb], observations, j, result_queue))
             print('starting')
@@ -294,7 +296,7 @@ class Process:
         procpix = ProcessPixels(
             self.metricList, j, outDir=self.outDir, dbName=self.dbName, saveData=self.saveData)
 
-        #print('continuing')
+        # print('continuing')
         valsdf = pd.DataFrame(self.pixelmap)
         ido = valsdf['healpixID'].isin(pixels)
         if len(valsdf[ido]) > 0:
@@ -302,10 +304,11 @@ class Process:
             maxDec = np.max(valsdf[ido]['pixDec'])
             minDecobs = np.min(observations[self.DecCol])
             maxDecobs = np.max(observations[self.DecCol])
-            print('processing pixel',len(valsdf[ido]),minDec,maxDec,minDecobs,maxDecobs)
+            print('processing pixel', len(
+                valsdf[ido]), minDec, maxDec, minDecobs, maxDecobs)
             procpix(valsdf[ido], np.copy(observations), self.npixels)
         else:
-            print('pb here no data in ',pixels)
+            print('pb here no data in ', pixels)
 
         print('end of processing for', j, time.time()-time_ref)
 
