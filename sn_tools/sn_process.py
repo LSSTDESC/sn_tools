@@ -128,7 +128,6 @@ class Process:
                     self.npixels = len(
                         np.unique(self.pixelmap['healpixID']))
                 random_pixels = self.randomPixels()
-                #random_pixels = [0]
                 print('number of pixels to process', len(random_pixels))
                 self.multiprocess(random_pixels, obs,
                                   func=self.procix)
@@ -207,7 +206,7 @@ class Process:
             idx = field['fieldName'] == 'SPT'
             if len(field[idx]) > 0:
             """
-            print('go for multiprocessing', j, func)
+            print('go for multiprocessing', j, func, healpixels[ida:idb])
             p = multiprocessing.Process(name='Subprocess-'+str(j), target=func, args=(
                 healpixels[ida:idb], observations, j, result_queue))
             print('starting')
@@ -252,7 +251,6 @@ class Process:
                                 pointing['radius_RA'], pointing['radius_Dec'], self.remove_dithering, display=False)
 
             # select pixels that are inside the original area
-
             pixels_run = pixels
             if self.fieldType != 'Fake' and self.fieldType != 'DD':
                 idx = (pixels['pixRA']-pointing['RA']) >= - \
@@ -272,6 +270,7 @@ class Process:
 
             # datapixels.plot(pixels)
             #print('after selection', len(pixels_run), datapixels.observations)
+
             procpix(pixels_run, datapixels.observations, ipoint)
 
         #print('end of processing for', j, time.time()-time_ref)
