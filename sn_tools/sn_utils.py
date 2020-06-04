@@ -2304,3 +2304,66 @@ class Gamma:
             output_q.put({j: rec})
         else:
             return rec
+
+
+class SNTimer:
+    """
+    class to get processing time infos
+
+    Parameters
+    ---------------
+    time_ref: float
+      time start of the process
+
+    """
+
+    def __init__(self, time_ref):
+
+        self.time_ref = time_ref
+        self.time_current = time_ref
+
+        self.r = []
+        self.names = []
+
+    def __call__(self, this_time, stepname):
+        """
+        Update of the timer
+
+        Parameters
+        --------------
+        this_time: float
+           current time
+        stepname: str
+           tag for the processing step
+
+        """
+
+        self.r.append(this_time-self.time_current)
+        self.names.append(stepname)
+        self.time_current = this_time
+
+    def finish(self, this_time):
+        """
+        Summary of the result
+
+        Parameters
+        ---------------
+        this_time: float
+          current time
+
+        Returns
+        -----------
+        numpy array with the normalized processing time for each considered step
+        ptime is the total processing time, in sec.
+        """
+
+        total_time = this_time-self.time_ref
+        if len(self.r) > 0:
+            # normalize the various steps to get the fraction of time
+            self.r = np.divide(self.r, total_time).tolist()
+        self.r.append(total_time)
+        self.names.append('ptime')
+
+        res = np.rec.fromrecords([self.r], names=self.names)
+
+        return res
