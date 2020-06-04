@@ -988,8 +988,13 @@ def LSSTPointing_circular(xc, yc, angle_rot=0., area=None, maxbound=None):
     #
     arr = []
 
-    for x in np.arange(0., 1.001, 0.001):
-        y = np.sqrt(1.-x*x)
+    radius = 1.
+    if maxbound is not None:
+        radius = maxbound
+
+    step = radius/100.
+    for x in np.arange(0., radius, step):
+        y = np.sqrt(radius*radius-x*x)
         arr.append([x, y])
 
     # symmetry I: y -> -y
@@ -1013,7 +1018,10 @@ def LSSTPointing_circular(xc, yc, angle_rot=0., area=None, maxbound=None):
             area/poly_orig.area), yfact=np.sqrt(area/poly_orig.area))
 
     # set rotation angle
-    rotated_poly = affinity.rotate(poly_orig, angle_rot)
+    if angle_rot > 0.1:
+        rotated_poly = affinity.rotate(poly_orig, angle_rot)
+    else:
+        rotated_poly = poly_orig
 
     return affinity.translate(rotated_poly,
                               xoff=xc-rotated_poly.centroid.x,
@@ -1095,6 +1103,7 @@ class DataToPixels:
         """
 
         # display: (RA,Dec) distribution of the data
+
         if display:
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots()
@@ -1205,18 +1214,19 @@ class DataToPixels:
 
         # get LSST FP with the good scale
         # pnew = LSSTPointing(0., 0., area=np.pi*self.fpscale**2)
-        fpnew = LSSTPointing(0., 0., maxbound=self.fpscale)
+        fpnew = LSSTPointing_circular(0., 0., maxbound=self.fpscale)
         # fpnew = LSSTPointing(np.deg2rad(self.LSST_RA-pRA),np.deg2rad(self.LSST_Dec-pDec),area=np.pi*self.fpscale**2)
         # maxbound=self.fpscale)
 
         """
         import matplotlib.pyplot as plt
         fig, ax = plt.subplots()
-        ax.plot(x,y,'ko')
+        ax.plot(x, y, 'ko')
         pf = PolygonPatch(fpnew, facecolor=(0, 0, 0, 0), edgecolor='red')
         ax.add_patch(pf)
         plt.show()
         """
+
         # print(shapely.vectorized.contains(
         #    fpnew, x, y), self.fpscale, fpnew.area)
 
