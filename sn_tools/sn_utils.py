@@ -1860,6 +1860,39 @@ class MbCov:
             print(cov_int)
 
 
+def limVals(lc, field):
+    """ Get unique values of a field in  a table
+
+    Parameters
+    --------------
+    lc: Table
+     astropy Table (here probably a LC)
+    field: str
+     name of the field of interest
+
+    Returns
+    -----------
+    vmin: float
+     min value of the field
+    vmax: float
+     max value of the field
+    vstep: float
+     step value for this field (median)
+    nvals: int
+     number of unique values
+
+    """
+
+    lc.sort(field)
+    vals = np.unique(lc[field].data.round(decimals=4))
+    # print(vals)
+    vmin = np.min(vals)
+    vmax = np.max(vals)
+    vstep = np.median(vals[1:]-vals[:-1])
+
+    return vmin, vmax, vstep, len(vals)
+
+
 class GetReference:
     """
     Class to load reference data
@@ -2163,6 +2196,39 @@ class GetReference:
         return tab_res
 
 
+class LoadGamma:
+    """
+    class to load gamma values and make regulargrid out of it
+
+    Parameters
+    ---------------
+    bands: str
+      bands to consider
+    fname: str
+      name of the file containing gamma values
+
+    """
+
+    def __init__(self, bands, gammaName):
+
+        self.gamma = {}
+        for band in bands:
+            rec = Table.read(gammaName, path='gamma_{}'.format(band))
+
+            rec['mag'] = rec['mag'].data.round(decimals=4)
+            rec['exptime'] = rec['exptime'].data.round(decimals=4)
+
+            magmin, magmax, magstep, nmag = limVals(rec, 'mag')
+            expmin, expmax, expstep, nexp = limVals(rec, 'exptime')
+            mag = np.linspace(magmin, magmax, nmag)
+            exp = np.linspace(expmin, expmax, nexp)
+
+            index = np.lexsort((np.round(rec['exptime'], 4), rec['mag']))
+            gammab = np.reshape(rec[index]['gamma'], (nmag, nexp))
+            self.gamma[band] = RegularGridInterpolator(
+                (mag, exp), gammab, method='linear', bounds_error=False, fill_value=0.)
+
+
 class Gamma:
     """ 
     Class to estimate gamma parameters
@@ -2178,8 +2244,10 @@ class Gamma:
       output file name (extension: hdf5)
     mag_range: numpy array, opt
       magnitude range to consider ( default: np.arange(10., 35., 0.05))
-    exptimes: numpy array, opt
-      exposure times to consider (default: np.arange(1., 900., 1.))
+    single_exposure_time: float
+      single exposure time (default: 30. s)
+    nexps: numpy array,opt
+      number of exposure to consider (default: range(1,500,10))
 
     Returns
     --------
@@ -2203,10 +2271,12 @@ class Gamma:
 
     def __init__(self, bands, telescope, fileout,
                  mag_range=np.arange(10., 35., 0.05),
-                 exptimes=np.arange(1., 900., 1.)):
+                 single_exposure_time=30.,
+                 nexps=range(1, 500, 10)):
 
         # gamma estimation
-        tab = self.loopGamma(bands, mag_range, exptimes, telescope)
+        tab = self.loopGamma(
+            bands, mag_range, single_exposure_time, nexps, telescope)
 
         # dump the result in a hdf5 file
 
@@ -2216,7 +2286,7 @@ class Gamma:
             sel.write(fileout, path='gamma_{}'.format(band),
                       append=True, compression=True)
 
-    def loopGamma(self, bands, mag_range, exptimes, telescope):
+    def loopGamma(self, bands, mag_range, single_exposure_time, nexps, telescope):
         """ 
         gamma parameter estimation - loop on bands
 
@@ -2247,7 +2317,7 @@ class Gamma:
         result_queue = multiprocessing.Queue()
         for i, band in enumerate(bands):
             p = multiprocessing.Process(
-                name='Subprocess-'+str(i), target=self.calcGamma, args=(band, mag_range, exptimes, telescope, i, result_queue))
+                name='Subprocess-'+str(i), target=self.calcGamma, args=(band, mag_range, single_exposure_time, nexps, telescope, i, result_queue))
             p.start()
 
         resultdict = {}
@@ -2263,7 +2333,7 @@ class Gamma:
 
         return restot
 
-    def calcGamma(self, band, mag_range, exptimes, telescope, j=-1, output_q=None):
+    def calcGamma(self, band, mag_range, single_exposure_time, nexps, telescope, j=-1, output_q=None):
         """ Gamma parameter estimation
 
         Parameters
@@ -2294,9 +2364,9 @@ class Gamma:
 
         gamm = []
         for mag in mag_range:
-            for exptime in exptimes:
+            for nexp in nexps:
                 gamm.append(
-                    (band, mag, exptime, telescope.gamma(mag, band, exptime)))
+                    (band, mag, single_exposure_time*nexp, telescope.gamma(mag, band, single_exposure_time, nexp)))
 
         rec = Table(rows=gamm, names=['band', 'mag', 'exptime', 'gamma'])
 
