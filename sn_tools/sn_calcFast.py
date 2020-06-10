@@ -347,10 +347,10 @@ class LCfast:
 
         m5_tile = np.tile(m5, (len(p), 1))
 
-        srand_ref = self.srand(
+        srand_ref = srand(
             np.tile(gammaref, (len(p), 1)), mag_obs, m5_tile)
 
-        srand_obs = self.srand(np.tile(gamma_obs, (len(p), 1)), mag_obs, np.tile(
+        srand_obs = srand(np.tile(gamma_obs, (len(p), 1)), mag_obs, np.tile(
             sel_obs[self.m5Col], (len(p), 1)))
 
         correct_m5 = srand_ref/srand_obs
@@ -604,10 +604,10 @@ class LCfast:
 
         m5_tile = np.tile(m5, (len(p), 1))
 
-        srand_ref = self.srand(
+        srand_ref = srand(
             np.tile(gammaref, (len(p), 1)), mag_obs, m5_tile)
 
-        srand_obs = self.srand(np.tile(gamma_obs, (len(p), 1)), mag_obs, np.tile(
+        srand_obs = srand(np.tile(gamma_obs, (len(p), 1)), mag_obs, np.tile(
             sel_obs[self.m5Col], (len(p), 1)))
 
         correct_m5 = srand_ref/srand_obs
@@ -718,31 +718,32 @@ class LCfast:
         else:
             return lc
 
-    def srand(self, gamma, mag, m5):
-        """
-        Method to estimate :math:`srand=\sqrt((0.04-\gamma)*x+\gamma*x^2)`
 
-        with :math:`x = 10^{0.4*(m-m_5)}`
+def srand(gamma, mag, m5):
+    """
+    Function to estimate :math:`srand=\sqrt((0.04-\gamma)*x+\gamma*x^2)`
+
+    with :math:`x = 10^{0.4*(m-m_5)}`
 
 
-        Parameters
-        ---------------
-        gamma: float
-          gamma value
-        mag: float
-          magnitude
-        m5: float
-           fiveSigmaDepth value
+    Parameters
+    ---------------
+    gamma: float
+     gamma value
+    mag: float
+     magnitude
+    m5: float
+      fiveSigmaDepth value
 
-        Returns
-        ----------
-        srand = np.sqrt((0.04-gamma)*x+gamma*x**2)
-        with x = 10**(0.4*(mag-m5))
+    Returns
+    ----------
+    srand = np.sqrt((0.04-gamma)*x+gamma*x**2)
+    with x = 10**(0.4*(mag-m5))
 
-        """
+    """
 
-        x = 10**(0.4*(mag-m5))
-        return np.sqrt((0.04-gamma)*x+gamma*x**2)
+    x = 10**(0.4*(mag-m5))
+    return np.sqrt((0.04-gamma)*x+gamma*x**2)
 
 
 class CalcSN:
