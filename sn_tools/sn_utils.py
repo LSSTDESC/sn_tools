@@ -814,8 +814,9 @@ class Make_Files_for_Cadence_Metric:
         for band in 'grizy':
             mag_to_flux = np.array(m5, dtype=[('m5', 'f8')])
             exptime = [30.] * len(m5)
+            nexp = range(1, len(m5))
             b = [band] * len(m5)
-            f5 = self.telescope.mag_to_flux_e_sec(m5, b, exptime)
+            f5 = self.telescope.mag_to_flux_e_sec(m5, b, exptime, nexp)
             mag_to_flux = rf.append_fields(mag_to_flux, ['band', 'flux_e'], [
                 b, f5[:, [1]]], dtypes=['U256', 'f8'])
             if mag_to_flux_tot is None:

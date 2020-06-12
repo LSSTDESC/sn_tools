@@ -379,7 +379,7 @@ class Telescope(Throughputs):
         """
         if zp is None:
             zp = self.zero_points(band)
-        return np.power(10., -0.4 * (mag-zp))
+        return np.power(10., -0.4 * (mag-zp.item()))
 
     def zero_points(self, band):
         """
@@ -395,7 +395,7 @@ class Telescope(Throughputs):
         array of zp
 
         """
-        return np.asarray([self.zp[b] for b in band])
+        return np.asarray([self.zp(b) for b in band])
 
     def mag_to_flux_e_sec(self, mag, band, exptime, nexp):
         """
