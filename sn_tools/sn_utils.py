@@ -2198,7 +2198,8 @@ class GetReference:
 
 class LoadGamma:
     """
-    class to load gamma values and make regulargrid out of it
+    class to load gamma and mag_to_flux values 
+    and make regulargrid out of it
 
     Parameters
     ---------------
@@ -2212,21 +2213,29 @@ class LoadGamma:
     def __init__(self, bands, gammaName):
 
         self.gamma = {}
+        self.mag_to_flux = {}
         for band in bands:
             rec = Table.read(gammaName, path='gamma_{}'.format(band))
 
             rec['mag'] = rec['mag'].data.round(decimals=4)
-            rec['exptime'] = rec['exptime'].data.round(decimals=4)
+            rec['single_exptime'] = rec['single_exptime'].data.round(
+                decimals=4)
 
             magmin, magmax, magstep, nmag = limVals(rec, 'mag')
-            expmin, expmax, expstep, nexp = limVals(rec, 'exptime')
+            expmin, expmax, expstep, nexpo = limVals(rec, 'single_exptime')
+            nexpmin, nexpmax, nexpstep, nnexp = limVals(rec, 'nexp')
             mag = np.linspace(magmin, magmax, nmag)
-            exp = np.linspace(expmin, expmax, nexp)
+            exp = np.linspace(expmin, expmax, nexpo)
+            nexp = np.linspace(nexpmin, nexpmax, nnexp)
 
-            index = np.lexsort((np.round(rec['exptime'], 4), rec['mag']))
-            gammab = np.reshape(rec[index]['gamma'], (nmag, nexp))
+            index = np.lexsort(
+                (rec['nexp'], np.round(rec['single_exptime'], 4), rec['mag']))
+            gammab = np.reshape(rec[index]['gamma'], (nmag, nexpo, nnexp))
+            fluxb = np.reshape(rec[index]['flux_e_sec'], (nmag, nexpo, nnexp))
             self.gamma[band] = RegularGridInterpolator(
-                (mag, exp), gammab, method='linear', bounds_error=False, fill_value=0.)
+                (mag, exp, nexp), gammab, method='linear', bounds_error=False, fill_value=0.)
+            self.mag_to_flux[band] = RegularGridInterpolator(
+                (mag, exp, nexp), fluxb, method='linear', bounds_error=False, fill_value=0.)
 
 
 class Gamma:
@@ -2244,8 +2253,8 @@ class Gamma:
       output file name (extension: hdf5)
     mag_range: numpy array, opt
       magnitude range to consider ( default: np.arange(10., 35., 0.05))
-    single_exposure_time: float
-      single exposure time (default: 30. s)
+    single_exposure_time: list(float)
+      single exposure times (default: [30.] s)
     nexps: numpy array,opt
       number of exposure to consider (default: range(1,500,10))
 
@@ -2271,8 +2280,8 @@ class Gamma:
 
     def __init__(self, bands, telescope, fileout,
                  mag_range=np.arange(10., 35., 0.05),
-                 single_exposure_time=30.,
-                 nexps=range(1, 500, 10)):
+                 single_exposure_time=[30.],
+                 nexps=range(1, 500, 1)):
 
         # gamma estimation
         tab = self.loopGamma(
@@ -2364,11 +2373,15 @@ class Gamma:
 
         gamm = []
         for mag in mag_range:
-            for nexp in nexps:
-                gamm.append(
-                    (band, mag, single_exposure_time*nexp, telescope.gamma(mag, band, single_exposure_time, nexp)))
+            for single_expo in single_exposure_time:
+                for nexp in nexps:
+                    gamma, flux_e = telescope.gamma(
+                        mag, band, single_expo, nexp)
+                    gamm.append(
+                        (band, mag, single_expo, nexp, gamma, flux_e))
 
-        rec = Table(rows=gamm, names=['band', 'mag', 'exptime', 'gamma'])
+        rec = Table(rows=gamm, names=[
+                    'band', 'mag', 'single_exptime', 'nexp', 'gamma', 'flux_e_sec'])
 
         if output_q is not None:
             output_q.put({j: rec})
