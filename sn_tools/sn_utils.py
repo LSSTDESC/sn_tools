@@ -1937,33 +1937,29 @@ class GetReference:
         lc_ref_tot = np.copy(lc_ref_tot[idx])
 
         # telescope requested
-        """
-        telescope = Telescope(name=tel_par['name'],
-                              throughput_dir=tel_par['throughput_dir'],
-                              atmos_dir=tel_par['atmos_dir'],
-                              atmos=tel_par['atmos'],
-                              aerosol=tel_par['aerosol'],
-                              airmass=tel_par['airmass'])
-        """
         # Load the file - gamma values
         if not os.path.exists(gammaName):
             print('gamma file {} does not exist')
             print('will generate it - few minutes')
-            mag_range = np.arange(15., 38., 1.)
-            exptimes = np.arange(1., 3000., 10.)
-            Gamma('ugrizy', telescope, gammaName,
+            mag_range = np.arange(13., 38., 0.05)
+            nexps = range(1, 500, 1)
+            single_exposure_time = [15., 30.]
+            Gamma(bands, telescope, outName,
                   mag_range=mag_range,
-                  exptimes=exptimes)
+                  single_exposure_time=single_exposure_time, nexps=nexps)
+
             print('end of gamma estimation')
 
-        fgamma = h5py.File(gammaName, 'r')
-
+        #fgamma = h5py.File(gammaName, 'r')
+        gammas = LoadGamma('grizy', gammaName)
+        self.gamma = gammas.gamma
+        self.mag_to_flux = gammas.mag_to_flux
         # Load references needed for the following
         self.lc_ref = {}
         self.gamma_ref = {}
-        self.gamma = {}
+        #self.gamma = {}
         self.m5_ref = {}
-        self.mag_to_flux_e_sec = {}
+        #self.mag_to_flux_e_sec = {}
 
         self.flux = {}
         self.fluxerr = {}
@@ -1986,10 +1982,12 @@ class GetReference:
             lc_sel['z'] = lc_sel['z'].data.round(decimals=4)
             lc_sel['phase'] = lc_sel['phase'].data.round(decimals=4)
 
+            """
             fluxes_e_sec = telescope.mag_to_flux_e_sec(
                 mag_range, [band]*len(mag_range), [30]*len(mag_range))
             self.mag_to_flux_e_sec[band] = interpolate.interp1d(
                 mag_range, fluxes_e_sec[:, 1], fill_value=0., bounds_error=False)
+            """
 
             # these reference data will be used for griddata interp.
             self.lc_ref[band] = lc_sel
@@ -2029,6 +2027,7 @@ class GetReference:
 
             # gamma estimator
 
+            """
             rec = Table.read(gammaName, path='gamma_{}'.format(band))
 
             rec['mag'] = rec['mag'].data.round(decimals=4)
@@ -2044,6 +2043,7 @@ class GetReference:
             self.gamma[band] = RegularGridInterpolator(
                 (mag, exp), gammab, method=method, bounds_error=False, fill_value=0.)
             #print(band, gammab, mag, exp)
+            """
 
     def limVals(self, lc, field):
         """ Get unique values of a field in  a table

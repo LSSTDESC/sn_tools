@@ -48,7 +48,7 @@ class LCfast:
                  telescope, mjdCol='observationStartMJD',
                  RACol='fieldRA', DecCol='fieldDec',
                  filterCol='filter', exptimeCol='visitExposureTime',
-                 m5Col='fiveSigmaDepth', seasonCol='season',
+                 m5Col='fiveSigmaDepth', seasonCol='season', nexpCol='numExposures',
                  snr_min=5.,
                  lightOutput=True):
 
@@ -60,6 +60,7 @@ class LCfast:
         self.m5Col = m5Col
         self.exptimeCol = exptimeCol
         self.seasonCol = seasonCol
+        self.nexpCol = nexpCol
         self.x1 = x1
         self.color = color
         self.lightOutput = lightOutput
@@ -371,6 +372,9 @@ class LCfast:
             np.tile(sel_obs[self.seasonCol], (nvals, 1)), mask=~flag)
         exp_time = np.ma.array(
             np.tile(sel_obs[self.exptimeCol], (nvals, 1)), mask=~flag)
+        nexposures = np.ma.array(
+            np.tile(sel_obs[self.nexpCol], (nvals, 1)), mask=~flag)
+
         m5_obs = np.ma.array(
             np.tile(sel_obs[self.m5Col], (nvals, 1)), mask=~flag)
         healpixIds = np.ma.array(
@@ -400,6 +404,7 @@ class LCfast:
         lc['magerr'] = (2.5/np.log(10.))/snr_m5[~snr_m5.mask]
         lc['time'] = obs_time[~obs_time.mask]
         lc['exposuretime'] = exp_time[~exp_time.mask]
+        lc['nexp'] = nexposures[~nexposures.mask]
         lc['band'] = ['LSST::'+band]*len(lc)
         lc['zp'] = [2.5*np.log10(3631)]*len(lc)
         lc['zpsys'] = ['ab']*len(lc)
@@ -410,9 +415,9 @@ class LCfast:
         lc['pixDec'] = pixDecs[~pixDecs.mask]
         lc['z'] = z_vals
         lc['daymax'] = daymax_vals
-        lc['flux_e_sec'] = self.reference_lc.mag_to_flux_e_sec[band](
+        lc['flux_e_sec'] = self.reference_lc.mag_to_flux[band](
             lc['mag'])
-        lc['flux_5'] = self.reference_lc.mag_to_flux_e_sec[band](
+        lc['flux_5'] = self.reference_lc.mag_to_flux[band](
             lc['m5'])
         for key, vals in Fisher_Mat.items():
             lc['F_{}'.format(key)] = vals[~vals.mask]/(lc['fluxerr']**2)
@@ -594,7 +599,7 @@ class LCfast:
         #    sel_obs[self.m5Col], [band]*len(sel_obs), sel_obs[self.exptimeCol])
 
         gamma_obs = self.reference_lc.gamma[band](
-            (sel_obs[self.m5Col], sel_obs[self.exptimeCol]))
+            (sel_obs[self.m5Col], sel_obs[self.exptimeCol]/sel_obs[self.nexpCol], sel_obs[self.nexpCol]))
 
         mag_obs = -2.5*np.log10(fluxes_obs/3631.)
 
@@ -633,6 +638,8 @@ class LCfast:
         if not self.lightOutput:
             exp_time = np.ma.array(
                 np.tile(sel_obs[self.exptimeCol], (nvals, 1)), mask=~flag)
+            nexposures = np.ma.array(
+                np.tile(sel_obs[self.nexpCol], (nvals, 1)), mask=~flag)
             m5_obs = np.ma.array(
                 np.tile(sel_obs[self.m5Col], (nvals, 1)), mask=~flag)
         healpixIds = np.ma.array(
@@ -669,8 +676,8 @@ class LCfast:
                 lc['mag'] = mag_obs[~mag_obs.mask]
                 lc['magerr'] = (2.5/np.log(10.))/snr_m5[~snr_m5.mask]
                 lc['time'] = obs_time[~obs_time.mask]
-                lc['exptime'] = exp_time[~exp_time.mask]
-
+                lc[self.exptimeCol] = exp_time[~exp_time.mask]
+                lc[self.nexpCol] = nexposures[~nexposures.mask]
             lc['band'] = ['LSST::'+band]*len(lc)
             lc['zp'] = self.zp[band]
             lc['zp'] = 2.5*np.log10(3631)
@@ -683,10 +690,10 @@ class LCfast:
             lc['z'] = z_vals
             lc['daymax'] = daymax_vals
             if not self.lightOutput:
-                lc['flux_e_sec'] = self.reference_lc.mag_to_flux_e_sec[band](
-                    lc['mag'])
-                lc['flux_5'] = self.reference_lc.mag_to_flux_e_sec[band](
-                    lc['m5'])
+                lc['flux_e_sec'] = self.reference_lc.mag_to_flux[band]((
+                    lc['mag'], lc[self.exptimeCol]/lc[self.nexpCol], lc[self.nexpCol]))
+                lc['flux_5'] = self.reference_lc.mag_to_flux[band]((
+                    lc['m5'], lc[self.exptimeCol]/lc[self.nexpCol], lc[self.nexpCol]))
                 lc.loc[:, 'ratio'] = (
                     lc['flux_e_sec']/lc['snr_m5'])/(lc['flux_5']/5.)
             for key, vals in Fisher_Mat.items():
