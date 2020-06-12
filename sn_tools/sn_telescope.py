@@ -159,7 +159,7 @@ class Telescope(Throughputs):
 
     @get_val_decor
     def get_zp(self, what, band):
-        """ 
+        """
         decorator get zero points
         formula used here are extracted from LSE-40
 
@@ -260,7 +260,7 @@ class Telescope(Throughputs):
         return self.return_value('zp', filtre)
 
     def FWHMeff(self, filtre):
-        """ 
+        """
         FWHMeff accessor
 
         Parameters
@@ -271,7 +271,7 @@ class Telescope(Throughputs):
         return self.return_value('FWHMeff', filtre)
 
     def Calc_Integ(self, bandpass):
-        """ 
+        """
         integration over bandpass
 
         Parameters
@@ -294,7 +294,7 @@ class Telescope(Throughputs):
         return resu
 
     def Calc_Integ_Sed(self, sed, bandpass, wavelen=None, fnu=None):
-        """ 
+        """
         SED integration
 
         Parameters
@@ -334,7 +334,7 @@ class Telescope(Throughputs):
         return nphoton * dlambda
 
     def flux_to_mag(self, flux, band, zp=None):
-        """ 
+        """
         Flux to magnitude conversion
 
         Parameters
@@ -398,7 +398,7 @@ class Telescope(Throughputs):
         return np.asarray([self.zp[b] for b in band])
 
     def mag_to_flux_e_sec(self, mag, band, exptime, nexp):
-        """ 
+        """
         Mag to flux (in photoelec/sec) conversion
 
         Parameters
@@ -434,11 +434,18 @@ class Telescope(Throughputs):
             counts = sed.calcADU(
                 bandpass=self.atmosphere[band], photParams=photParams)
             e_per_sec = counts
-            e_per_sec /= exptime*nexp/photParams.gain
-            # print('hello',photParams.gain,exptime)
+
+            # counts per sec
+            e_per_sec /= (exptime*nexp)
+            # conversion to pe
+            e_per_sec *= photParams.gain
             return counts, e_per_sec
         else:
-            return np.asarray([self.mag_to_flux_e_sec(m, b, expt, nexpos) for m, b, expt, nexpos in zip(mag, band, exptime, nexp)])
+            r = []
+            for m, b, expt, nexpos in zip(mag, band, exptime, nexp):
+                counts, flux_e = self.mag_to_flux_e_sec(m, b, expt, nexpos)
+                r.append((counts, flux_e))
+            return np.asarray(r)
 
     def gamma(self, mag, band, exptime, nexp):
         """
@@ -459,7 +466,7 @@ class Telescope(Throughputs):
 
         Returns
         ----------
-        gamma (float)
+        gamma, mag_to_flux (float)
 
         """
 
@@ -468,7 +475,10 @@ class Telescope(Throughputs):
             counts, e_per_sec = self.mag_to_flux_e_sec(
                 mag, band, exptime, nexp)
             gamma = 0.04-1./(photParams.gain*counts)
-
-            return gamma
+            return gamma, e_per_sec
         else:
-            return np.asarray([self.gamma(m, b, e, nexpo) for m, b, e, nexpo in zip(mag, band, exptime, nexp)])
+            r = []
+            for m, b, e, nexpo in zip(mag, band, exptime, nexp):
+                gamma, flux_e = self.gamma(m, b, e, nexpo)
+                r.append((gamma, flux_e))
+            return np.asarray(r)
