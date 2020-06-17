@@ -100,8 +100,6 @@ class Process:
             idx = observations[self.RACol] <= delta_coord
             obs = np.concatenate((obs, observations[idx]))
 
-        #print('after', len(observations))
-
         """
         import matplotlib.pyplot as plt
         plt.plot(observations[self.RACol],observations[self.DecCol],'ko')
