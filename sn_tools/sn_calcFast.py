@@ -806,6 +806,7 @@ class CalcSN:
         goodlc, badlc = self.selectLC(lc)
 
         res = badlc
+        self.fitstatus = 0
         if len(goodlc) > 0:
             self.calcSigma(lc, goodlc)
             res = vstack([res, goodlc])
@@ -949,32 +950,40 @@ class CalcSN:
         # print('one',time.time()-time_ref,parts)
         time_ref = time.time()
         size = len(resu)
-        Fisher_Big = np.zeros((3*size, 3*size))
-        Big_Diag = np.zeros((3*size, 3*size))
+        npars = len(self.params)
+        Fisher_Big = np.zeros((npars*size, npars*size))
+        Big_Diag = np.zeros((npars*size, npars*size))
         Big_Diag = []
 
         for iv in range(size):
-            Fisher_Matrix = np.zeros((3, 3))
+            Fisher_Matrix = np.zeros((npars, npars))
             for ia, vala in enumerate(self.params):
                 for jb, valb in enumerate(self.params):
                     if jb >= ia:
-                        Fisher_Big[ia+3*iv][jb+3 *
-                                            iv] = parts[ia, jb][iv]
+                        Fisher_Big[ia+npars*iv][jb+npars *
+                                                iv] = parts[ia, jb][iv]
         # print('two',time.time()-time_ref)
         time_ref = time.time()
         # pprint.pprint(Fisher_Big)
 
         Fisher_Big = Fisher_Big + np.triu(Fisher_Big, 1).T
         # Big_Diag = np.diag(np.linalg.inv(Fisher_Big))
-        # print('hhhh',Fisher_Big.shape)
-        Big_Diag = np.diag(faster_inverse(Fisher_Big))
-        # print('three',time.time()-time_ref)
-        time_ref = time.time()
-        for ia, vala in enumerate(self.params):
-            indices = range(ia, len(Big_Diag), 3)
-            restab.add_column(
-                Column(np.take(Big_Diag, indices), name='Cov_{}{}'.format(vala, vala)))
-
+        detmat = np.linalg.det(Fisher_Big)
+        if detmat > 1.e-5:
+            # matrix not singular - should be invertible
+            Big_Diag = np.diag(faster_inverse(Fisher_Big))
+            # print('three',time.time()-time_ref)
+            time_ref = time.time()
+            for ia, vala in enumerate(self.params):
+                indices = range(ia, len(Big_Diag), npars)
+                restab.add_column(
+                    Column(np.take(Big_Diag, indices), name='Cov_{}{}'.format(vala, vala)))
+            self.fitstatus = 1
+        else:
+            for ia, vala in enumerate(self.params):
+                restab.add_column(
+                    Column(-99., name='Cov_{}{}'.format(vala, vala)))
+            self.fitstatus = -1
     # print('four',time.time()-time_ref)
     # time_ref = time.time()
 
