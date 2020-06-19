@@ -606,3 +606,29 @@ def getObservations(dbDir, dbName, dbExtens):
                                        new_col_names=keymap)
 
     return observations
+
+
+def check_get_file(web_server, fDir, fName):
+    """
+    Function checking if a file is available
+    If not, grab it from a web server
+
+    Parameters
+    ---------------
+    web_server: str
+       web server name
+    fDir: str
+      location dir of the file
+    fName: str
+      name of the file
+
+    """
+
+    if os.path.isfile('{}/{}'.format(fDir, fName)):
+        return
+
+    path = '{}/{}/{}'.format(web_server, fDir, fName)
+    print('wget path:', path)
+    cmd = 'wget --no-clobber --no-verbose {} --directory-prefix {}'.format(
+        path, fDir)
+    os.system(cmd)
