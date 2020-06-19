@@ -2,6 +2,7 @@ import numpy as np
 from sn_tools.sn_rate import SN_Rate
 from sn_tools.sn_throughputs import Throughputs
 from sn_tools.sn_telescope import Telescope
+from sn_tools.sn_io import check_get_file
 import os
 import numpy.lib.recfunctions as rf
 from astropy.table import Table, vstack, Column
@@ -1928,7 +1929,6 @@ class GetReference:
     def __init__(self, lcName, gammaName, telescope, param_Fisher=['x0', 'x1', 'color', 'daymax']):
 
         # Load the file - lc reference
-
         f = h5py.File(lcName, 'r')
         keys = list(f.keys())
         # lc_ref_tot = Table.read(filename, path=keys[0])
@@ -2237,6 +2237,53 @@ class LoadGamma:
                 (mag, exp, nexp), gammab, method='linear', bounds_error=False, fill_value=0.)
             self.mag_to_flux[band] = RegularGridInterpolator(
                 (mag, exp, nexp), fluxb, method='linear', bounds_error=False, fill_value=0.)
+
+
+class LoadDust:
+
+    """
+    class to load dust correction file
+    and make regulargrid out of it
+
+    Parameters
+    ---------------
+    fDir: str
+      location directory of the file
+    fName: str
+      name of the file containing dust correction values
+    web_server: str
+      web server adress where the file could be retrieved
+    bands: str, opt
+       bands to consider (default: 'grizy')
+    """
+
+    def __init__(self, fDir, fName, web_path, bands='grizy'):
+
+        # check whether the file is available
+        # if not grab it from the web server
+        check_get_file(web_path, fDir, fName)
+
+        self.dustcorr = {}
+
+        tab = Table.read('{}/{}'.format(fDir, fName), path='dust')
+
+        for b in bands:
+            idx = tab['band'] == b
+            rec = tab[idx]
+            phasemin, phasemax, phasestep, nphase = limVals(rec, 'phase')
+            zmin, zmax, zstep, nz = limVals(rec, 'z')
+            ebvofMWmin, ebvofMWmax, ebvofMWstep, nebvofMW = limVals(
+                rec, 'ebvofMW')
+
+            phase = np.linspace(phasemin, phasemax, nphase)
+            z = np.linspace(zmin, zmax, nz)
+            ebvofMW = np.linspace(ebvofMWmin, ebvofMWmax, nebvofMW)
+
+            index = np.lexsort(
+                (rec['ebvofMW'], np.round(rec['z'], 4), rec['phase']))
+            ratio = np.reshape(rec[index]['ratio'], (nphase, nz, nebvofMW))
+            self.dustcorr[b] = RegularGridInterpolator(
+                (phase, z, ebvofMW), ratio, method='linear', bounds_error=False, fill_value=0.)
 
 
 class Gamma:
