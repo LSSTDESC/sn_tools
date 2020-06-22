@@ -7,8 +7,8 @@ import shapely.vectorized
 from astropy_healpix import HEALPix
 from astropy import units as u
 from descartes.patch import PolygonPatch
-from astropy.coordinates import SkyCoord
-from dustmaps.sfd import SFDQuery
+#from astropy.coordinates import SkyCoord
+#from dustmaps.sfd import SFDQuery
 from matplotlib.patches import Polygon
 from shapely.geometry import Point
 import pandas as pd
@@ -826,9 +826,13 @@ def pixelate(data, nside, RACol='RA', DecCol='Dec'):
         nside, table[:, 0], table[:, 1], table[:, 2], nest=True)
     coord = hp.pix2ang(nside, healpixs, nest=True, lonlat=True)
 
+    # This is to get ebvofMW value
+    """
     coords = SkyCoord(coord[0], coord[1], unit='deg')
     sfd = SFDQuery()
     ebv = sfd(coords)
+    """
+    ebv = -1.
     res = rf.append_fields(res, 'healpixID', healpixs)
     res = rf.append_fields(res, 'pixRA', coord[0])
     res = rf.append_fields(res, 'pixDec', coord[1])
