@@ -150,7 +150,7 @@ class GenerateSample:
 
     """
 
-    def __init__(self, sn_parameters, cosmo_parameters, mjdCol='mjd', seasonCol='season', filterCol='filter', min_rf_phase=-15., max_rf_phase=30., area=9.6, dirFiles='reference_files'):
+    def __init__(self, sn_parameters, cosmo_parameters, mjdCol='mjd', seasonCol='season', filterCol='filter', min_rf_phase=-15., max_rf_phase=30., area=9.6, dirFiles='reference_files', web_path=''):
         self.dirFiles = dirFiles
         self.params = sn_parameters
         self.sn_rate = SN_Rate(rate=self.params['z']['rate'],
@@ -164,6 +164,7 @@ class GenerateSample:
         self.area = area
         self.min_rf_phase = min_rf_phase
         self.max_rf_phase = max_rf_phase
+        self.web_path = web_path
 
     def __call__(self, obs):
         """
@@ -417,8 +418,10 @@ class GenerateSample:
                           ('weight', np.float)])
         x1_color = {}
         for val in ['low_z', 'high_z']:
-            x1_color[val] = np.loadtxt('{}_{}{}'.format(
-                prefix, val, suffix), dtype=dtype)
+            fName = '{}_{}{}'.format(
+                prefix, val, suffix)
+            check_get_file(self.web_path, self.DirFiles, fName)
+            x1_color[val] = np.loadtxt(fName, dtype=dtype)
 
         return x1_color
 
@@ -476,17 +479,22 @@ class SimuParameters:
     area : float, opt
        area of the survey (in deg\^2)
        Default : 9.6 deg\^2
+    dirFiles: str, opt
+      location dir where (x1,c) dist may be found (default: reference_files)
+    web_path: str, opt
+       web adress where where (x1,c) dist may be found (default: '')
+
     """
 
     def __init__(self, sn_parameters, cosmo_parameters,
                  mjdCol='mjd', seasonCol='season', filterCol='filter',
-                 min_rf_phase=-15., max_rf_phase=30., area=9.6, dirFiles='reference_files'):
+                 min_rf_phase=-15., max_rf_phase=30., area=9.6, dirFiles='reference_files', web_path=''):
         self.dirFiles = dirFiles
         self.params = sn_parameters
         self.sn_rate = SN_Rate(rate=self.params['z']['rate'],
                                H0=cosmo_parameters['H0'],
                                Om0=cosmo_parameters['Omega_m'])
-
+        self.web_path = web_path
         self.x1_color = self.getDist(self.params['x1_color']['rate'])
         self.mjdCol = mjdCol
         self.seasonCol = seasonCol
@@ -509,6 +517,7 @@ class SimuParameters:
         """
 
         # prefix = os.getenv('SN_UTILS_DIR')+'/input/Dist_X1_Color_'+rate+'_'
+
         prefix = '{}/Dist_X1_Color_{}'.format(self.dirFiles, rate)
         suffix = '.txt'
         # names=['x1','c','weight_x1','weight_c','weight_tot']
@@ -517,8 +526,12 @@ class SimuParameters:
                           ('weight', np.float)])
         x1_color = {}
         for val in ['low_z', 'high_z']:
-            x1_color[val] = np.loadtxt('{}_{}{}'.format(
-                prefix, val, suffix), dtype=dtype)
+            fName = '{}_{}{}'.format(
+                prefix, val, suffix)
+            fName = 'Dist_X1_Color_{}_{}{}'.format(rate, val, suffix)
+            check_get_file(self.web_path, self.dirFiles, fName)
+            x1_color[val] = np.loadtxt(
+                '{}/{}'.format(self.dirFiles, fName), dtype=dtype)
 
         return x1_color
 
@@ -1902,10 +1915,16 @@ class GetReference:
 
     Parameters
     ----------------
+    templateDir: str
+      location dir of the reference LC files
     lcName: str
       name of the reference file to load (lc)
+    gammaDir: str
+       location dir where gamma files are located
     gammaName: str
       name of the reference file to load (gamma)
+    web_path: str
+      web adress where files (LC reference and gamma) can be found if not already on disk
     tel_par: dict
       telescope parameters
     param_Fisher : list(str),opt
@@ -1926,41 +1945,35 @@ class GetReference:
 
     """""
 
-    def __init__(self, lcName, gammaName, telescope, param_Fisher=['x0', 'x1', 'color', 'daymax']):
+    def __init__(self, templateDir, lcName,
+                 gammaDir, gammaName,
+                 web_path, telescope, param_Fisher=['x0', 'x1', 'color', 'daymax']):
+
+        check_get_file(web_path, templateDir, lcName)
 
         # Load the file - lc reference
-        f = h5py.File(lcName, 'r')
+        lcFullName = '{}/{}'.format(templateDir, lcName)
+        f = h5py.File(lcFullName, 'r')
         keys = list(f.keys())
         # lc_ref_tot = Table.read(filename, path=keys[0])
-        lc_ref_tot = Table.from_pandas(pd.read_hdf(lcName))
+        lc_ref_tot = Table.from_pandas(pd.read_hdf(lcFullName))
 
         idx = lc_ref_tot['z'] > 0.005
         lc_ref_tot = np.copy(lc_ref_tot[idx])
 
         # telescope requested
         # Load the file - gamma values
-        if not os.path.exists(gammaName):
-            print('gamma file {} does not exist')
-            print('will generate it - few minutes')
-            mag_range = np.arange(13., 38., 0.05)
-            nexps = range(1, 500, 1)
-            single_exposure_time = [15., 30.]
-            Gamma(bands, telescope, outName,
-                  mag_range=mag_range,
-                  single_exposure_time=single_exposure_time, nexps=nexps)
 
-            print('end of gamma estimation')
-
-        #fgamma = h5py.File(gammaName, 'r')
-        gammas = LoadGamma('grizy', gammaName)
+        # fgamma = h5py.File(gammaName, 'r')
+        gammas = LoadGamma('grizy', gammaDir, gammaName, web_path, telescope)
         self.gamma = gammas.gamma
         self.mag_to_flux = gammas.mag_to_flux
         # Load references needed for the following
         self.lc_ref = {}
         self.gamma_ref = {}
-        #self.gamma = {}
+        # self.gamma = {}
         self.m5_ref = {}
-        #self.mag_to_flux_e_sec = {}
+        # self.mag_to_flux_e_sec = {}
 
         self.flux = {}
         self.fluxerr = {}
@@ -2043,7 +2056,7 @@ class GetReference:
             gammab = np.reshape(rec[index]['gamma'], (nmag, nexp))
             self.gamma[band] = RegularGridInterpolator(
                 (mag, exp), gammab, method=method, bounds_error=False, fill_value=0.)
-            #print(band, gammab, mag, exp)
+            # print(band, gammab, mag, exp)
             """
 
     def limVals(self, lc, field):
@@ -2206,17 +2219,30 @@ class LoadGamma:
     ---------------
     bands: str
       bands to consider
-    fname: str
+    fDir: str
+      location dir of the gamma file
+    gammaName: str
       name of the file containing gamma values
-
+    web_path: str
+        web server where the file could be loaded from.
+    telescope: Telescope
+      instrument throughput
     """
 
-    def __init__(self, bands, gammaName):
+    def __init__(self, bands, fDir, gammaName, web_path, telescope):
 
         self.gamma = {}
         self.mag_to_flux = {}
+
+        check_get_file(web_path, fDir, gammaName)
+
+        gammaFullName = '{}/{}'.format(fDir, gammaName)
+        if not os.path.exists(gammaFullName):
+            self.generateGamma(bands, telescope, gammaFullName)
+
         for band in bands:
-            rec = Table.read(gammaName, path='gamma_{}'.format(band))
+            rec = Table.read(gammaFullName,
+                             path='gamma_{}'.format(band))
 
             rec['mag'] = rec['mag'].data.round(decimals=4)
             rec['single_exptime'] = rec['single_exptime'].data.round(
@@ -2238,6 +2264,31 @@ class LoadGamma:
             self.mag_to_flux[band] = RegularGridInterpolator(
                 (mag, exp, nexp), fluxb, method='linear', bounds_error=False, fill_value=0.)
 
+    def generateGammas(self, bands, telescope, outName):
+        """
+        Method to generate gamma file (if does not exist)
+
+        Parameters
+        ---------------
+        bands: str
+          bands to consider
+        telescope: Telescope
+           instrument
+        outName: str
+           output file name
+
+        """
+        print('gamma file {} does not exist')
+        print('will generate it - few minutes')
+        mag_range = np.arange(13., 38., 0.05)
+        nexps = range(1, 500, 1)
+        single_exposure_time = [15., 30.]
+        Gamma(bands, telescope, outName,
+              mag_range=mag_range,
+              single_exposure_time=single_exposure_time, nexps=nexps)
+
+        print('end of gamma estimation')
+
 
 class LoadDust:
 
@@ -2251,7 +2302,7 @@ class LoadDust:
       location directory of the file
     fName: str
       name of the file containing dust correction values
-    web_server: str
+    web_path: str
       web server adress where the file could be retrieved
     bands: str, opt
        bands to consider (default: 'grizy')
