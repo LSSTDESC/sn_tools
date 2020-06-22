@@ -632,3 +632,20 @@ def check_get_file(web_server, fDir, fName):
     cmd = 'wget --no-clobber --no-verbose {} --directory-prefix {}'.format(
         path, fDir)
     os.system(cmd)
+
+
+def dustmaps(dustDir):
+    """
+    method to grab dustmaps
+    Dust maps will be placed in dustDir
+
+    Parameters
+    ---------------
+    dustDir: str
+       dir where maps will be copied
+
+    """
+    from dustmaps.config import config
+    config['data_dir'] = dustDir
+    import dustmaps.sfd
+    dustmaps.sfd.fetch()
