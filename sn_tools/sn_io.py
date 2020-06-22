@@ -628,10 +628,34 @@ def check_get_file(web_server, fDir, fName):
         return
 
     path = '{}/{}/{}'.format(web_server, fDir, fName)
-    print('wget path:', path)
+    print('wget poth:', path)
     cmd = 'wget --no-clobber --no-verbose {} --directory-prefix {}'.format(
         path, fDir)
     os.system(cmd)
+
+
+def check_get_dir(web_server, fDir, fName):
+    """
+    Function checking if a dir is available
+    If not, grab it from a web server
+
+    Parameters
+    ---------------
+    web_server: str
+       web server name
+    fDir: str
+      name of the dir on the server
+    fName: str
+      name of the dir 
+
+    """
+
+    if not os.path.exists(fName):
+        fullname = '{}/{}'.format(web_server, fDir)
+        print('wget path:', fullname)
+        cmd = 'wget --no-verbose --recursive {} --directory-prefix={} --no-clobber --no-parent -nH --cut-dirs=3 -R \'index.html*\''.format(
+            fullname+'/', fName)
+        os.system(cmd)
 
 
 def dustmaps(dustDir):
