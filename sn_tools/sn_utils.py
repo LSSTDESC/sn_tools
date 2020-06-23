@@ -58,7 +58,7 @@ class MultiProc:
         # multiprocessing parameters
         nz = len(self.toprocess)
         t = np.linspace(0, nz, self.nproc+1, dtype='int')
-        print('hello', nz, t)
+        #print('multi', nz, t)
         result_queue = multiprocessing.Queue()
 
         procs = [multiprocessing.Process(name='Subprocess-'+str(j), target=self.process,
@@ -273,7 +273,7 @@ class GenerateSample:
 
             if zmin < 1.e-6:
                 zmin = 0.01
-            print(zmin, zmax, duration, self.area)
+            #print(zmin, zmax, duration, self.area)
             zz, rate, err_rate, nsn, err_nsn = self.sn_rate(
                 zmin=zmin, zmax=zmax,
                 duration=duration,
@@ -620,6 +620,7 @@ class SimuParameters:
         zmin = self.params['z']['min']
         zmax = self.params['z']['max']
         zstep = self.params['z']['step']
+        NSN_factor = self.params['NSN factor']
 
         if ztype == 'unique':
             zvals = [zmin]
@@ -632,7 +633,7 @@ class SimuParameters:
 
             if zmin < 1.e-6:
                 zmin = 0.01
-            print(zmin, zmax, duration, self.area)
+            #print(zmin, zmax, duration, self.area)
             zz, rate, err_rate, nsn, err_nsn = self.sn_rate(
                 zmin=zmin, zmax=zmax,
                 duration=duration,
@@ -640,14 +641,16 @@ class SimuParameters:
                 account_for_edges=True, dz=0.001)
             # get number of supernovae
             N_SN = int(np.cumsum(nsn)[-1])
+            print('nsn from rate', N_SN)
             if np.cumsum(nsn)[-1] < 0.5:
                 return r
+            N_SN *= NSN_factor
             weight_z = np.cumsum(nsn)/np.sum(np.cumsum(nsn))
 
             if N_SN < 1:
                 N_SN = 1
                 # weight_z = 1
-            print('nsn from rate', N_SN)
+
             zvals = np.random.choice(zz, N_SN, p=weight_z)
 
         return pd.DataFrame(zvals, columns=['z'])
@@ -685,11 +688,12 @@ class SimuParameters:
             for z in pars['z'].values:
                 daymax_min = daymin-(1.+z)*self.min_rf_phase
                 daymax_max = daymax-(1.+z)*self.max_rf_phase
-                ndaymax = int((daymax_max-daymax_min)/daymaxstep)+1
-                df = pd.DataFrame(np.linspace(
-                    daymax_min, daymax_max, ndaymax), columns=['daymax'])
-                df['z'] = z
-                daymaxdf = pd.concat((daymaxdf, df))
+                if daymax_max-daymax_min >= 10:
+                    ndaymax = int((daymax_max-daymax_min)/daymaxstep)+1
+                    df = pd.DataFrame(np.linspace(
+                        daymax_min, daymax_max, ndaymax), columns=['daymax'])
+                    df['z'] = z
+                    daymaxdf = pd.concat((daymaxdf, df))
 
         if daymaxtype == 'random':
             daymaxdf = pd.DataFrame(pars)
@@ -746,18 +750,22 @@ class SimuParameters:
 
         if ptype == 'random':
             pdf = pd.DataFrame()
-            # have to separate between low and high z-range
-            # distributions may be different
-            for key, vv in dict(zip(['low_z', 'high_z'], [[0., 0.1], [0.1, 1.5]])).items():
-                idx = pars['z'] > vv[0]
-                idx &= pars['z'] < vv[1]
-                sel = pd.DataFrame(pars[idx])
-                if sel.size > 0:
-                    norm = np.sum(self.x1_color[key]['weight'])
-                    sel[pname] = np.random.choice(
-                        self.x1_color[key][pname], len(sel), p=self.x1_color[key]['weight']/norm)
-                    pdf = pd.concat((pdf, sel))
-
+            # if pmin and pmax are different -> random choice in distribution
+            if pmax-pmin > 1.e-5:
+                # have to separate between low and high z-range
+                # distributions may be different
+                for key, vv in dict(zip(['low_z', 'high_z'], [[0., 0.1], [0.1, 1.5]])).items():
+                    idx = pars['z'] > vv[0]
+                    idx &= pars['z'] < vv[1]
+                    sel = pd.DataFrame(pars[idx])
+                    if sel.size > 0:
+                        norm = np.sum(self.x1_color[key]['weight'])
+                        sel[pname] = np.random.choice(
+                            self.x1_color[key][pname], len(sel), p=self.x1_color[key]['weight']/norm)
+                        pdf = pd.concat((pdf, sel))
+            else:
+                pdf = pd.DataFrame(pars)
+                pdf[pname] = pmin
         return pdf
 
     def plot(self, gen_params):
@@ -2173,7 +2181,6 @@ class GetReference:
         """
         # distrib=np.unique(tab['z'])
         nlc = len(tab)
-        print('ici pal', nlc)
         # n_multi=8
         if nlc >= 8:
             n_multi = min(nlc, 8)

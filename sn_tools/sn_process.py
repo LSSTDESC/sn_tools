@@ -81,15 +81,15 @@ class Process:
 
         observations, patches = self.load()
 
-        #print('coordinates for patch',RAmin,RAmax,Decmin,Decmax)
+        # print('coordinates for patch',RAmin,RAmax,Decmin,Decmax)
         # select observation in this area
         delta_coord = 5.
         idx = observations[self.RACol] >= RAmin-delta_coord
         idx &= observations[self.RACol] < RAmax+delta_coord
-        #idx &= observations[self.DecCol] >= Decmin-delta_coord
-        #idx &= observations[self.DecCol] < Decmax+delta_coord
+        # idx &= observations[self.DecCol] >= Decmin-delta_coord
+        # idx &= observations[self.DecCol] < Decmax+delta_coord
 
-        #print('before', len(observations), RAmin, RAmax, Decmin, Decmax)
+        # print('before', len(observations), RAmin, RAmax, Decmin, Decmax)
         obs = observations[idx]
 
         if RAmin < delta_coord:
@@ -125,7 +125,7 @@ class Process:
                 if self.npixels == -1:
                     self.npixels = len(
                         np.unique(self.pixelmap['healpixID']))
-                random_pixels = self.randomPixels()
+                random_pixels = self.randomPixels(self.pixelmap, self.npixels)
                 print('number of pixels to process', len(random_pixels))
                 self.multiprocess(random_pixels, obs,
                                   func=self.procix)
@@ -187,18 +187,18 @@ class Process:
         npixels = int(len(healpixels))
 
         tabpix = np.linspace(0, npixels, self.nprocs+1, dtype='int')
-        #print(tabpix, len(tabpix))
+        # print(tabpix, len(tabpix))
         result_queue = multiprocessing.Queue()
 
-        #print('in multi process', npixels, self.nprocs)
+        # print('in multi process', npixels, self.nprocs)
         # multiprocessing
         for j in range(len(tabpix)-1):
             ida = tabpix[j]
             idb = tabpix[j+1]
 
-            #print('Field', j, len(healpixels[ida:idb]),len(observations))
+            # print('Field', j, len(healpixels[ida:idb]),len(observations))
 
-            #field = healpixels[ida:idb]
+            # field = healpixels[ida:idb]
 
             """
             idx = field['fieldName'] == 'SPT'
@@ -208,7 +208,7 @@ class Process:
             p = multiprocessing.Process(name='Subprocess-'+str(j), target=func, args=(
                 healpixels[ida:idb], observations, j, result_queue))
             print('starting')
-            #p.daemon = True
+            # p.daemon = True
             p.start()
 
     def processPatch(self, pointings, observations, j=0, output_q=None):
@@ -227,7 +227,7 @@ class Process:
           queue of the multiprocessing (default: None)
         """
 
-        #print('processing area', j, pointings)
+        # print('processing area', j, pointings)
 
         time_ref = time.time()
         ipoint = 1
@@ -238,9 +238,11 @@ class Process:
         procpix = ProcessPixels(
             self.metricList, j, outDir=self.outDir, dbName=self.dbName, saveData=self.saveData)
 
+        print('pointings', len(pointings))
+
         for index, pointing in pointings.iterrows():
             ipoint += 1
-            #print('pointing', ipoint)
+            # print('pointing', ipoint)
 
             # print('there man', np.unique(observations[[self.RACol, self.DecCol]]), pointing[[
             #      'RA', 'Dec', 'radius_RA', 'radius_Dec']])
@@ -250,15 +252,34 @@ class Process:
 
             # select pixels that are inside the original area
             pixels_run = pixels
+            """
+            print('number of pixels', len(pixels_run), pixels)
+            import matplotlib.pyplot as plt
+            plt.plot(pixels['pixRA'], pixels['pixDec'], 'ko')
+            zonex = [pointing['minRA'], pointing['maxRA'],
+                     pointing['maxRA'], pointing['minRA'], pointing['minRA']]
+            zoney = [pointing['minDec'], pointing['minDec'],
+                     pointing['maxDec'], pointing['maxDec'], pointing['minDec']]
+            plt.plot(zonex, zoney)
+            plt.show()
+            """
+
             if self.fieldType != 'Fake' and self.fieldType != 'DD':
-                idx = (pixels['pixRA']-pointing['RA']) >= - \
-                    pointing['radius_RA']/2.
+                """
+                idx = (pixels['pixRA']-pointing['RA']
+                       ) >= pointing['radius_RA']/2.
                 idx &= (pixels['pixRA']-pointing['RA']
                         ) < pointing['radius_RA']/2.
-                idx &= (pixels['pixDec']-pointing['Dec']) >= - \
-                    pointing['radius_Dec']/2.
+                idx &= (pixels['pixDec']-pointing['Dec']
+                        ) >= pointing['radius_Dec']/2.
                 idx &= (pixels['pixDec']-pointing['Dec']
                         ) < pointing['radius_Dec']/2.
+                """
+                idx = pixels['pixRA'] > pointing['minRA']
+                idx &= pixels['pixRA'] < pointing['maxRA']
+                idx &= pixels['pixDec'] > pointing['minDec']
+                idx &= pixels['pixDec'] < pointing['maxDec']
+
                 pixels_run = pixels[idx]
 
             """
@@ -267,11 +288,20 @@ class Process:
             """
 
             # datapixels.plot(pixels)
-            #print('after selection', len(pixels_run), datapixels.observations)
+            # print('after selection', len(pixels_run), datapixels.observations)
+
+            npixels = len(np.unique(pixels_run['healpixID']))
+
+            if self.npixels > -1:
+                if npixels >= self.npixels:
+                    # too many pixel found: should choose self.npixels among this
+                    random_pixels = self.randomPixels(pixels_run, self.npixels)
+                    idx = np.in1d(pixels_run['healpixID'], random_pixels)
+                    pixels_run = pixels_run[idx]
 
             procpix(pixels_run, datapixels.observations, ipoint)
 
-        #print('end of processing for', j, time.time()-time_ref)
+        # print('end of processing for', j, time.time()-time_ref)
 
     def procix(self, pixels, observations, j=0, output_q=None):
         """
@@ -289,7 +319,7 @@ class Process:
           queue of the multiprocessing (default: None)
         """
         time_ref = time.time()
-        #print('there we go instance procpix')
+        # print('there we go instance procpix')
         procpix = ProcessPixels(
             self.metricList, j, outDir=self.outDir, dbName=self.dbName, saveData=self.saveData)
 
@@ -309,7 +339,7 @@ class Process:
 
         print('end of processing for', j, time.time()-time_ref)
 
-    def randomPixels(self):
+    def randomPixels(self, pixelmap, npixels):
         """
         Method to choose a random set of pixels
 
@@ -320,7 +350,7 @@ class Process:
 
         """
 
-        hIDs = np.unique(self.pixelmap['healpixID'])
-        healpixIDs = random.sample(hIDs.tolist(), self.npixels)
+        hIDs = np.unique(pixelmap['healpixID'])
+        healpixIDs = random.sample(hIDs.tolist(), npixels)
 
         return healpixIDs

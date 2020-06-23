@@ -1368,13 +1368,13 @@ class ProcessPixels:
               len(pixels['healpixID'].unique()))
         """
         for ipixel, vv in enumerate(pixels['healpixID'].unique()):
-            # print('processing pixel',ipixel,vv)
-            # time_ref = time.time()
+            #print('processing pixel', ipixel, vv)
+            time_ref = time.time()
             ipix += 1
             idf = pixels['healpixID'] == vv
             selpix = pixels[idf]
             dataPixels = self.getData(data, selpix)
-            # print('got datapixels',time.time()-time_ref,selpix)
+            #print('got datapixels', time.time()-time_ref, selpix)
             # dataPixels = data.iloc[selpix['index'].tolist()].copy()
 
             for val in ['healpixID', 'pixRA', 'pixDec']:
