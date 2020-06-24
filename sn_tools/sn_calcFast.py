@@ -17,7 +17,10 @@ class LCfast:
 
     Parameters
     ---------------
-    reference_lc:
+    reference_lc: RegularGridData
+        lc reference files
+    dustcorr: RegularGridData
+       dust correction map
     x1: float
       SN stretch
     color: float
@@ -42,15 +45,23 @@ class LCfast:
        minimal Signal-to-Noise Ratio to apply on LC points (default: 5)
     lightOutput: bool, opt
         to get a lighter output (ie lower number of cols) (default: True)
+    bluecutoff: float,opt
+       blue cutoff for SN (default: 380.0 nm)
+    redcutoff: float, opt
+       red cutoff for SN (default: 800.0 nm)
+
     """
 
-    def __init__(self, reference_lc, x1, color,
+    def __init__(self, reference_lc, dustcorr, x1, color,
                  telescope, mjdCol='observationStartMJD',
                  RACol='fieldRA', DecCol='fieldDec',
                  filterCol='filter', exptimeCol='visitExposureTime',
                  m5Col='fiveSigmaDepth', seasonCol='season', nexpCol='numExposures',
                  snr_min=5.,
-                 lightOutput=True):
+                 lightOutput=True,
+                 ebvofMW=-1.0,
+                 bluecutoff=380.0,
+                 redcutoff=800.0):
 
         # grab all vals
         self.RACol = RACol
@@ -64,7 +75,8 @@ class LCfast:
         self.x1 = x1
         self.color = color
         self.lightOutput = lightOutput
-
+        self.ebvofMW = ebvofMW
+        self.dustcorr = dustcorr
         # Loading reference file
         self.reference_lc = reference_lc
 
@@ -75,8 +87,8 @@ class LCfast:
         # selection: min_rf_phase < phase < max_rf_phase
         # and        blue_cutoff < mean_rest_frame < red_cutoff
         # where mean_rest_frame = telescope.mean_wavelength/(1.+z)
-        self.blue_cutoff = 380.
-        self.red_cutoff = 800.
+        self.blue_cutoff = bluecutoff
+        self.red_cutoff = redcutoff
 
         # SN parameters for Fisher matrix estimation
         self.param_Fisher = ['x0', 'x1', 'daymax', 'color']
@@ -97,7 +109,7 @@ class LCfast:
         print(toto)
         """
 
-    def __call__(self, obs, gen_par=None, bands='grizy'):
+    def __call__(self, obs, ebvofMW, gen_par=None, bands='grizy'):
         """ Simulation of the light curve
 
 
@@ -105,10 +117,13 @@ class LCfast:
         ----------------
         obs: array
          array of observations
+        ebvofMW: float
+           E(B-V) for MW
         gen_par: array, opt
          simulation parameters (default: None)
         bands: str, opt
           filters to consider for simulation (default: grizy)
+
 
         Returns
         ------------
@@ -127,7 +142,7 @@ class LCfast:
         for band in bands:
             idx = obs[self.filterCol] == band
             if len(obs[idx]) > 0:
-                resband = self.processBand(obs[idx], band, gen_par)
+                resband = self.processBand(obs[idx], ebvofMW, band, gen_par)
                 tab_tot = tab_tot.append(resband, ignore_index=True)
 
         # return produced LC
@@ -188,7 +203,7 @@ class LCfast:
         # return produced LC
         return tab_tot
 
-    def processBand(self, sel_obs, band, gen_par, j=-1, output_q=None):
+    def processBand(self, sel_obs, ebvofMW, band, gen_par, j=-1, output_q=None):
         """ LC simulation of a set of obs corresponding to a band
         The idea is to use python broadcasting so as to estimate
         all the requested values (flux, flux error, Fisher components, ...)
@@ -323,6 +338,7 @@ class LCfast:
         flag = (p >= min_rf_phase) & (p <= max_rf_phase)
 
         # remove LC points outside the (blue-red) range
+
         mean_restframe_wavelength = np.array(
             [self.telescope.mean_wavelength[band]]*len(sel_obs))
         mean_restframe_wavelength = np.tile(
@@ -462,10 +478,93 @@ class LCfast:
             idb = (lc['z'] > 0.65) & (lc['z'] < 0.9)
             print(lc[idb][['z', 'ratio', 'm5', 'flux_e_sec', 'snr_m5']])
             """
+
+        lc = self.dust_corrections(lc, ebvofMW)
         if output_q is not None:
             output_q.put({j: lc})
         else:
             return lc
+
+    def dust_corrections(self, tab, ebvofMW):
+        """
+        Method to apply dust corrections on flux and related data
+
+        Parameters
+        ---------------
+        tab: pandas df
+          LC points to apply dust corrections on
+        ebvofMW: float
+          E(B-V) for MW
+
+        Returns
+        -----------
+        tab: pandas df
+          LC points with dust corrections applied
+        """
+
+        # no dust correction here
+        if np.abs(ebvofMW) < 1.e-5:
+            return tab
+
+        tab['ebvofMW'] = ebvofMW
+
+        """
+        for vv in ['F_x0x0', 'F_x0x1', 'F_x0daymax', 'F_x0color', 'F_x1x1',
+                   'F_x1daymax', 'F_x1color', 'F_daymaxdaymax', 'F_daymaxcolor',
+                   'F_colorcolor']:
+            tab[vv] *= tab['fluxerr']**2
+        """
+        # test = pd.DataFrame(tab)
+
+        tab = tab.groupby(['band']).apply(
+            lambda x: self.corrFlux(x)).reset_index()
+
+        # mag correction - after flux correction
+        tab['mag'] = -2.5 * np.log10(tab['flux'] / 3631.0)
+        # snr_m5 correction
+        tab['snr_m5'] = 1./srand(tab['gamma'], tab['mag'], tab['m5'])
+        tab['magerr'] = (2.5/np.log(10.))/tab['snr_m5']
+        tab['fluxerr'] = tab['flux']/tab['snr_m5']
+
+        # tab['old_flux'] = test['flux']
+        # tab['old_fluxerr'] = test['fluxerr']
+
+        # print(toat)
+
+        """
+        for vv in ['F_x0x0', 'F_x0x1', 'F_x0daymax', 'F_x0color', 'F_x1x1',
+                   'F_x1daymax', 'F_x1color', 'F_daymaxdaymax', 'F_daymaxcolor',
+                   'F_colorcolor']:
+            tab[vv] /= tab['fluxerr']**2
+        """
+        return tab
+
+    def corrFlux(self, grp):
+        """
+        Method to correct flux and Fisher matrix elements for dust
+
+        Parameters
+        ---------------
+        grp: pandas group
+           data to process
+
+        Returns
+        ----------
+        pandas grp with corrected values
+
+        """
+
+        corrdust = self.dustcorr[grp.name.split(':')[-1]](
+            (grp['phase'], grp['z'], grp['ebvofMW']))
+
+        for vv in ['flux', 'flux_e_sec']:
+            grp[vv] *= corrdust
+        for vv in ['F_x0x0', 'F_x0x1', 'F_x0daymax', 'F_x0color', 'F_x1x1',
+                   'F_x1daymax', 'F_x1color', 'F_daymaxdaymax', 'F_daymaxcolor',
+                   'F_colorcolor']:
+            grp[vv] *= corrdust*corrdust
+
+        return grp
 
 
 def srand(gamma, mag, m5):
