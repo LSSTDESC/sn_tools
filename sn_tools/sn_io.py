@@ -628,7 +628,6 @@ def check_get_file(web_server, fDir, fName):
         return
 
     path = '{}/{}/{}'.format(web_server, fDir, fName)
-    print('wget poth:', path)
     cmd = 'wget --no-clobber --no-verbose {} --directory-prefix {}'.format(
         path, fDir)
     os.system(cmd)
