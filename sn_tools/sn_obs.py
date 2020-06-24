@@ -836,7 +836,7 @@ def pixelate(data, nside, RACol='RA', DecCol='Dec'):
     res = rf.append_fields(res, 'healpixID', healpixs)
     res = rf.append_fields(res, 'pixRA', coord[0])
     res = rf.append_fields(res, 'pixDec', coord[1])
-    res = rf.append_fields(res, 'ebv', ebv)
+    res = rf.append_fields(res, 'ebv', [ebv]*len(healpixs))
 
     return res
 
@@ -1368,7 +1368,7 @@ class ProcessPixels:
               len(pixels['healpixID'].unique()))
         """
         for ipixel, vv in enumerate(pixels['healpixID'].unique()):
-            #print('processing pixel', ipixel, vv)
+            print('processing pixel', ipixel, vv)
             time_ref = time.time()
             ipix += 1
             idf = pixels['healpixID'] == vv
