@@ -479,7 +479,9 @@ class LCfast:
             print(lc[idb][['z', 'ratio', 'm5', 'flux_e_sec', 'snr_m5']])
             """
 
-        lc = self.dust_corrections(lc, ebvofMW)
+        if len(lc) > 0.:
+            lc = self.dust_corrections(lc, ebvofMW)
+
         if output_q is not None:
             output_q.put({j: lc})
         else:
