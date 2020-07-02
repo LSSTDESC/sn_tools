@@ -2339,9 +2339,13 @@ class LoadDust:
 
             index = np.lexsort(
                 (rec['ebvofMW'], np.round(rec['z'], 4), rec['phase']))
-            ratio = np.reshape(rec[index]['ratio'], (nphase, nz, nebvofMW))
-            self.dustcorr[b] = RegularGridInterpolator(
-                (phase, z, ebvofMW), ratio, method='linear', bounds_error=False, fill_value=0.)
+
+            self.dustcorr[b] = {}
+            for vv in ['flux', 'dx0', 'dx1', 'dcolor', 'ddaymax']:
+                ratio = np.reshape(
+                    rec[index]['ratio_{}'.format(vv)], (nphase, nz, nebvofMW))
+                self.dustcorr[b]['ratio_{}'.format(vv)] = RegularGridInterpolator(
+                    (phase, z, ebvofMW), ratio, method='linear', bounds_error=False, fill_value=0.)
 
 
 class Gamma:

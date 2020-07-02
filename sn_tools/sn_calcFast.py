@@ -19,7 +19,7 @@ class LCfast:
     ---------------
     reference_lc: RegularGridData
         lc reference files
-    dustcorr: RegularGridData
+    dustcorr: dict of dict of RegularGridData
        dust correction map
     x1: float
       SN stretch
@@ -510,12 +510,11 @@ class LCfast:
 
         tab['ebvofMW'] = ebvofMW
 
-        """
         for vv in ['F_x0x0', 'F_x0x1', 'F_x0daymax', 'F_x0color', 'F_x1x1',
                    'F_x1daymax', 'F_x1color', 'F_daymaxdaymax', 'F_daymaxcolor',
                    'F_colorcolor']:
             tab[vv] *= tab['fluxerr']**2
-        """
+
         # test = pd.DataFrame(tab)
 
         tab = tab.groupby(['band']).apply(
@@ -533,12 +532,11 @@ class LCfast:
 
         # print(toat)
 
-        """
         for vv in ['F_x0x0', 'F_x0x1', 'F_x0daymax', 'F_x0color', 'F_x1x1',
                    'F_x1daymax', 'F_x1color', 'F_daymaxdaymax', 'F_daymaxcolor',
                    'F_colorcolor']:
             tab[vv] /= tab['fluxerr']**2
-        """
+
         return tab
 
     def corrFlux(self, grp):
@@ -553,18 +551,24 @@ class LCfast:
         Returns
         ----------
         pandas grp with corrected values
-
         """
 
-        corrdust = self.dustcorr[grp.name.split(':')[-1]](
-            (grp['phase'], grp['z'], grp['ebvofMW']))
+        band = grp.name.split(':')[-1]
 
+        corrdust = self.dustcorr[band]['ratio_flux'](
+            (grp['phase'], grp['z'], grp['ebvofMW']))
         for vv in ['flux', 'flux_e_sec']:
             grp[vv] *= corrdust
-        for vv in ['F_x0x0', 'F_x0x1', 'F_x0daymax', 'F_x0color', 'F_x1x1',
-                   'F_x1daymax', 'F_x1color', 'F_daymaxdaymax', 'F_daymaxcolor',
-                   'F_colorcolor']:
-            grp[vv] *= corrdust*corrdust
+
+        for va in ['x0', 'x1', 'color', 'daymax']:
+            for vb in ['x0', 'x1', 'color', 'daymax']:
+                corrdusta = self.dustcorr[band]['ratio_d{}'.format(va)](
+                    (grp['phase'], grp['z'], grp['ebvofMW']))
+                corrdustb = self.dustcorr[band]['ratio_d{}'.format(vb)](
+                    (grp['phase'], grp['z'], grp['ebvofMW']))
+                varcorr = 'F_{}{}'.format(va, vb)
+                if varcorr in grp.columns:
+                    grp[varcorr] *= corrdusta*corrdustb
 
         return grp
 
