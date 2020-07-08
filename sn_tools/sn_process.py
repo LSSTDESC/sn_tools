@@ -331,7 +331,7 @@ class Process:
             maxDec = np.max(valsdf[ido]['pixDec'])
             minDecobs = np.min(observations[self.DecCol])
             maxDecobs = np.max(observations[self.DecCol])
-            print('processing pixel', len(
+            print('processing pixels', len(
                 valsdf[ido]), minDec, maxDec, minDecobs, maxDecobs)
             procpix(valsdf[ido], np.copy(observations), self.npixels)
         else:
