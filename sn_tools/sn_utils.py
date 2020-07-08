@@ -599,7 +599,7 @@ class SimuParameters:
         pars['min_rf_phase'] = self.min_rf_phase
         pars['max_rf_phase'] = self.max_rf_phase
 
-        print('total number of SN to simulate:', len(pars))
+        #print('total number of SN to simulate:', len(pars))
         return pars.to_records(index=False)
 
     def zdist(self, duration):
