@@ -1368,7 +1368,7 @@ class ProcessPixels:
               len(pixels['healpixID'].unique()))
         """
         for ipixel, vv in enumerate(pixels['healpixID'].unique()):
-            print('processing pixel', ipixel, vv)
+            #print('processing pixel', ipixel, vv)
             time_ref = time.time()
             ipix += 1
             idf = pixels['healpixID'] == vv
@@ -1380,6 +1380,9 @@ class ProcessPixels:
             for val in ['healpixID', 'pixRA', 'pixDec']:
                 dataPixels[val] = selpix[val].unique().tolist()*len(dataPixels)
             # time_ref = time.time()
+            
+            dataPixels['iproc']=[self.num]*len(dataPixels)
+
             self.runMetrics(dataPixels)
             # print('pixel processed',ipixel,time.time()-time_ref)
             if self.saveData and ipix >= 20:
