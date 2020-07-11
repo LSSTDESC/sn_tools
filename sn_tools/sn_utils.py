@@ -282,7 +282,8 @@ class GenerateSample:
             # get number of supernovae
             N_SN = int(np.cumsum(nsn)[-1])
             if np.cumsum(nsn)[-1] < 0.5:
-                return r
+                print('none',zmin,zmax,duration)
+                return None
             weight_z = np.cumsum(nsn)/np.sum(np.cumsum(nsn))
 
             if N_SN < 1:
@@ -558,6 +559,8 @@ class SimuParameters:
         duration = daymax-daymin
         pars = self.zdist(duration)
 
+        if pars is None:
+            return None
         # add daymax, which is z-dependent (boundaries effects)
 
         pars = self.daymaxdist(pars, daymin, daymax)
@@ -643,7 +646,7 @@ class SimuParameters:
             N_SN = int(np.cumsum(nsn)[-1])
             print('nsn from rate', N_SN)
             if np.cumsum(nsn)[-1] < 0.5:
-                return r
+                return None
             N_SN *= NSN_factor
             weight_z = np.cumsum(nsn)/np.sum(np.cumsum(nsn))
 
