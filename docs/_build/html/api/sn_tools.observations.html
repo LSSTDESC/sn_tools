@@ -1,0 +1,181 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>sn_tools.observations module &#8212; sn_tools 0.1 documentation</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '0.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true,
+        SOURCELINK_SUFFIX: '.txt'
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head>
+  <body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="module-sn_tools.observations">
+<span id="sn-tools-observations-module"></span><h1>sn_tools.observations module<a class="headerlink" href="#module-sn_tools.observations" title="Permalink to this headline">¶</a></h1>
+<dl class="class">
+<dt id="sn_tools.observations.Observations">
+<em class="property">class </em><code class="descclassname">sn_tools.observations.</code><code class="descname">Observations</code><span class="sig-paren">(</span><em>data</em>, <em>nseasons=10</em>, <em>season_length=95</em>, <em>names={'Nexp': 'numExposures'</em>, <em>'airmass': 'airmass'</em>, <em>'band': 'band'</em>, <em>'exptime': 'exptime'</em>, <em>'fiveSigmaDepth': 'fiveSigmaDepth'</em>, <em>'mjd': 'mjd'</em>, <em>'moonPhase': 'moonPhase'</em>, <em>'night': 'night'</em>, <em>'pixDec': 'pixDec'</em>, <em>'pixRa': 'pixRa'</em>, <em>'rawSeeing': 'seeingFwhm500'</em>, <em>'season': 'season'</em>, <em>'seeing': 'seeingFwhmEff'</em>, <em>'sky': 'sky'}</em>, <em>coadd_night=True</em><span class="sig-paren">)</span><a class="headerlink" href="#sn_tools.observations.Observations" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal"><span class="pre">object</span></code></p>
+<p>class Observations
+Input
+———
+File (txt) with a list of observations
+(dumped from OpSim output for instance)
+Returns
+———
+seasons: the list of seasons with observations</p>
+<p>by default : poor seasons (&lt; 10 observations all bands) are removed</p>
+<p class="rubric">Methods</p>
+<table border="1" class="longtable docutils">
+<colgroup>
+<col width="10%" />
+<col width="90%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td><a class="reference internal" href="#sn_tools.observations.Observations.Coadd" title="sn_tools.observations.Observations.Coadd"><code class="xref py py-obj docutils literal"><span class="pre">Coadd</span></code></a>()</td>
+<td></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="#sn_tools.observations.Observations.Coadd_Season_night" title="sn_tools.observations.Observations.Coadd_Season_night"><code class="xref py py-obj docutils literal"><span class="pre">Coadd_Season_night</span></code></a>(filt)</td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="#sn_tools.observations.Observations.Get_Seasons" title="sn_tools.observations.Observations.Get_Seasons"><code class="xref py py-obj docutils literal"><span class="pre">Get_Seasons</span></code></a>(data,&nbsp;season_length)</td>
+<td>Gather list of observations</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="#sn_tools.observations.Observations.Load" title="sn_tools.observations.Observations.Load"><code class="xref py py-obj docutils literal"><span class="pre">Load</span></code></a>(filename)</td>
+<td>Load txt file of observations</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="#sn_tools.observations.Observations.Remove_Poor_Seasons" title="sn_tools.observations.Observations.Remove_Poor_Seasons"><code class="xref py py-obj docutils literal"><span class="pre">Remove_Poor_Seasons</span></code></a>()</td>
+<td>Remove seasons with too few obs (&lt;10) Returns ——— List of seasons with at least 10 observations.</td>
+</tr>
+</tbody>
+</table>
+<dl class="method">
+<dt id="sn_tools.observations.Observations.Coadd">
+<code class="descname">Coadd</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#sn_tools.observations.Observations.Coadd" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sn_tools.observations.Observations.Coadd_Season_night">
+<code class="descname">Coadd_Season_night</code><span class="sig-paren">(</span><em>filt</em><span class="sig-paren">)</span><a class="headerlink" href="#sn_tools.observations.Observations.Coadd_Season_night" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sn_tools.observations.Observations.Get_Seasons">
+<code class="descname">Get_Seasons</code><span class="sig-paren">(</span><em>data</em>, <em>season_length</em><span class="sig-paren">)</span><a class="headerlink" href="#sn_tools.observations.Observations.Get_Seasons" title="Permalink to this definition">¶</a></dt>
+<dd><p>Gather list of observations
+to make seasons
+Input
+———
+data : recordarray of observations</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">seasons: the list of seasons with observations</p>
+<p class="last">each element of the list is a recordarray</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="sn_tools.observations.Observations.Load">
+<code class="descname">Load</code><span class="sig-paren">(</span><em>filename</em><span class="sig-paren">)</span><a class="headerlink" href="#sn_tools.observations.Observations.Load" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="docutils">
+<dt>Load txt file of observations</dt>
+<dd>Input</dd>
+</dl>
+<p>File (txt) with a list of observations
+(dumped from OpSim output for instance)
+Returns
+———
+recordarray of observations</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sn_tools.observations.Observations.Remove_Poor_Seasons">
+<code class="descname">Remove_Poor_Seasons</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#sn_tools.observations.Observations.Remove_Poor_Seasons" title="Permalink to this definition">¶</a></dt>
+<dd><p>Remove seasons with too few obs (&lt;10)
+Returns
+———
+List of seasons with at least
+10 observations.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper"><div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <div><input type="text" name="q" /></div>
+      <div><input type="submit" value="Go" /></div>
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Philippe Gris.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.6.6</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
+      
+      |
+      <a href="../_sources/api/sn_tools.observations.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

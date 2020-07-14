@@ -1,0 +1,314 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>sn_tools.sn_telescope module &#8212; sn_tools 0.1 documentation</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '0.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true,
+        SOURCELINK_SUFFIX: '.txt'
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head>
+  <body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="module-sn_tools.sn_telescope">
+<span id="sn-tools-sn-telescope-module"></span><h1>sn_tools.sn_telescope module<a class="headerlink" href="#module-sn_tools.sn_telescope" title="Permalink to this headline">¶</a></h1>
+<dl class="class">
+<dt id="sn_tools.sn_telescope.Telescope">
+<em class="property">class </em><code class="descclassname">sn_tools.sn_telescope.</code><code class="descname">Telescope</code><span class="sig-paren">(</span><em>name='unknown'</em>, <em>airmass=1</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#sn_tools.sn_telescope.Telescope" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="sn_tools.sn_throughputs.html#sn_tools.sn_throughputs.Throughputs" title="sn_tools.sn_throughputs.Throughputs"><code class="xref py py-class docutils literal"><span class="pre">sn_tools.sn_throughputs.Throughputs</span></code></a></p>
+<p>Telescope class
+inherits from Throughputs
+estimate quantities defined in LSE-40</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">Accessible throughputs (per band, from Throughput class):</p>
+<p>lsst_system: system throughput (lens+mirrors+filters)</p>
+<p>lsst_atmos: lsst_system+atmosphere</p>
+<p>lsst_atmos_aerosol: lsst_system+atmosphere+aerosol</p>
+<p>The following parameters are estimated “on demand”:</p>
+<p>mag_sky: sky magnitude</p>
+<p>m5: 5-sigma depth</p>
+<p>Sigmab: see eq. (36) of LSE-40</p>
+<p>zp: see eq. (43) of LSE-40</p>
+<p>counts_zp:</p>
+<p>Skyb: see eq. (40) of LSE-40</p>
+<p class="last">flux_sky:</p>
+</td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Attributes</p>
+<table border="1" class="longtable docutils">
+<colgroup>
+<col width="10%" />
+<col width="90%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">atmosphere</span></code></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">system</span></code></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">telescope</span></code></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Methods</p>
+<table border="1" class="longtable docutils">
+<colgroup>
+<col width="10%" />
+<col width="90%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td><a class="reference internal" href="#sn_tools.sn_telescope.Telescope.Calc_Integ" title="sn_tools.sn_telescope.Telescope.Calc_Integ"><code class="xref py py-obj docutils literal"><span class="pre">Calc_Integ</span></code></a>(bandpass)</td>
+<td>integration over bandpass</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="#sn_tools.sn_telescope.Telescope.Calc_Integ_Sed" title="sn_tools.sn_telescope.Telescope.Calc_Integ_Sed"><code class="xref py py-obj docutils literal"><span class="pre">Calc_Integ_Sed</span></code></a>(sed,&nbsp;bandpass[,&nbsp;wavelen,&nbsp;fnu])</td>
+<td>SED integration</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="#sn_tools.sn_telescope.Telescope.FWHMeff" title="sn_tools.sn_telescope.Telescope.FWHMeff"><code class="xref py py-obj docutils literal"><span class="pre">FWHMeff</span></code></a>(filtre)</td>
+<td></td>
+</tr>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">Load_Atmosphere</span></code>([airmass])</td>
+<td>Load atmosphere files</td>
+</tr>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">Load_DarkSky</span></code>()</td>
+<td>Load DarkSky</td>
+</tr>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">Load_System</span></code>()</td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">Mean_Wave</span></code>()</td>
+<td>Estimate mean wave</td>
+</tr>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">Plot_DarkSky</span></code>()</td>
+<td>Plot darksky</td>
+</tr>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">Plot_Throughputs</span></code>()</td>
+<td>Plot the throughputs</td>
+</tr>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal"><span class="pre">Plot_Throughputs_Spectrum</span></code>(wavelength,&nbsp;fluxes,&nbsp;z)</td>
+<td>Plot throughput spectrum</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="#sn_tools.sn_telescope.Telescope.Sigmab" title="sn_tools.sn_telescope.Telescope.Sigmab"><code class="xref py py-obj docutils literal"><span class="pre">Sigmab</span></code></a>(filtre)</td>
+<td></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="#sn_tools.sn_telescope.Telescope.Tb" title="sn_tools.sn_telescope.Telescope.Tb"><code class="xref py py-obj docutils literal"><span class="pre">Tb</span></code></a>(filtre)</td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal"><span class="pre">aerosol</span></code>()</td>
+<td></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="#sn_tools.sn_telescope.Telescope.flux_to_mag" title="sn_tools.sn_telescope.Telescope.flux_to_mag"><code class="xref py py-obj docutils literal"><span class="pre">flux_to_mag</span></code></a>(flux,&nbsp;band[,&nbsp;zp])</td>
+<td>conversion flux-&gt;mag</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="#sn_tools.sn_telescope.Telescope.gamma" title="sn_tools.sn_telescope.Telescope.gamma"><code class="xref py py-obj docutils literal"><span class="pre">gamma</span></code></a>(mag,&nbsp;band,&nbsp;exptime)</td>
+<td></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="#sn_tools.sn_telescope.Telescope.get" title="sn_tools.sn_telescope.Telescope.get"><code class="xref py py-obj docutils literal"><span class="pre">get</span></code></a>(theclass,&nbsp;what,&nbsp;xlist)</td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="#sn_tools.sn_telescope.Telescope.get_inputs" title="sn_tools.sn_telescope.Telescope.get_inputs"><code class="xref py py-obj docutils literal"><span class="pre">get_inputs</span></code></a>(theclass,&nbsp;what,&nbsp;xlist)</td>
+<td></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="#sn_tools.sn_telescope.Telescope.get_zp" title="sn_tools.sn_telescope.Telescope.get_zp"><code class="xref py py-obj docutils literal"><span class="pre">get_zp</span></code></a>(theclass,&nbsp;what,&nbsp;xlist)</td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="#sn_tools.sn_telescope.Telescope.m5" title="sn_tools.sn_telescope.Telescope.m5"><code class="xref py py-obj docutils literal"><span class="pre">m5</span></code></a>(filtre)</td>
+<td></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="#sn_tools.sn_telescope.Telescope.mag_sky" title="sn_tools.sn_telescope.Telescope.mag_sky"><code class="xref py py-obj docutils literal"><span class="pre">mag_sky</span></code></a>(filtre)</td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="#sn_tools.sn_telescope.Telescope.mag_to_flux" title="sn_tools.sn_telescope.Telescope.mag_to_flux"><code class="xref py py-obj docutils literal"><span class="pre">mag_to_flux</span></code></a>(mag,&nbsp;band[,&nbsp;zp])</td>
+<td>conversion mag-&gt;flux</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="#sn_tools.sn_telescope.Telescope.mag_to_flux_e_sec" title="sn_tools.sn_telescope.Telescope.mag_to_flux_e_sec"><code class="xref py py-obj docutils literal"><span class="pre">mag_to_flux_e_sec</span></code></a>(mag,&nbsp;band,&nbsp;exptime)</td>
+<td>mag to flux (in photoelec/sec)</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="#sn_tools.sn_telescope.Telescope.return_value" title="sn_tools.sn_telescope.Telescope.return_value"><code class="xref py py-obj docutils literal"><span class="pre">return_value</span></code></a>(what,&nbsp;band)</td>
+<td></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="#sn_tools.sn_telescope.Telescope.zero_points" title="sn_tools.sn_telescope.Telescope.zero_points"><code class="xref py py-obj docutils literal"><span class="pre">zero_points</span></code></a>(band)</td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="#sn_tools.sn_telescope.Telescope.zp" title="sn_tools.sn_telescope.Telescope.zp"><code class="xref py py-obj docutils literal"><span class="pre">zp</span></code></a>(filtre)</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<dl class="method">
+<dt id="sn_tools.sn_telescope.Telescope.Calc_Integ">
+<code class="descname">Calc_Integ</code><span class="sig-paren">(</span><em>bandpass</em><span class="sig-paren">)</span><a class="headerlink" href="#sn_tools.sn_telescope.Telescope.Calc_Integ" title="Permalink to this definition">¶</a></dt>
+<dd><p>integration over bandpass</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sn_tools.sn_telescope.Telescope.Calc_Integ_Sed">
+<code class="descname">Calc_Integ_Sed</code><span class="sig-paren">(</span><em>sed</em>, <em>bandpass</em>, <em>wavelen=None</em>, <em>fnu=None</em><span class="sig-paren">)</span><a class="headerlink" href="#sn_tools.sn_telescope.Telescope.Calc_Integ_Sed" title="Permalink to this definition">¶</a></dt>
+<dd><p>SED integration</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sn_tools.sn_telescope.Telescope.FWHMeff">
+<code class="descname">FWHMeff</code><span class="sig-paren">(</span><em>filtre</em><span class="sig-paren">)</span><a class="headerlink" href="#sn_tools.sn_telescope.Telescope.FWHMeff" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sn_tools.sn_telescope.Telescope.Sigmab">
+<code class="descname">Sigmab</code><span class="sig-paren">(</span><em>filtre</em><span class="sig-paren">)</span><a class="headerlink" href="#sn_tools.sn_telescope.Telescope.Sigmab" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sn_tools.sn_telescope.Telescope.Tb">
+<code class="descname">Tb</code><span class="sig-paren">(</span><em>filtre</em><span class="sig-paren">)</span><a class="headerlink" href="#sn_tools.sn_telescope.Telescope.Tb" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sn_tools.sn_telescope.Telescope.flux_to_mag">
+<code class="descname">flux_to_mag</code><span class="sig-paren">(</span><em>flux</em>, <em>band</em>, <em>zp=None</em><span class="sig-paren">)</span><a class="headerlink" href="#sn_tools.sn_telescope.Telescope.flux_to_mag" title="Permalink to this definition">¶</a></dt>
+<dd><p>conversion flux-&gt;mag</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sn_tools.sn_telescope.Telescope.gamma">
+<code class="descname">gamma</code><span class="sig-paren">(</span><em>mag</em>, <em>band</em>, <em>exptime</em><span class="sig-paren">)</span><a class="headerlink" href="#sn_tools.sn_telescope.Telescope.gamma" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sn_tools.sn_telescope.Telescope.get">
+<code class="descname">get</code><span class="sig-paren">(</span><em>theclass</em>, <em>what</em>, <em>xlist</em><span class="sig-paren">)</span><a class="headerlink" href="#sn_tools.sn_telescope.Telescope.get" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sn_tools.sn_telescope.Telescope.get_inputs">
+<code class="descname">get_inputs</code><span class="sig-paren">(</span><em>theclass</em>, <em>what</em>, <em>xlist</em><span class="sig-paren">)</span><a class="headerlink" href="#sn_tools.sn_telescope.Telescope.get_inputs" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sn_tools.sn_telescope.Telescope.get_zp">
+<code class="descname">get_zp</code><span class="sig-paren">(</span><em>theclass</em>, <em>what</em>, <em>xlist</em><span class="sig-paren">)</span><a class="headerlink" href="#sn_tools.sn_telescope.Telescope.get_zp" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sn_tools.sn_telescope.Telescope.m5">
+<code class="descname">m5</code><span class="sig-paren">(</span><em>filtre</em><span class="sig-paren">)</span><a class="headerlink" href="#sn_tools.sn_telescope.Telescope.m5" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sn_tools.sn_telescope.Telescope.mag_sky">
+<code class="descname">mag_sky</code><span class="sig-paren">(</span><em>filtre</em><span class="sig-paren">)</span><a class="headerlink" href="#sn_tools.sn_telescope.Telescope.mag_sky" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sn_tools.sn_telescope.Telescope.mag_to_flux">
+<code class="descname">mag_to_flux</code><span class="sig-paren">(</span><em>mag</em>, <em>band</em>, <em>zp=None</em><span class="sig-paren">)</span><a class="headerlink" href="#sn_tools.sn_telescope.Telescope.mag_to_flux" title="Permalink to this definition">¶</a></dt>
+<dd><p>conversion mag-&gt;flux</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sn_tools.sn_telescope.Telescope.mag_to_flux_e_sec">
+<code class="descname">mag_to_flux_e_sec</code><span class="sig-paren">(</span><em>mag</em>, <em>band</em>, <em>exptime</em><span class="sig-paren">)</span><a class="headerlink" href="#sn_tools.sn_telescope.Telescope.mag_to_flux_e_sec" title="Permalink to this definition">¶</a></dt>
+<dd><p>mag to flux (in photoelec/sec)</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="sn_tools.sn_telescope.Telescope.return_value">
+<code class="descname">return_value</code><span class="sig-paren">(</span><em>what</em>, <em>band</em><span class="sig-paren">)</span><a class="headerlink" href="#sn_tools.sn_telescope.Telescope.return_value" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sn_tools.sn_telescope.Telescope.zero_points">
+<code class="descname">zero_points</code><span class="sig-paren">(</span><em>band</em><span class="sig-paren">)</span><a class="headerlink" href="#sn_tools.sn_telescope.Telescope.zero_points" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="sn_tools.sn_telescope.Telescope.zp">
+<code class="descname">zp</code><span class="sig-paren">(</span><em>filtre</em><span class="sig-paren">)</span><a class="headerlink" href="#sn_tools.sn_telescope.Telescope.zp" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="sn_tools.sn_telescope.get_val_decor">
+<code class="descclassname">sn_tools.sn_telescope.</code><code class="descname">get_val_decor</code><span class="sig-paren">(</span><em>func</em><span class="sig-paren">)</span><a class="headerlink" href="#sn_tools.sn_telescope.get_val_decor" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper"><div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <div><input type="text" name="q" /></div>
+      <div><input type="submit" value="Go" /></div>
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Philippe Gris.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.6.6</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
+      
+      |
+      <a href="../_sources/api/sn_tools.sn_telescope.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
