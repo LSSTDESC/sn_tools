@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='sn_tools',
-    version='v1.0.0',
+    version=__version__,
     description='Set of tools used to run SN pipeline',
     url='http://github.com/lsstdesc/sn_tools',
     author='Philippe Gris',
