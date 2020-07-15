@@ -32,6 +32,8 @@ All rights reserved.
  * **README.md**: README file
  * **doc_package**: md files docs.
  * [**sn_tools**](doc_package/sn_tools.md): set of python scripts
+ * **tests**: unit tests
+ * **version.py**: package version
 
 
 ## Complete tree ##
@@ -39,51 +41,57 @@ All rights reserved.
 
  ```bash
 
-├── doc_package 
-│   ├── sn_tools.md  
-├── docs 
-│   ├── api  
-│   │   ├── sn_tools.rst  
-│   │   ├── sn_tools.sn_analyze_simu.rst  
-│   │   ├── sn_tools.sn_cadence_tools.rst  
-│   │   ├── sn_tools.sn_calcFast.rst 
-│   │   ├── sn_tools.sn_clusters.rst 
-│   │   ├── sn_tools.sn_io.rst 
-│   │   ├── sn_tools.sn_lcana.rst  
-│   │   ├── sn_tools.sn_obs.rst 
-│   │   ├── sn_tools.sn_rate.rst 
-│   │   ├── sn_tools.sn_telescope.rst  
-│   │   ├── sn_tools.sn_throughputs.rst  
-│   │   ├── sn_tools.sn_utils.rst 
-│   │   └── sn_tools.sn_visu.rst 
-│   ├── conf.py 
-│   ├── index.rst
-│   ├── make.bat 
-│   └── Makefile 
-├── __init__.py 
-├── LICENCE 
-├── notebooks 
-│   ├── Check_dist.ipynb 
-│   ├── Display_LC.ipynb 
-│   └── SN_Analyze_Simu.ipynb 
-├── README.md 
-├── setup.py 
-├── sn_tools 
-│   ├── __init__.py 
-│   ├── sn_analyze_simu.py 
-│   ├── sn_cadence_tools.py 
-│   ├── sn_calcFast.py 
-│   ├── sn_clusters.py 
-│   ├── sn_io.py 
-│   ├── sn_lcana.py 
-│   ├── sn_obs.py 
-│   ├── sn_rate.py 
-│   ├── sn_telescope.py 
-│   ├── sn_throughputs.py 
-│   ├── sn_utils.py 
-│   └── sn_visu.py 
-└── tests 
-    └── testSNtools.py
+|-- LICENCE
+|-- README.md
+|-- __init__.py
+|-- doc_package
+|   |-- sn_tools.md
+|-- docs
+|   |-- Makefile
+|   |-- api
+|   |   |-- sn_tools.rst
+|   |   |-- sn_tools.sn_analyze_simu.rst
+|   |   |-- sn_tools.sn_cadence_tools.rst
+|   |   |-- sn_tools.sn_calcFast.rst
+|   |   |-- sn_tools.sn_clusters.rst
+|   |   |-- sn_tools.sn_io.rst
+|   |   |-- sn_tools.sn_lcana.rst
+|   |   |-- sn_tools.sn_obs.rst
+|   |   |-- sn_tools.sn_process.rst
+|   |   |-- sn_tools.sn_rate.rst
+|   |   |-- sn_tools.sn_telescope.rst
+|   |   |-- sn_tools.sn_throughputs.rst
+|   |   |-- sn_tools.sn_utils.rst
+|   |   |-- sn_tools.sn_visu.rst
+|   |-- conf.py
+|   |-- index.rst
+|   |-- make.bat
+|-- notebooks
+|   |-- Check_dist.ipynb
+|   |-- Display_LC.ipynb
+|   |-- SN_Analyze_Simu.ipynb
+|-- setup.py
+|-- sn_tools
+|   |-- __init__.py
+|   |-- sn_analyze_simu.py
+|   |-- sn_cadence_tools.py
+|   |-- sn_calcFast.py
+|   |-- sn_clusters.py
+|   |-- sn_io.py
+|   |-- sn_lcana.py
+|   |-- sn_obs.py
+|   |-- sn_process.py
+|   |-- sn_rate.py
+|   |-- sn_telescope.py
+|   |-- sn_throughputs.py
+|   |-- sn_utils.py
+|   |-- sn_visu.py
+|   `-- version.py
+|-- tests
+|   |-- testSNtools.py
+|-- version.py
+
+
  ```    
 
 
