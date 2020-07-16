@@ -282,14 +282,14 @@ class GenerateSample:
             # get number of supernovae
             N_SN = int(np.cumsum(nsn)[-1])
             if np.cumsum(nsn)[-1] < 0.5:
-                print('none',zmin,zmax,duration)
+                #print('none',zmin,zmax,duration)
                 return None
             weight_z = np.cumsum(nsn)/np.sum(np.cumsum(nsn))
 
             if N_SN < 1:
                 N_SN = 1
                 # weight_z = 1
-            print('nsn', N_SN)
+            #print('nsn', N_SN)
             for j in range(N_SN):
                 z = self.getVal(self.params['z']['type'], zmin, zz, weight_z)
                 zrange = 'low_z'
