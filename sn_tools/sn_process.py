@@ -250,6 +250,9 @@ class Process:
             pixels = datapixels(observations, pointing['RA'], pointing['Dec'],
                                 pointing['radius_RA'], pointing['radius_Dec'], self.remove_dithering, display=False)
 
+            if pixels is None:
+                return
+
             # select pixels that are inside the original area
             pixels_run = pixels
             """
