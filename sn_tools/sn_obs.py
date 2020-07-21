@@ -1380,8 +1380,8 @@ class ProcessPixels:
             for val in ['healpixID', 'pixRA', 'pixDec']:
                 dataPixels[val] = selpix[val].unique().tolist()*len(dataPixels)
             # time_ref = time.time()
-            
-            dataPixels['iproc']=[self.num]*len(dataPixels)
+
+            dataPixels['iproc'] = [self.num]*len(dataPixels)
 
             self.runMetrics(dataPixels)
             # print('pixel processed',ipixel,time.time()-time_ref)
@@ -2640,8 +2640,11 @@ def getFields(observations, fieldType='WFD', fieldIds=None,
                 #print(res, np.argmax(res['Nobs']), propId_WFD)
                 #a = observations['note']
                 df = pd.DataFrame(np.copy(observations))
-                idx = df['note'].str.contains('DD')
-                return df[~idx].to_records(index=False)
+                if 'note' in df.columns:
+                    idx = df['note'].str.contains('DD')
+                    return df[~idx].to_records(index=False)
+                else:
+                    return df.to_records(index=False)
                 # return observations[observations[pName] == propId_WFD]
             if fieldType == 'DD':
                 # could be tricky here depending on the database structure
