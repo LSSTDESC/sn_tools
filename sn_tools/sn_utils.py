@@ -138,19 +138,13 @@ class GenerateSample:
     filterCol : str, opt
       name of the column corresponding to filter
       Default : 'filter'
-    min_rf_phase : float, opt
-       min rest-frame phase for supernovae
-       Default : -15.
-    max_rf_phase : float, opt
-       max rest-frame phase for supernovae
-       Default : 30.
     area : float, opt
        area of the survey (in deg\^2)
        Default : 9.6 deg\^2
 
     """
 
-    def __init__(self, sn_parameters, cosmo_parameters, mjdCol='mjd', seasonCol='season', filterCol='filter', min_rf_phase=-15., max_rf_phase=30., area=9.6, dirFiles='reference_files', web_path=''):
+    def __init__(self, sn_parameters, cosmo_parameters, mjdCol='mjd', seasonCol='season', filterCol='filter', area=9.6, dirFiles='reference_files', web_path=''):
         self.dirFiles = dirFiles
         self.params = sn_parameters
         self.sn_rate = SN_Rate(rate=self.params['z']['rate'],
@@ -162,8 +156,10 @@ class GenerateSample:
         self.seasonCol = seasonCol
         self.filterCol = filterCol
         self.area = area
-        self.min_rf_phase = min_rf_phase
-        self.max_rf_phase = max_rf_phase
+        self.min_rf_phase = self.params['min_rf_phase']
+        self.max_rf_phase =self.params['max_rf_phase']
+        self.min_rf_phase_qual = self.params['min_rf_phase_qual']
+        self.max_rf_phase_qual =self.params['max_rf_phase_qual']
         self.web_path = web_path
 
     def __call__(self, obs):
@@ -195,6 +191,10 @@ class GenerateSample:
           min rest-frame phase for LC points
         max_rf_phase, float
           max rest-frame phase for LC points
+        min_rf_phase_qual, float
+          min rest-frame phase for T0 estimation
+        max_rf_phase_qual, float
+          max rest-frame phase for T0 estimation
         """
         epsilon = 1.e-08
 
@@ -216,7 +216,7 @@ class GenerateSample:
         if len(r) > 0:
             names = ['z', 'x1', 'color', 'daymax',
                      'epsilon_x0', 'epsilon_x1', 'epsilon_color',
-                     'epsilon_daymax', 'min_rf_phase', 'max_rf_phase']
+                     'epsilon_daymax', 'min_rf_phase', 'max_rf_phase','min_rf_phase_qual','max_rf_phase_qual']
             types = ['f8']*len(names)
             # params = np.zeros(len(r), dtype=list(zip(names, types)))
             params = np.asarray(r, dtype=list(zip(names, types)))
@@ -259,7 +259,10 @@ class GenerateSample:
           min rest-frame phase for LC points
         max_rf_phase, float
           max rest-frame phase for LC points
-
+        min_rf_phase_qual, float
+          min rest-frame phase for T0 estimation
+        max_rf_phase, float
+          max rest-frame phase for T0 estimation
         """
 
         # get z range
@@ -304,7 +307,7 @@ class GenerateSample:
                     T0_values = [daymin+21.*(1.+z)]
                 if self.params['daymax']['type'] == 'random':
                     T0_values = np.arange(
-                        daymin-(1.+z)*self.min_rf_phase, daymax-(1.+z)*self.max_rf_phase, 0.1)
+                        daymin-(1.+z)*self.min_rf_phase_qual, daymax-(1.+z)*self.max_rf_phase, 0.1)
                 dist_daymax = T0_values
                 # print('daymax',dist_daymax,type(dist_daymax))
                 if dist_daymax.size == 0:
@@ -313,7 +316,7 @@ class GenerateSample:
                                  -1., dist_daymax,
                                  [1./len(dist_daymax)]*len(dist_daymax))
                 r.append((z, x1_color[0], x1_color[1], T0, 0.,
-                          0., 0., 0., self.min_rf_phase, self.max_rf_phase))
+                          0., 0., 0., self.min_rf_phase_qual, self.max_rf_phase))
 
         if self.params['z']['type'] == 'uniform':
             zstep = self.params['z']['step']
@@ -326,8 +329,8 @@ class GenerateSample:
                 if z < 1.e-6:
                     z = 0.01
                 if self.params['daymax']['type'] == 'uniform':
-                    T0_min = daymin-(1.+z)*self.min_rf_phase
-                    T0_max = daymax-(1.+z)*self.max_rf_phase
+                    T0_min = daymin-(1.+z)*self.min_rf_phase_qual
+                    T0_max = daymax-(1.+z)*self.max_rf_phase_qual
                     T0_min = daymin
                     T0_max = daymax
                     nT0 = int((T0_max-T0_min)/daystep)
@@ -341,22 +344,22 @@ class GenerateSample:
 
                 for T0 in T0_values:
                     r.append((z, x1_color[0], x1_color[1], T0, 0.,
-                              0., 0., 0., self.min_rf_phase, self.max_rf_phase))
+                              0., 0., 0., self.min_rf_phase, self.max_rf_phase,self.min_rf_phase_qual, self.max_rf_phase_qual))
 
         if self.params['z']['type'] == 'unique':
             daystep = self.params['daymax']['step']
             x1_color = self.params['x1_color']['min']
             z = self.params['z']['min']
             if self.params['daymax']['type'] == 'uniform':
-                T0_min = daymin-(1.+z)*self.min_rf_phase
-                T0_max = daymax-(1.+z)*self.max_rf_phase
+                T0_min = daymin-(1.+z)*self.min_rf_phase_qual
+                T0_max = daymax-(1.+z)*self.max_rf_phase_qual
                 nT0 = int((T0_max-T0_min)/daystep)
                 T0_values = np.linspace(T0_min, T0_max, nT0+1)
             if self.params['daymax']['type'] == 'unique':
                 T0_values = [daymin+21.*(1.+z)]
             for T0 in T0_values:
                 r.append((z, x1_color[0], x1_color[1], T0, 0.,
-                          0., 0., 0., self.min_rf_phase, self.max_rf_phase))
+                          0., 0., 0., self.min_rf_phase, self.max_rf_phase,self.min_rf_phase_qual, self.max_rf_phase_qual))
         rdiff = []
         if self.params['differential_flux']:
             for rstart in r:
@@ -471,11 +474,6 @@ class SimuParameters:
     filterCol : str, opt
       name of the column corresponding to filter
       Default : 'filter'
-    min_rf_phase : float, opt
-       min rest-frame phase for supernovae
-       Default : -15.
-    max_rf_phase : float, opt
-       max rest-frame phase for supernovae
        Default : 30.
     area : float, opt
        area of the survey (in deg\^2)
@@ -488,8 +486,7 @@ class SimuParameters:
     """
 
     def __init__(self, sn_parameters, cosmo_parameters,
-                 mjdCol='mjd', seasonCol='season', filterCol='filter',
-                 min_rf_phase=-15., max_rf_phase=30., area=9.6, dirFiles='reference_files', web_path=''):
+                 mjdCol='mjd', seasonCol='season', filterCol='filter',area=9.6, dirFiles='reference_files', web_path=''):
         self.dirFiles = dirFiles
         self.params = sn_parameters
         self.sn_rate = SN_Rate(rate=self.params['z']['rate'],
@@ -501,8 +498,10 @@ class SimuParameters:
         self.seasonCol = seasonCol
         self.filterCol = filterCol
         self.area = area
-        self.min_rf_phase = min_rf_phase
-        self.max_rf_phase = max_rf_phase
+        self.min_rf_phase = self.params['min_rf_phase']
+        self.max_rf_phase = self.params['max_rf_phase']
+        self.min_rf_phase_qual = self.params['min_rf_phase_qual']
+        self.max_rf_phase_qual = self.params['max_rf_phase_qual']
 
     def getDist(self, rate):
         """ get (x1,color) distributions
@@ -549,7 +548,7 @@ class SimuParameters:
         ----------
         numpy array with the following columns:
         color, z, daymax, x1, epsilon_x0, epsilon_x1,
-       epsilon_color, epsilon_daymax, min_rf_phase, max_rf_phase
+       epsilon_color, epsilon_daymax, min_rf_phase, max_rf_phase,min_rf_phase_qual,max_rf_phase_qual
 
         """
 
@@ -601,7 +600,10 @@ class SimuParameters:
         # finally add min and max rf
         pars['min_rf_phase'] = self.min_rf_phase
         pars['max_rf_phase'] = self.max_rf_phase
+        pars['min_rf_phase_qual'] = self.min_rf_phase_qual
+        pars['max_rf_phase_qual'] = self.max_rf_phase_qual
 
+        
         #print('total number of SN to simulate:', len(pars))
         return pars.to_records(index=False)
 
@@ -689,8 +691,8 @@ class SimuParameters:
         if daymaxtype == 'uniform':
             daymaxdf = pd.DataFrame()
             for z in pars['z'].values:
-                daymax_min = daymin-(1.+z)*self.min_rf_phase
-                daymax_max = daymax-(1.+z)*self.max_rf_phase
+                daymax_min = daymin-(1.+z)*self.min_rf_phase_qual
+                daymax_max = daymax-(1.+z)*self.max_rf_phase_qual
                 if daymax_max-daymax_min >= 10:
                     ndaymax = int((daymax_max-daymax_min)/daymaxstep)+1
                     df = pd.DataFrame(np.linspace(
@@ -700,8 +702,8 @@ class SimuParameters:
 
         if daymaxtype == 'random':
             daymaxdf = pd.DataFrame(pars)
-            daymaxdf['daymax_min'] = daymin-(1.+pars['z'])*self.min_rf_phase
-            daymaxdf['daymax_max'] = daymax-(1.+pars['z'])*self.max_rf_phase
+            daymaxdf['daymax_min'] = daymin-(1.+pars['z'])*self.min_rf_phase_qual
+            daymaxdf['daymax_max'] = daymax-(1.+pars['z'])*self.max_rf_phase_qual
             idx = daymaxdf['daymax_max']-daymaxdf['daymax_min'] >= 10.
             daymaxdf = daymaxdf[idx]
             if len(daymaxdf) > 0:
