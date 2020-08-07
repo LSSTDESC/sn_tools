@@ -56,7 +56,7 @@ class LCfast:
                  telescope, mjdCol='observationStartMJD',
                  RACol='fieldRA', DecCol='fieldDec',
                  filterCol='filter', exptimeCol='visitExposureTime',
-                 m5Col='fiveSigmaDepth', seasonCol='season', nexpCol='numExposures',
+                 m5Col='fiveSigmaDepth', seasonCol='season', nexpCol='numExposures',seeingCol='seeingFwhmEff',
                  snr_min=5.,
                  lightOutput=True,
                  ebvofMW=-1.0,
@@ -72,6 +72,8 @@ class LCfast:
         self.exptimeCol = exptimeCol
         self.seasonCol = seasonCol
         self.nexpCol = nexpCol
+        self.seeingCol = seeingCol
+        
         self.x1 = x1
         self.color = color
         self.lightOutput = lightOutput
@@ -399,9 +401,13 @@ class LCfast:
                 np.tile(sel_obs[self.nexpCol], (nvals, 1)), mask=~flag)
             m5_obs = np.ma.array(
                 np.tile(sel_obs[self.m5Col], (nvals, 1)), mask=~flag)
+            if self.seeingCol in sel_obs.dtype.names:
+                seeings = np.ma.array(
+                    np.tile(sel_obs[self.seeingCol], (nvals, 1)), mask=~flag)
+            
         healpixIds = np.ma.array(
             np.tile(sel_obs['healpixID'].astype(int), (nvals, 1)), mask=~flag)
-
+       
         pixRAs = np.ma.array(
             np.tile(sel_obs['pixRA'], (nvals, 1)), mask=~flag)
 
@@ -430,12 +436,15 @@ class LCfast:
             lc['mag'] = mag_obs[~mag_obs.mask]
             if not self.lightOutput:
                 lc['gamma'] = gammas[~gammas.mask]
-                lc['m5'] = m5_obs[~m5_obs.mask]
+                lc['m5'] = m5_obs[~m5_obs.mask]            
                 lc['mag'] = mag_obs[~mag_obs.mask]
                 lc['magerr'] = (2.5/np.log(10.))/snr_m5[~snr_m5.mask]
                 lc['time'] = obs_time[~obs_time.mask]
                 lc[self.exptimeCol] = exp_time[~exp_time.mask]
                 lc[self.nexpCol] = nexposures[~nexposures.mask]
+                if self.seeingCol in sel_obs.dtype.names:
+                    lc[self.seeingCol] = seeings[~seeings.mask]
+                
             lc['band'] = ['LSST::'+band]*len(lc)
             lc['zp'] = self.zp[band]
             lc['zp'] = 2.5*np.log10(3631)
