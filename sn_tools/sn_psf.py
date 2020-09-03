@@ -145,13 +145,16 @@ class PSF_Flux:
 
         npixels_area_x = np.min([self.npixels_x,15])
         npixels_area_y = np.min([self.npixels_y,15])
+        npixels_area_x = int(np.round(self.npixels_x/3,0))
+        npixels_area_y = int(np.round(self.npixels_y/3,0))
+        
         deltax_area = (self.xmax-self.xmin)/npixels_area_x 
         deltay_area = (self.ymax-self.ymin)/npixels_area_y
 
         deltax_area = np.round(deltax_area,0)
         deltay_area = np.round(deltay_area,0)
         
-        print(deltax_area,self.xmin,self.xmax)
+        #print(deltax_area,self.xmin,self.xmax,npixels_area_x,npixels_area_y)
 
         # define areas here
         areas = []
@@ -160,7 +163,8 @@ class PSF_Flux:
             for i in range(npixels_area_y):
                 ymin_a = self.ymin+i*deltay_area
                 areas.append(dict(zip(['xmin','xmax','ymin','ymax'],[xmin_a,xmin_a+deltax_area,ymin_a, ymin_a+deltay_area])))
-                
+
+        #print('areas',areas)
 
         # estimate the flux distribution using multiprocessing
         df = self.fluxDist_multiproc(areas,nproc)
@@ -314,6 +318,9 @@ class PSF_Flux:
 
         x = np.arange(xmin, xmax+self.dx, self.dx)
         y = np.arange(ymin, ymax+self.dy, self.dy)
+        np.round(x,2)
+        np.round(y,2)
+        
         xtile, ytile = np.meshgrid(x, y)
 
         """
