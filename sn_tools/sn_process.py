@@ -119,7 +119,7 @@ class Process:
                                                                         self.Decmin, self.Decmax)
             pixelmap_files = glob.glob(search_path)
             if not pixelmap_files:
-                print('Severe problem: pixel map does not exist!!!!')
+                print('Severe problem: pixel map does not exist!!!!',search_path)
             else:
                 self.pixelmap = np.load(pixelmap_files[0])
                 if self.npixels == -1:

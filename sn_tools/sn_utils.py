@@ -645,11 +645,14 @@ class SimuParameters:
                 survey_area=self.area,
                 account_for_edges=True, dz=0.001)
             # get number of supernovae
-            N_SN = int(np.cumsum(nsn)[-1])
-            print('nsn from rate', N_SN)
-            if np.cumsum(nsn)[-1] < 0.5:
-                return None
+            N_SN = np.cumsum(nsn)[-1]
             N_SN *= NSN_factor
+            N_SN = int(N_SN)
+
+            print('nsn from rate', N_SN, NSN_factor)
+            
+            if N_SN < 0.5:
+                return None
             weight_z = np.cumsum(nsn)/np.sum(np.cumsum(nsn))
 
             if N_SN < 1:
