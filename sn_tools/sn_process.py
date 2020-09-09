@@ -77,29 +77,13 @@ class Process:
         self.nclusters = nclusters
         self.radius = radius
 
-        # this is to take multiproc into account
 
-        observations, patches = self.load()
+        # loading observations
 
-        # print('coordinates for patch',RAmin,RAmax,Decmin,Decmax)
-        # select observation in this area
-        delta_coord = 5.
-        idx = observations[self.RACol] >= RAmin-delta_coord
-        idx &= observations[self.RACol] < RAmax+delta_coord
-        # idx &= observations[self.DecCol] >= Decmin-delta_coord
-        # idx &= observations[self.DecCol] < Decmax+delta_coord
+       
+        obs, patches = self.load()
 
-        # print('before', len(observations), RAmin, RAmax, Decmin, Decmax)
-        obs = observations[idx]
-
-        if RAmin < delta_coord:
-            idx = observations[self.RACol] >= 360.-delta_coord
-            obs = np.concatenate((obs, observations[idx]))
-
-        if RAmax >= 360.-delta_coord:
-            idx = observations[self.RACol] <= delta_coord
-            obs = np.concatenate((obs, observations[idx]))
-
+        #print('in Process - observations loaded')
         """
         import matplotlib.pyplot as plt
         plt.plot(observations[self.RACol],observations[self.DecCol],'ko')
@@ -126,7 +110,7 @@ class Process:
                     self.npixels = len(
                         np.unique(self.pixelmap['healpixID']))
                 random_pixels = self.randomPixels(self.pixelmap, self.npixels)
-                print('number of pixels to process', len(random_pixels))
+                print('number of pixels to process', len(random_pixels),obs.dtype)
                 self.multiprocess(random_pixels, obs,
                                   func=self.procix)
 
@@ -141,22 +125,39 @@ class Process:
        patches: pandas df
         patches coordinates on the sky
         """
-
-        # loading observations
-
         observations = getObservations(self.dbDir, self.dbName, self.dbExtens)
 
+        self.RACol = 'RA'
+        self.DecCol = 'Dec'
+
+        # select observation in this area
+        delta_coord = 5.
+        idx = observations[self.RACol] >= self.RAmin-delta_coord
+        idx &= observations[self.RACol] < self.RAmax+delta_coord
+        # idx &= observations[self.DecCol] >= Decmin-delta_coord
+        # idx &= observations[self.DecCol] < Decmax+delta_coord
+
+        obs = observations[idx]
+                
+        if self.RAmin < delta_coord:
+            idk = observations[self.RACol] >= 360.-delta_coord
+            obs = np.concatenate((obs, observations[idk]))
+
+        if self.RAmax >= 360.-delta_coord:
+            idk = observations[self.RACol] <= delta_coord
+            obs = np.concatenate((obs, observations[idk]))
+        
+
         # rename fields
-
-        observations = renameFields(observations)
-
+        observations = renameFields(obs)
+       
         self.RACol = 'fieldRA'
         self.DecCol = 'fieldDec'
-
+        
         if 'RA' in observations.dtype.names:
             self.RACol = 'RA'
             self.DecCol = 'Dec'
-
+      
         observations, patches = patchObs(observations, self.fieldType,
                                          self.dbName,
                                          self.nside,
@@ -165,7 +166,7 @@ class Process:
                                          self.RACol, self.DecCol,
                                          display=False,
                                          nclusters=self.nclusters, radius=self.radius)
-
+        
         return observations, patches
 
     def multiprocess(self, patches, observations, func):
@@ -204,7 +205,7 @@ class Process:
             idx = field['fieldName'] == 'SPT'
             if len(field[idx]) > 0:
             """
-            print('go for multiprocessing', j, func, healpixels[ida:idb])
+            print('go for multiprocessing', j, func, len(healpixels[ida:idb]))
             p = multiprocessing.Process(name='Subprocess-'+str(j), target=func, args=(
                 healpixels[ida:idb], observations, j, result_queue))
             print('starting')
