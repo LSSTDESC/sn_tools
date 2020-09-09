@@ -649,7 +649,7 @@ class SimuParameters:
             N_SN *= NSN_factor
             N_SN = int(N_SN)
 
-            print('nsn from rate', N_SN, NSN_factor)
+            #print('nsn from rate', N_SN, NSN_factor)
             
             if N_SN < 0.5:
                 return None
