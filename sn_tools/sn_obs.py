@@ -141,6 +141,7 @@ def patchObs(observations, fieldType,
 
     else:
         if fieldType == 'WFD':
+            #print('getting observations')
             observations = getFields(observations, 'WFD')
             minDec = Decmin
             maxDec = Decmax
@@ -149,6 +150,7 @@ def patchObs(observations, fieldType,
                 minDec = max(minDec, -90.)
             if maxDec == -1.0:
                 maxDec = np.max(observations['fieldDec'])+radius
+            #print('sky area')
             areas = PavingSky(RAmin, RAmax, minDec, maxDec, radius, radius)
             # print(observations.dtype)
             if display:
@@ -2639,12 +2641,23 @@ def getFields(observations, fieldType='WFD', fieldIds=None,
                 #propId_WFD = propIds[np.argmax(res['Nobs'])]
                 #print(res, np.argmax(res['Nobs']), propId_WFD)
                 #a = observations['note']
-                df = pd.DataFrame(np.copy(observations))
-                if 'note' in df.columns:
+                #df = pd.DataFrame(np.copy(observations))
+                #df = observations
+                ##print('end of copy')
+               
+                #print(test)
+
+                if 'note' in observations.dtype.names:
+                    ido = np.core.defchararray.find(observations['note'].astype(str), 'DD')
+                    ies = np.ma.asarray(list(map(lambda st: False if st!=-1 else True,ido)))
+                    return(observations[ies])
+                    """
                     idx = df['note'].str.contains('DD')
+                    print('ayer',len(df[~idx]),len(df[idx]))
                     return df[~idx].to_records(index=False)
+                    """
                 else:
-                    return df.to_records(index=False)
+                    return observations
                 # return observations[observations[pName] == propId_WFD]
             if fieldType == 'DD':
                 # could be tricky here depending on the database structure
