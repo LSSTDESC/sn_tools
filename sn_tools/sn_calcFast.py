@@ -321,8 +321,9 @@ class LCfast:
             #                      method=method, fill_value=0.)
 
         # replace crazy fluxes by dummy values
+        fluxes_obs_err[fluxes_obs <= 0.] = 10.
         fluxes_obs[fluxes_obs <= 0.] = 1.e-10
-        fluxes_obs_err[fluxes_obs_err <= 0.] = 1.e-10
+        
 
         # Fisher matrix components estimation
         # loop on SN parameters (x0,x1,color)
@@ -488,6 +489,7 @@ class LCfast:
             print(lc[idb][['z', 'ratio', 'm5', 'flux_e_sec', 'snr_m5']])
             """
 
+        #print('lc here',lc)
         if len(lc) > 0.:
             lc = self.dust_corrections(lc, ebvofMW)
 
@@ -530,6 +532,8 @@ class LCfast:
             lambda x: self.corrFlux(x)).reset_index()
 
         # mag correction - after flux correction
+        #print('there man',tab['flux'])
+        tab = tab.replace({'flux': 0.0}, 1.e-10)
         tab['mag'] = -2.5 * np.log10(tab['flux'] / 3631.0)
         # snr_m5 correction
         tab['snr_m5'] = 1./srand(tab['gamma'], tab['mag'], tab['m5'])
