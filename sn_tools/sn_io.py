@@ -605,6 +605,15 @@ def getObservations(dbDir, dbName, dbExtens):
                                        to_degrees=False,
                                        new_col_names=keymap)
 
+        #save this file on disk if it does not exist
+        outDir = dbDir.replace('/db','/npy')
+        if not os.path.isdir(outDir):
+            os.mkdir(outDir)
+
+        path = '{}/{}.npy'.format(outDir,dbName)
+        if not os.path.isfile(path):
+            np.save(path,observations)
+ 
     return observations
 
 
