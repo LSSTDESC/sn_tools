@@ -681,3 +681,28 @@ def dustmaps(dustDir):
     config['data_dir'] = dustDir
     import dustmaps.sfd
     dustmaps.sfd.fetch()
+
+def colName(names, list_search):
+    """
+    Function to get a name from a list
+
+    Parameters
+    ----------------
+    names: list(str)
+      list of names
+    list_search: list(str)
+      list of names to find in names
+
+    Returns
+    -----------
+    the found name (str) or None
+
+    """
+
+    for vv in list_search:
+        if vv in names:
+            return vv
+
+    return None
+
+    
