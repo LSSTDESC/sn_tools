@@ -1173,6 +1173,7 @@ class DataToPixels:
         groups = dataset.groupby([self.RACol, self.DecCol])
         
         """
+
         groups = dataset.groupby(['observationId','night','filter'])
         # match pixels to data
         time_ref = time.time()
@@ -1433,9 +1434,12 @@ class ProcessPixels:
         dataPixel = pd.DataFrame()
         dataset = pd.DataFrame(data)
 
+        """
         dataset = dataset.round({self.RACol: 4, self.DecCol: 4})
         ido = dataset[self.RACol].isin(selpix[self.RACol])
         ido &= dataset[self.DecCol].isin(selpix[self.DecCol])
+        """
+        ido = dataset['observationId'].isin(selpix['observationId'])
 
         return dataset[ido]
         """
