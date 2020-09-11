@@ -46,6 +46,16 @@ def plotPixels(fluxdist,seeing):
     im = ax.imshow(fluxpixels,extent=[xmin,xmax,ymin,ymax],vmin=np.min(fluxpixels),vmax=np.max(fluxpixels))
 
     fig.colorbar(im)
+
+    radius = int(xmax)
+
+    print('radius',radius)
+    r = []
+    for x in np.arange(0,radius,0.01):
+        r.append((x,np.sqrt(radius**2-x**2)))
+
+    res = np.rec.fromrecords(r, names=['x','y'])
+    ax.plot(res['x'],res['y'],'ko')
     
 def limVals(lc, field):
     """ Get unique values of a field in  a table
@@ -100,7 +110,7 @@ class PSF_Flux:
 
     """
 
-    def __init__(self, seeing, dx=0.01, dy=0.01, nsigma=3.0, xs=0.0, ys=0.0):
+    def __init__(self, seeing, dx=0.01, dy=0.01, nsigma=-1, xs=0.0, ys=0.0,npixels_x=3,npixels_y=3):
 
         self.dx = dx
         self.dy = dy
@@ -112,17 +122,31 @@ class PSF_Flux:
         self.sigma = seeing_pixel/2.355
         self.xs = xs
         self.ys = ys
-        self.nsigma = nsigma
-        nsize = int(nsigma*self.sigma)
+        if nsigma>-1:
+            self.nsigma = nsigma
+            #nsize = int(nsigma*self.sigma)
 
-        self.xmin = int(-nsigma*self.sigma)-self.pixel_size_x/2.
-        self.xmax = int(nsigma*self.sigma)+self.pixel_size_x/2.
-        self.ymin = int(-nsigma*self.sigma)-self.pixel_size_y/2.
-        self.ymax = int(nsigma*self.sigma)+self.pixel_size_y/2.
+            self.xmin = int(-nsigma*self.sigma)-self.pixel_size_x/2.
+            self.ymin = int(-nsigma*self.sigma)-self.pixel_size_y/2.
+            self.xmax = -self.xmin
+            self.ymax = -self.ymin
 
-        self.npixels_x = int(self.xmax-self.xmin)
-        self.npixels_y = int(self.ymax-self.ymin)
+            self.npixels_x = int(self.xmax-self.xmin)
+            self.npixels_y = int(self.ymax-self.ymin)
 
+        else:
+            self.npixels_x = npixels_x
+            self.npixels_y = npixels_y
+            if not (self.npixels_x%2):
+                self.npixels_x+=1
+            if not (self.npixels_y%2):
+                self.npixels_y+=1  
+            self.xmin=-self.npixels_x/2.
+            self.ymin=-self.npixels_y/2.          
+            self.xmax = -self.xmin
+            self.ymax = -self.ymin
+            self.nsigma = self.npixels_x/2/self.sigma
+            
         print('Total number of pixels', self.xmin, self.xmax, self.ymin,
               self.ymax, self.npixels_x, self.npixels_y, self.npixels_x*self.npixels_y)
 
@@ -284,12 +308,15 @@ class PSF_Flux:
         
         df = df.round({'xpixel': 0, 'ypixel': 0})
         df = df.sort_values(by=['xpixel','ypixel'])
-
+        df['radius'] = np.sqrt(df['xpixel']**2+df['ypixel']**2)
+        
         # select only pixels in the initial region
         idx = df['xpixel']>=self.xmin
         idx &= df['xpixel']<=self.xmax
         idx &= df['ypixel']>=self.ymin
         idx &= df['ypixel']<=self.ymax
+
+        idx &= df['radius']<=np.sqrt(self.npixels_x/2*self.npixels_y/2)
         return df[idx]
         
     def fluxDist_area(self, xmin, xmax, ymin, ymax):
@@ -408,7 +435,7 @@ class PSF_Flux:
 
         print('fluxes', np.sum(np.sum(fluxm, axis=3), axis=2).flatten())
         """
-        return pd.DataFrame({'xpixel': xp, 'ypixel': yp, 'fluxdist': fluxdist})
+        return pd.DataFrame({'xpixel': xp, 'ypixel': yp, 'fluxdist': fluxdist,'npixels': self.npixels_x*self.npixels_y})
 
     def PSF(self, x, y, xs, ys, sigma):
         """
