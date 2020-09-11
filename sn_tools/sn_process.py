@@ -1,5 +1,5 @@
 from sn_tools.sn_obs import DataToPixels, ProcessPixels, renameFields, patchObs
-from sn_tools.sn_io import getObservations
+from sn_tools.sn_io import getObservations,colName
 import time
 import numpy as np
 import pandas as pd
@@ -105,7 +105,7 @@ class Process:
             if not pixelmap_files:
                 print('Severe problem: pixel map does not exist!!!!',search_path)
             else:
-                self.pixelmap = np.load(pixelmap_files[0])
+                self.pixelmap = np.load(pixelmap_files[0],allow_pickle=True)
                 if self.npixels == -1:
                     self.npixels = len(
                         np.unique(self.pixelmap['healpixID']))
@@ -127,9 +127,11 @@ class Process:
         """
         observations = getObservations(self.dbDir, self.dbName, self.dbExtens)
 
-        self.RACol = 'RA'
-        self.DecCol = 'Dec'
+        names = observations.dtype.names
+        self.RACol = colName(names,['fieldRA','RA','Ra'])
+        self.DecCol = colName(names,['fieldDec','Dec'])
 
+        print('dtype',observations.dtype.names)
         # select observation in this area
         delta_coord = 5.
         idx = observations[self.RACol] >= self.RAmin-delta_coord
@@ -150,14 +152,18 @@ class Process:
 
         # rename fields
         observations = renameFields(obs)
-       
+        names = observations.dtype.names
+        self.RACol = colName(names,['fieldRA','RA','Ra'])
+        self.DecCol = colName(names,['fieldDec','Dec'])
+
+        """
         self.RACol = 'fieldRA'
         self.DecCol = 'fieldDec'
         
         if 'RA' in observations.dtype.names:
             self.RACol = 'RA'
             self.DecCol = 'Dec'
-      
+        """
         observations, patches = patchObs(observations, self.fieldType,
                                          self.dbName,
                                          self.nside,
@@ -194,6 +200,7 @@ class Process:
         # print('in multi process', npixels, self.nprocs)
         # multiprocessing
         for j in range(len(tabpix)-1):
+        
             ida = tabpix[j]
             idb = tabpix[j+1]
 
