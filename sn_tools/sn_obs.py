@@ -1167,18 +1167,22 @@ class DataToPixels:
             plt.show()
 
         # make groups by (RA,dec)
+    
+        """
         dataset = dataset.round({self.RACol: 4, self.DecCol: 4})
         groups = dataset.groupby([self.RACol, self.DecCol])
-
+        
+        """
+        groups = dataset.groupby(['observationId','night','filter'])
         # match pixels to data
         time_ref = time.time()
         matched_pixels = groups.apply(
             lambda x: self.match(x, self.healpixIDs, self.pixRA, self.pixDec)).reset_index()
 
-        """
+        
         print('after matching', time.time()-time_ref,
-              len(matched_pixels['healpixID'].unique()))
-        """
+              len(matched_pixels['healpixID'].unique()),matched_pixels.columns)
+        
         return matched_pixels
 
     def match(self, grp, healpixIDs, pixRA, pixDec):
