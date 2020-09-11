@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.animation as manimation
@@ -12,6 +13,9 @@ import numpy.lib.recfunctions as rf
 import pandas as pd
 from shapely import geometry
 from shapely import affinity
+import os
+import glob
+import healpy as hp
 
 def fieldType(obs, RACol, DecCol):
     """
@@ -596,3 +600,217 @@ def fillCorresp(tab, corres, vara, varb):
 
     if vara in tab.dtype.names and varb not in tab.dtype.names:
         corres[vara] = varb
+
+
+class MoviePixels:
+    
+    def __init__(self, dbDir, dbName,saveMovie=False, realTime=False, saveFig=False, nightmin=0,nightmax=365,time_display=5):
+
+        self.realTime = realTime
+        self.dbName = dbName
+        self.dbDir = dbDir
+        self.saveFig = saveFig
+        self.time_display = time_display
+        self.nightmin = nightmin
+        self.nightmax = nightmax
+        self.saveMovie = saveMovie
+        if saveMovie:
+            self.saveFig = True
+        
+        plotDir_gen = 'Plots_Stat'
+        self.plotDir = '{}/{}'.format(plotDir_gen,self.dbName)
+        
+        if not os.path.isdir(plotDir_gen):
+            os.makedirs(plotDir_gen)
+
+        if os.path.isdir(self.plotDir):
+            os.rmdir(self.plotDir)
+            
+        os.makedirs(self.plotDir)
+            
+        
+            
+            
+        # load observations
+        data = self.loadPixels()
+
+        # looping on data
+        self.loopObs(data)
+        
+    def loadPixels(self):
+        """
+        Method to load the data
+
+        Returns
+        ----------
+        numpy array with pixels infos
+
+        """
+
+        
+        files = glob.glob('{}/{}/*.npy'.format(self.dbDir,self.dbName))
+
+        pixel = None
+
+        for fi in files:
+            tab = np.load(fi,allow_pickle=True)
+            if pixel is None:
+                pixel = tab
+            else:
+                pixel = np.concatenate((pixel,tab))
+
+        return pixel
+
+    def loopObs(self,data):
+        
+        pixel_night = pd.DataFrame(np.unique(data['healpixID']),columns=['healpixID'])
+        pixel_night['night_last'] = -1
+        pixel_night = pixel_night.sort_values(by=['healpixID'])
+
+        r = []
+        filters = ['g','r','i']
+        nVisits_min = dict(zip(filters,[1,1,1]))
+
+        print('hello',self.nightmax)
+        for night in range(self.nightmin,self.nightmax):
+            
+            idx = data['night']==night
+            pix = pd.DataFrame(np.copy(data[idx]))
+            for b in filters:
+                pix[b] = pix['filter']==b
+                pix[b] = pix[b].astype(int)
+
+            groups = pix.groupby(['healpixID','night'])[filters].sum().reset_index()
+            idx = True
+            for f in filters:
+                idx &= groups[f]<nVisits_min[f]
+        
+            pixsel_night = groups[~idx][['healpixID','night']]
+            pixsel_night = pixsel_night.rename(columns={'night':'night_last'})
+    
+            idx = pixel_night['healpixID'].isin(pixsel_night['healpixID'])
+            
+            pixel_night = pd.concat((pixel_night[~idx],pixsel_night))
+
+            iop = pixel_night['night_last']>-1
+            iop &= (night-pixel_night['night_last'])<=10
+
+            r.append((night,np.median(night-pixel_night[iop]['night_last']),len(pixel_night[iop])))
+            res = np.rec.fromrecords(r, names=['night','deltaT_median','Npixels_observed'])
+            self.plotNight(night,pixel_night,res)
+
+            if self.realTime:
+                plt.draw()
+                plt.pause(self.time_display)
+                plt.close()
+
+        if self.saveMovie:
+            self.makeMovie()
+            
+                
+    def plotNight(self,night,pixels, stat,nside=64):
+
+        pixels['deltaT'] = -1
+        io = pixels['night_last']>-1
+        pixels.loc[io,'deltaT'] = night-pixels.loc[io,'night_last']
+
+    
+        #fig, ax =plt.subplots(nrows=2,ncols=2,figsize=(15,12))
+        fig = plt.figure(figsize=(15,12))
+        fig.suptitle('{} - night {}'.format(self.dbName,int(night)))
+
+        """
+        ax_a = fig.add_axes([0.4,0.25,0.5,0.5])
+        ax_b = fig.add_axes([0.1,0.1,0.25,0.25])
+        ax_c = fig.add_axes([0.1,0.4,0.25,0.25])
+        ax_d = fig.add_axes([0.1,0.7,0.25,0.25])
+        """
+
+        ax_a = fig.add_axes([0.25,0.4,0.5,0.5])
+        ax_b = fig.add_axes([0.1,0.1,0.25,0.25])
+        ax_c = fig.add_axes([0.4,0.1,0.25,0.25])
+        ax_d = fig.add_axes([0.7,0.1,0.25,0.25])
+        
+        #axa = ax[0,1]
+        axa = ax_d
+        plt.sca(axa)
+        idx = pixels['night_last']>-1
+        idx &= pixels['deltaT']<=10
+        
+        axa.hist(pixels[idx]['deltaT'],histtype='step')
+        axa.set_xlabel('$\Delta$T')
+        axa.set_ylabel('Number of entries')
+        #axa.set_ylabel('Number of entries',rotation=270)
+        #axa.yaxis.set_label_position("right")
+        #axa.yaxis.tick_right()
+
+        #axa = ax[1,0]
+        axa = ax_c
+        plt.sca(axa)
+        axa.plot(stat['night'],stat['deltaT_median'])
+        axa.set_ylabel('Median $\Delta$T')
+        axa.set_xlabel('night')
+
+        #axa = ax[1,1]
+        axa = ax_b
+        plt.sca(axa)
+        axa.plot(stat['night'],stat['Npixels_observed'])
+        axa.set_ylabel('Number of pixels observed')
+        axa.set_xlabel('night')
+        
+        #print(pixels)
+        #idtest = pixels['healpixID'].isin([39143,39149,39154])
+        #print('test',night,pixels[idtest])
+
+        #axa = ax[0,0]
+        axa = ax_a
+        plt.sca(axa)
+        npixels = hp.nside2npix(nside)
+        xmin = -1.e-8
+        xmax = np.max([np.max(pixels['deltaT']),1])
+    
+        norm = plt.cm.colors.Normalize(xmin, xmax)
+        #cmap = plt.get_cmap('jet', int(xmax))
+        n = int(xmax)+1
+        n = 9
+        from_list = matplotlib.colors.LinearSegmentedColormap.from_list
+        cmap = from_list(None, plt.cm.Set1(range(0,n)), n)
+        cmap.set_under('w')
+
+        hpxmap = np.zeros(npixels, dtype=np.int)
+        hpxmap = np.full(hpxmap.shape, -2)
+        hpxmap[pixels['healpixID']] = pixels['deltaT'].astype(int)
+
+        #print('hello ',xmin,xmax)
+
+        dd = '$\Delta$T = current night-last obs night (gri)'
+        hp.mollview(hpxmap,nest=True,cmap=cmap,
+                    min=xmin, max=n,norm=norm,cbar=False,
+                    title=dd,hold=True,badcolor='white',xsize=1600)
+
+            
+        hp.graticule()
+        ax = plt.gca()
+        image = ax.get_images()[0]
+        cbar= fig.colorbar(image, ax=ax, ticks=range(0,n+1), orientation='horizontal')
+        #cbar = fig.colorbar(ax[0,0], ticks=range(0,n), orientation='horizontal')  # set some values to ticks
+
+        labels = list(range(0,n))
+    
+        tick_label = list(map(str, labels))
+    
+        tick_label[-1] = '>{}'.format(tick_label[-2])
+        #print(tick_label)
+        cbar.ax.set_xticklabels([])
+        cbar.ax.tick_params(size=0)
+        for j, lab in enumerate(tick_label):
+            cbar.ax.text(labels[j]+0.5, -10.,lab)
+
+        if self.saveFig:
+            plt.savefig('{}/{}_{}.png'.format(self.plotDir,self.dbName,str(night).zfill(3)))
+
+    def makeMovie(self):
+
+        dirFigs = self.plotDir
+        cmd = 'ffmpeg -r 3 -f image2 -s 1920x1080 -i {}/{}_%03d.png -vcodec libx264 -crf 25  -pix_fmt yuv420p {}.mp4 -y'.format(self.plotDir,self.dbName,self.dbName)
+        os.system(cmd)
