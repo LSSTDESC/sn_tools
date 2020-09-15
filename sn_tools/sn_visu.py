@@ -603,12 +603,37 @@ def fillCorresp(tab, corres, vara, varb):
 
 
 class MoviePixels:
-    
-    def __init__(self, dbDir, dbName,saveMovie=False, realTime=False, saveFig=False, nightmin=0,nightmax=365,time_display=5):
+    """
+    class to display pixel cadence visits per night
+
+    Parameters
+    --------------
+    dbDir: str
+      directory where observations (pointings) may be found
+    dbDir_pixels: str
+       directory where pixel observations may be found
+    dbName: str
+       OS name
+    saveMovie: bool, opt
+      to make the movie or not (default:False)
+    realTime: bool, opt
+     to display figures in "real time" (default: False)
+    saveFig: bool, opt
+      to save figures (default:False)
+    nightmin: int
+      first night of observation (default: 0)
+    nightmax: int
+      last night of observation (default: 365)
+    time_display: int
+      time of persistency for the plot displayed (default: 5 sec)
+
+    """
+    def __init__(self, dbDir, dbDir_pixels,dbName,saveMovie=False, realTime=False, saveFig=False, nightmin=0,nightmax=365,time_display=5,nside=64):
 
         self.realTime = realTime
         self.dbName = dbName
         self.dbDir = dbDir
+        self.dbDir_pixels = dbDir_pixels
         self.saveFig = saveFig
         self.time_display = time_display
         self.nightmin = nightmin
@@ -616,26 +641,26 @@ class MoviePixels:
         self.saveMovie = saveMovie
         if saveMovie:
             self.saveFig = True
-        
+        self.npixels = hp.nside2npix(nside)
+        # prepare output directory
         plotDir_gen = 'Plots_Stat'
         self.plotDir = '{}/{}'.format(plotDir_gen,self.dbName)
-        
-        if not os.path.isdir(plotDir_gen):
-            os.makedirs(plotDir_gen)
 
-        if os.path.isdir(self.plotDir):
-            os.rmdir(self.plotDir)
+        if self.saveFig:
+            if not os.path.isdir(plotDir_gen):
+                os.makedirs(plotDir_gen)
+
+            if os.path.isdir(self.plotDir):
+                os.system('rm -rf {}'.format(self.plotDir))
             
-        os.makedirs(self.plotDir)
-            
-        
-            
+            os.makedirs(self.plotDir)
             
         # load observations
-        data = self.loadPixels()
-
+        pixel_data = self.loadPixels()
+        pointings = np.load('{}/{}.npy'.format(self.dbDir,self.dbName),allow_pickle=True)
+        
         # looping on data
-        self.loopObs(data)
+        self.loopObs(pixel_data,pointings)
         
     def loadPixels(self):
         """
@@ -648,7 +673,7 @@ class MoviePixels:
         """
 
         
-        files = glob.glob('{}/{}/*.npy'.format(self.dbDir,self.dbName))
+        files = glob.glob('{}/{}/*.npy'.format(self.dbDir_pixels,self.dbName))
 
         pixel = None
 
@@ -661,19 +686,47 @@ class MoviePixels:
 
         return pixel
 
-    def loopObs(self,data):
+    def loopObs(self,data,pointings):
+        """
+        Method processing the data
+
+        Parameters
+        ---------------
+        data: numpy array
+          pixel observations to process
+        pointings: numpy array
+          observations (pointings) to process
+
+
+        """
+
+        # selection per night
+        nVisits_min = {}
+        nVisits_min['gri'] = dict(zip(['g','r','i'],[1,1,1]))
+        nVisits_min['yz'] = dict(zip(['y','z'],[1,1]))
+        nVisits_min['all'] = dict(zip(['u','g','r','i','z','y'],[1,1,1,1,1,1]))
         
-        pixel_night = pd.DataFrame(np.unique(data['healpixID']),columns=['healpixID'])
-        pixel_night['night_last'] = -1
-        pixel_night = pixel_night.sort_values(by=['healpixID'])
+        pixel_night = {}
+        res = {}
+        # reference df: list of pixels to consider
+        for key in nVisits_min.keys():
+            pixel_night[key] = pd.DataFrame(np.unique(data['healpixID']),columns=['healpixID'])
+            pixel_night[key]['night_last'] = -1
+            pixel_night[key] = pixel_night[key].sort_values(by=['healpixID'])
+            res[key] = None
 
-        r = []
-        filters = ['g','r','i']
-        nVisits_min = dict(zip(filters,[1,1,1]))
-
-        print('hello',self.nightmax)
-        for night in range(self.nightmin,self.nightmax):
+        self.colors=dict(zip(['gri','yz','all'],['r','m','k']))
             
+        nopointings = []
+        self.deltat_cut = 10.
+        for night in range(self.nightmin,self.nightmax):
+
+            # any pointings this night?
+            idp = pointings['night']==night
+            if len(pointings[idp])==0:
+                nopointings.append(night)
+
+            """
             idx = data['night']==night
             pix = pd.DataFrame(np.copy(data[idx]))
             for b in filters:
@@ -697,7 +750,26 @@ class MoviePixels:
 
             r.append((night,np.median(night-pixel_night[iop]['night_last']),len(pixel_night[iop])))
             res = np.rec.fromrecords(r, names=['night','deltaT_median','Npixels_observed'])
-            self.plotNight(night,pixel_night,res)
+            """
+            io = data['night']==night
+            for key in pixel_night.keys():
+                pixel_night[key], res[key] = self.pixelNight(night,data[io],nVisits_min[key],pixel_night[key],res[key])
+
+
+            """
+            # Merge pixel_night dict to a single df
+            df = pd.DataFrame()
+            for key,val in pixel_night.items():
+                val = val.rename(columns={'night_last':'night_last_{}'.format(key)})
+                if df.empty:
+                    df = val
+                else:
+                    df = df.merge(val, left_on=['healpixID'],right_on=['healpixID'],suffixes=['',''])
+
+            print('finally',df)
+            """
+            # plot the results for this night
+            self.plotNight(night,pixel_night,res,nopointings)
 
             if self.realTime:
                 plt.draw()
@@ -707,12 +779,100 @@ class MoviePixels:
         if self.saveMovie:
             self.makeMovie()
             
-                
-    def plotNight(self,night,pixels, stat,nside=64):
+    def pixelNight(self,night,data, nVisits_min,pixel_night,res):
+        """
+        Method to identify the pixels that got visits (in some defined bands) that night.
+        The idea is to update a pandas df with cols healpixID, night_last where 
+        healpixID is the pixel ID and night_last is the lastest nigh when the pixel was observed
+        in bands define by nVisits_min.
 
-        pixels['deltaT'] = -1
-        io = pixels['night_last']>-1
-        pixels.loc[io,'deltaT'] = night-pixels.loc[io,'night_last']
+        Parameters
+        --------------
+        night: int
+          night to consider
+        data: numpy array
+          pixel observations
+        nVisits_min: dict
+          dict for visits selection: key:band, item: min number of visits
+        pixel_night: pandas df
+          df with the following cols: healpixID, night_last
+        res: record array
+          some global stat: 
+
+        Returns
+        ----------
+        pixel_night: pandas df
+          df with the following cols: healpixID, night_last
+        res: record array
+          some global stat: 
+
+        """
+
+        r = []
+        # select data that night
+        #idx = data['night']==night
+
+        # use pandas df to ease estimation
+        pix = pd.DataFrame(np.copy(data))
+
+        filters = list(nVisits_min.keys())
+        for b in filters:
+            pix[b] = pix['filter']==b
+            pix[b] = pix[b].astype(int)
+
+        groups = pix.groupby(['healpixID','night'])[filters].sum().reset_index()
+
+        # perform the selection here
+        idx = True
+        for f in filters:
+            idx &= groups[f]<nVisits_min[f]
+
+        # pixsel_night: pixels selected for this night
+        pixsel_night = groups[~idx][['healpixID','night']]
+        pixsel_night = pixsel_night.rename(columns={'night':'night_last'})
+
+        # update pixel_night from infos of pixsel_night
+        idx = pixel_night['healpixID'].isin(pixsel_night['healpixID'])
+            
+        pixel_night = pd.concat((pixel_night[~idx],pixsel_night))
+
+        # some selection to avoid biased stat
+        iop = pixel_night['night_last']>-1
+        iop &= (night-pixel_night['night_last'])<=self.deltat_cut
+
+        r.append((night,np.median(night-pixel_night[iop]['night_last']),len(pixel_night[iop])))
+        rhere = np.rec.fromrecords(r, names=['night','deltaT_median','Npixels_observed'])
+        if res is None:
+            res = rhere
+        else:
+            res = np.concatenate((res, rhere))
+
+        return pixel_night,res
+        
+    def plotNight(self,night,pixels, stat,nopointings,nside=64):
+        """
+        Method to plot the results per night
+
+        Parameters
+        --------------
+        night: int
+          night number
+        pixels: pandas df
+          df with pixel infos: healpixID, night_last
+        stat: record array
+          some stat infos: night,'deltaT_median','Npixels_observed'
+        nopointings: list
+          list of night with no observations at all (ie no pointing)
+
+
+        """
+
+        # add a column to the df:
+        # deltaT = current_night-night_of_last_observation
+        for key, val in pixels.items():
+            val['deltaT'] = -1
+            io = val['night_last']>-1
+            val.loc[io,'deltaT'] = night-val.loc[io,'night_last']
 
     
         #fig, ax =plt.subplots(nrows=2,ncols=2,figsize=(15,12))
@@ -730,42 +890,89 @@ class MoviePixels:
         ax_b = fig.add_axes([0.1,0.1,0.25,0.25])
         ax_c = fig.add_axes([0.4,0.1,0.25,0.25])
         ax_d = fig.add_axes([0.7,0.1,0.25,0.25])
-        
+
+
+        ## Plot: delta_T distribution
         #axa = ax[0,1]
         axa = ax_d
         plt.sca(axa)
-        idx = pixels['night_last']>-1
-        idx &= pixels['deltaT']<=10
-        
-        axa.hist(pixels[idx]['deltaT'],histtype='step')
+        for key, val in pixels.items():
+            idx = val['night_last']>-1
+            idx &= val['deltaT']<=10
+            axa.hist(val[idx]['deltaT'],histtype='step',color=self.colors[key])
+            
         axa.set_xlabel('$\Delta$T')
         axa.set_ylabel('Number of entries')
         #axa.set_ylabel('Number of entries',rotation=270)
         #axa.yaxis.set_label_position("right")
         #axa.yaxis.tick_right()
 
+
+        # Plot: median delta_T vs night
         #axa = ax[1,0]
         axa = ax_c
         plt.sca(axa)
-        axa.plot(stat['night'],stat['deltaT_median'])
-        axa.set_ylabel('Median $\Delta$T')
+        for key, val in stat.items():
+            axa.plot(val['night'],val['deltaT_median'],color=self.colors[key],label=key)
+        ll = 'Median $\Delta$T [$\Delta$T$\leq${} days]'.format(int(self.deltat_cut))
+        axa.set_ylabel(ll)
         axa.set_xlabel('night')
+        # put a line when no pointings
+        ymin,ymax = axa.get_ylim()
+        ymin= np.max([00,ymin])
+        for vv in nopointings:
+            axa.plot([vv,vv],[ymin,ymax],color='r',linestyle=(0, (1, 10)))
 
+        #axa.legend(loc='lower center', bbox_to_anchor=(0., -0.3),ncol=3,fontsize=10,frameon=False)
+        axa.legend(bbox_to_anchor=(0.8, -0.15),ncol=3,fontsize=10,frameon=False)
+        # Plot: number of pixel observed with deltaT <= self.deltat_cut
         #axa = ax[1,1]
         axa = ax_b
         plt.sca(axa)
-        axa.plot(stat['night'],stat['Npixels_observed'])
-        axa.set_ylabel('Number of pixels observed')
+        for key, val in stat.items():
+            axa.plot(val['night'],val['Npixels_observed'],color=self.colors[key])
+        ll = 'Number of pixels observed [$\Delta$T$\leq${} days]'.format(int(self.deltat_cut))
+        axa.set_ylabel(ll)
         axa.set_xlabel('night')
+        # put a line when no pointings
+        ymin,ymax = axa.get_ylim()
+        ymin= np.max([0.,ymin])
+        for vv in nopointings:
+            axa.plot([vv,vv],[ymin,ymax],color='r',linestyle=(0, (1, 10)))
         
         #print(pixels)
         #idtest = pixels['healpixID'].isin([39143,39149,39154])
         #print('test',night,pixels[idtest])
 
+        # Plot: Mollview of deltaT for this night
         #axa = ax[0,0]
         axa = ax_a
         plt.sca(axa)
-        npixels = hp.nside2npix(nside)
+       
+
+        self.plotMollview(pixels['gri'],axa,fig)
+        
+        if self.saveFig:
+            plt.savefig('{}/{}_{}.png'.format(self.plotDir,self.dbName,str(night).zfill(3)))
+
+        if not self.realTime:
+            plt.close(fig)
+            
+    def plotMollview(self,pixels,axa,fig):
+        """
+        Method to display a Mollweid view
+
+        Parameters
+        --------------
+        pixels: pandas df
+          data to plots
+        axa: matplotlib axis
+          axis to use for the plot
+        fig: matplotlib figure
+          figure to use for plot
+        """
+        
+        
         xmin = -1.e-8
         xmax = np.max([np.max(pixels['deltaT']),1])
     
@@ -777,19 +984,19 @@ class MoviePixels:
         cmap = from_list(None, plt.cm.Set1(range(0,n)), n)
         cmap.set_under('w')
 
-        hpxmap = np.zeros(npixels, dtype=np.int)
+        hpxmap = np.zeros(self.npixels, dtype=np.int)
         hpxmap = np.full(hpxmap.shape, -2)
         hpxmap[pixels['healpixID']] = pixels['deltaT'].astype(int)
 
         #print('hello ',xmin,xmax)
 
-        dd = '$\Delta$T = current night-last obs night (gri)'
+        dd = '$\Delta$T = current night-last obs night (gri) [days]'
         hp.mollview(hpxmap,nest=True,cmap=cmap,
                     min=xmin, max=n,norm=norm,cbar=False,
                     title=dd,hold=True,badcolor='white',xsize=1600)
 
             
-        hp.graticule()
+        hp.graticule(verbose=False)
         ax = plt.gca()
         image = ax.get_images()[0]
         cbar= fig.colorbar(image, ax=ax, ticks=range(0,n+1), orientation='horizontal')
@@ -806,11 +1013,12 @@ class MoviePixels:
         for j, lab in enumerate(tick_label):
             cbar.ax.text(labels[j]+0.5, -10.,lab)
 
-        if self.saveFig:
-            plt.savefig('{}/{}_{}.png'.format(self.plotDir,self.dbName,str(night).zfill(3)))
-
+  
+            
     def makeMovie(self):
-
+        """
+        Method to make a movie from png files
+        """
         dirFigs = self.plotDir
         cmd = 'ffmpeg -r 3 -f image2 -s 1920x1080 -i {}/{}_%03d.png -vcodec libx264 -crf 25  -pix_fmt yuv420p {}.mp4 -y'.format(self.plotDir,self.dbName,self.dbName)
         os.system(cmd)
