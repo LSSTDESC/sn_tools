@@ -1181,8 +1181,8 @@ class DataToPixels:
             lambda x: self.match(x, self.healpixIDs, self.pixRA, self.pixDec)).reset_index()
 
         
-        print('after matching', time.time()-time_ref,
-              len(matched_pixels['healpixID'].unique()),matched_pixels.columns)
+        #print('after matching', time.time()-time_ref,
+        #      len(matched_pixels['healpixID'].unique()),matched_pixels.columns)
         
         return matched_pixels
 

@@ -246,7 +246,7 @@ class Process:
         procpix = ProcessPixels(
             self.metricList, j, outDir=self.outDir, dbName=self.dbName, saveData=self.saveData)
 
-        print('pointings', len(pointings))
+        #print('pointings', len(pointings))
 
         for index, pointing in pointings.iterrows():
             ipoint += 1
