@@ -300,8 +300,9 @@ class LCfast:
             """
             pts = (p, yi_arr)
             fluxes_obs = self.reference_lc.flux[band](pts)
-            fluxes_obs_err = self.reference_lc.fluxerr[band](pts)
-
+            fluxes_obs_err = self.reference_lc.fluxerr_photo[band](pts)
+            fluxes_model_err = self.reference_lc.fluxerr_model[band](pts)
+            
             """
             fluxes_obs = np.nan_to_num(fluxes_obs)
             fluxes_obs_err = np.nan_to_num(fluxes_obs_err)
@@ -327,7 +328,7 @@ class LCfast:
 
         # Fisher matrix components estimation
         # loop on SN parameters (x0,x1,color)
-        # estimate: dF/dxi*dF/dxj/sigma_flux**2
+        # estimate: dF/dxi*dF/dxj
         Derivative_for_Fisher = {}
         for ia, vala in enumerate(self.param_Fisher):
             for jb, valb in enumerate(self.param_Fisher):
@@ -346,8 +347,8 @@ class LCfast:
             [self.telescope.mean_wavelength[band]]*len(sel_obs))
         mean_restframe_wavelength = np.tile(
             mean_restframe_wavelength, (len(gen_par), 1))/(1.+gen_par['z'][:, np.newaxis])
-        flag &= (mean_restframe_wavelength > self.blue_cutoff) & (
-            mean_restframe_wavelength < self.red_cutoff)
+        flag &= (mean_restframe_wavelength > 0.) & (
+            mean_restframe_wavelength < 1000000.)
 
         flag_idx = np.argwhere(flag)
 
@@ -383,7 +384,8 @@ class LCfast:
 
         # now apply the flag to select LC points
         fluxes = np.ma.array(fluxes_obs, mask=~flag)
-        fluxes_err = np.ma.array(fluxes_obs_err, mask=~flag)
+        fluxes_err_photo = np.ma.array(fluxes_obs_err, mask=~flag)
+        fluxes_err_model = np.ma.array(fluxes_model_err, mask=~flag)
         phases = np.ma.array(p, mask=~flag)
         snr_m5 = np.ma.array(fluxes_obs/fluxes_obs_err, mask=~flag)
 
@@ -425,12 +427,14 @@ class LCfast:
         # Store in a panda dataframe
         lc = pd.DataFrame()
 
-        ndata = len(fluxes_err[~fluxes_err.mask])
+        ndata = len(fluxes_err_photo[~fluxes_err_photo.mask])
 
         if ndata > 0:
 
             lc['flux'] = fluxes[~fluxes.mask]
-            lc['fluxerr'] = fluxes_err[~fluxes_err.mask]
+            lc['fluxerr_photo'] = fluxes_err_photo[~fluxes_err_photo.mask]
+            lc['fluxerr_model'] = fluxes_err_model[~fluxes_err_model.mask]
+            lc['fluxerr'] = np.sqrt(lc['fluxerr_photo']**2+lc['fluxerr_model']**2)
             lc['phase'] = phases[~phases.mask]
             lc['snr_m5'] = snr_m5[~snr_m5.mask]
             lc['time'] = obs_time[~obs_time.mask]
