@@ -1992,7 +1992,8 @@ class GetReference:
         # self.mag_to_flux_e_sec = {}
 
         self.flux = {}
-        self.fluxerr = {}
+        self.fluxerr_photo = {}
+        self.fluxerr_model = {}
         self.param = {}
 
         bands = np.unique(lc_ref_tot['band'])
@@ -2012,6 +2013,20 @@ class GetReference:
             lc_sel['z'] = lc_sel['z'].data.round(decimals=4)
             lc_sel['phase'] = lc_sel['phase'].data.round(decimals=4)
 
+            """
+            select phases between -20 and -50 only
+
+            """
+        
+            idx = lc_sel['phase']<50.
+            idx &= lc_sel['phase']>-20.
+            lc_sel = lc_sel[idx]
+
+            """
+            for z in np.unique(lc_sel['z']):
+                ig = lc_sel['z'] == z
+                print(band,z,len(lc_sel[ig]))
+            """
             """
             fluxes_e_sec = telescope.mag_to_flux_e_sec(
                 mag_range, [band]*len(mag_range), [30]*len(mag_range))
@@ -2040,13 +2055,16 @@ class GetReference:
 
             index = np.lexsort((lc_sel['z'], lc_sel['phase']))
             flux = np.reshape(lc_sel[index]['flux'], (npha, nz))
-            fluxerr = np.reshape(lc_sel[index]['fluxerr'], (npha, nz))
-
+            fluxerr_photo = np.reshape(lc_sel[index]['fluxerr_photo'], (npha, nz))
+            fluxerr_model = np.reshape(lc_sel[index]['fluxerr_model'], (npha, nz))
+            
             self.flux[band] = RegularGridInterpolator(
-                (phav, zv), flux, method=method, bounds_error=False, fill_value=0.)
-            self.fluxerr[band] = RegularGridInterpolator(
-                (phav, zv), fluxerr, method=method, bounds_error=False, fill_value=0.)
-
+                (phav, zv), flux, method=method, bounds_error=False, fill_value=-1.0)
+            self.fluxerr_photo[band] = RegularGridInterpolator(
+                (phav, zv), fluxerr_photo, method=method, bounds_error=False, fill_value=-1.0)
+            self.fluxerr_model[band] = RegularGridInterpolator(
+                (phav, zv), fluxerr_model, method=method, bounds_error=False, fill_value=-1.0)
+            
             # Flux derivatives
             self.param[band] = {}
             for par in param_Fisher:
