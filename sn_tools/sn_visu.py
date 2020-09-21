@@ -705,7 +705,9 @@ class MoviePixels:
         nVisits_min['gri'] = dict(zip(['g','r','i'],[1,1,1]))
         nVisits_min['yz'] = dict(zip(['y','z'],[1,1]))
         nVisits_min['all'] = dict(zip(['u','g','r','i','z','y'],[1,1,1,1,1,1]))
-        
+        nVisits_min['g'] = dict(zip(['g'],[1]))
+        nVisits_min['r'] = dict(zip(['r'],[1]))
+        nVisits_min['i'] = dict(zip(['i'],[1]))
         pixel_night = {}
         res = {}
         # reference df: list of pixels to consider
@@ -715,10 +717,10 @@ class MoviePixels:
             pixel_night[key] = pixel_night[key].sort_values(by=['healpixID'])
             res[key] = None
 
-        self.colors=dict(zip(['gri','yz','all'],['r','m','k']))
+        self.colors=dict(zip(['gri','yz','all','g','r','i',],['b','r','k','c', 'g', 'y']))
             
         nopointings = []
-        self.deltat_cut = 10.
+        self.deltaT_cut = 50.
         for night in range(self.nightmin,self.nightmax):
 
             # any pointings this night?
@@ -726,50 +728,15 @@ class MoviePixels:
             if len(pointings[idp])==0:
                 nopointings.append(night)
 
-            """
-            idx = data['night']==night
-            pix = pd.DataFrame(np.copy(data[idx]))
-            for b in filters:
-                pix[b] = pix['filter']==b
-                pix[b] = pix[b].astype(int)
-
-            groups = pix.groupby(['healpixID','night'])[filters].sum().reset_index()
-            idx = True
-            for f in filters:
-                idx &= groups[f]<nVisits_min[f]
-        
-            pixsel_night = groups[~idx][['healpixID','night']]
-            pixsel_night = pixsel_night.rename(columns={'night':'night_last'})
-    
-            idx = pixel_night['healpixID'].isin(pixsel_night['healpixID'])
+            # plot the results for this night
+            self.plotNight(night,pixel_night,res,nopointings)
             
-            pixel_night = pd.concat((pixel_night[~idx],pixsel_night))
-
-            iop = pixel_night['night_last']>-1
-            iop &= (night-pixel_night['night_last'])<=10
-
-            r.append((night,np.median(night-pixel_night[iop]['night_last']),len(pixel_night[iop])))
-            res = np.rec.fromrecords(r, names=['night','deltaT_median','Npixels_observed'])
-            """
             io = data['night']==night
             for key in pixel_night.keys():
                 pixel_night[key], res[key] = self.pixelNight(night,data[io],nVisits_min[key],pixel_night[key],res[key])
 
-
-            """
-            # Merge pixel_night dict to a single df
-            df = pd.DataFrame()
-            for key,val in pixel_night.items():
-                val = val.rename(columns={'night_last':'night_last_{}'.format(key)})
-                if df.empty:
-                    df = val
-                else:
-                    df = df.merge(val, left_on=['healpixID'],right_on=['healpixID'],suffixes=['',''])
-
-            print('finally',df)
-            """
             # plot the results for this night
-            self.plotNight(night,pixel_night,res,nopointings)
+            #self.plotNight(night,pixel_night,res,nopointings)
 
             if self.realTime:
                 plt.draw()
@@ -838,7 +805,7 @@ class MoviePixels:
 
         # some selection to avoid biased stat
         iop = pixel_night['night_last']>-1
-        iop &= (night-pixel_night['night_last'])<=self.deltat_cut
+        iop &= (night-pixel_night['night_last'])<=self.deltaT_cut
 
         r.append((night,np.median(night-pixel_night[iop]['night_last']),len(pixel_night[iop])))
         rhere = np.rec.fromrecords(r, names=['night','deltaT_median','Npixels_observed'])
@@ -877,7 +844,7 @@ class MoviePixels:
     
         #fig, ax =plt.subplots(nrows=2,ncols=2,figsize=(15,12))
         fig = plt.figure(figsize=(15,12))
-        fig.suptitle('{} - night {}'.format(self.dbName,int(night)))
+        #fig.suptitle('{} - night {}'.format(self.dbName,int(night)))
 
         """
         ax_a = fig.add_axes([0.4,0.25,0.5,0.5])
@@ -886,60 +853,33 @@ class MoviePixels:
         ax_d = fig.add_axes([0.1,0.7,0.25,0.25])
         """
 
-        ax_a = fig.add_axes([0.25,0.4,0.5,0.5])
-        ax_b = fig.add_axes([0.1,0.1,0.25,0.25])
-        ax_c = fig.add_axes([0.4,0.1,0.25,0.25])
-        ax_d = fig.add_axes([0.7,0.1,0.25,0.25])
+        ax_a = fig.add_axes([0.275,0.55,0.45,0.45])
+        
+        ax_b = fig.add_axes([0.15,0.30,0.2,0.2])
+        ax_c = fig.add_axes([0.45,0.30,0.2,0.2])
+        ax_d = fig.add_axes([0.75,0.30,0.2,0.2])
+        
+        ax_b_1 = fig.add_axes([0.15,0.05,0.2,0.2])
+        ax_c_1 = fig.add_axes([0.45,0.05,0.2,0.2])
+        ax_d_1 = fig.add_axes([0.75,0.05,0.2,0.2])
 
+        
 
         ## Plot: delta_T distribution
         #axa = ax[0,1]
-        axa = ax_d
-        plt.sca(axa)
-        for key, val in pixels.items():
-            idx = val['night_last']>-1
-            idx &= val['deltaT']<=10
-            axa.hist(val[idx]['deltaT'],histtype='step',color=self.colors[key])
-            
-        axa.set_xlabel('$\Delta$T')
-        axa.set_ylabel('Number of entries')
-        #axa.set_ylabel('Number of entries',rotation=270)
-        #axa.yaxis.set_label_position("right")
-        #axa.yaxis.tick_right()
-
+        self.plotHist(ax_d,pixels,['gri','yz','all'])
+        self.plotHist(ax_d_1,pixels,['g','r','i'])
 
         # Plot: median delta_T vs night
         #axa = ax[1,0]
-        axa = ax_c
-        plt.sca(axa)
-        for key, val in stat.items():
-            axa.plot(val['night'],val['deltaT_median'],color=self.colors[key],label=key)
-        ll = 'Median $\Delta$T [$\Delta$T$\leq${} days]'.format(int(self.deltat_cut))
-        axa.set_ylabel(ll)
-        axa.set_xlabel('night')
-        # put a line when no pointings
-        ymin,ymax = axa.get_ylim()
-        ymin= np.max([00,ymin])
-        for vv in nopointings:
-            axa.plot([vv,vv],[ymin,ymax],color='r',linestyle=(0, (1, 10)))
+        legy = 'Median $\Delta$T [$\Delta$T$\leq${} days]'.format(int(self.deltaT_cut))
+        self.plotStat_night(ax_c,stat,'deltaT_median',legy,nopointings,['gri','yz','all'])
+        self.plotStat_night(ax_c_1,stat,'deltaT_median',legy,nopointings,['g','r','i'])
 
-        #axa.legend(loc='lower center', bbox_to_anchor=(0., -0.3),ncol=3,fontsize=10,frameon=False)
-        axa.legend(bbox_to_anchor=(0.8, -0.15),ncol=3,fontsize=10,frameon=False)
-        # Plot: number of pixel observed with deltaT <= self.deltat_cut
-        #axa = ax[1,1]
-        axa = ax_b
-        plt.sca(axa)
-        for key, val in stat.items():
-            axa.plot(val['night'],val['Npixels_observed'],color=self.colors[key])
-        ll = 'Number of pixels observed [$\Delta$T$\leq${} days]'.format(int(self.deltat_cut))
-        axa.set_ylabel(ll)
-        axa.set_xlabel('night')
-        # put a line when no pointings
-        ymin,ymax = axa.get_ylim()
-        ymin= np.max([0.,ymin])
-        for vv in nopointings:
-            axa.plot([vv,vv],[ymin,ymax],color='r',linestyle=(0, (1, 10)))
-        
+        # Plot: N pixels observed vs night
+        legy = 'N obs pixels [$\Delta$T$\leq${} days]'.format(int(self.deltaT_cut))
+        self.plotStat_night(ax_b,stat,'Npixels_observed',legy,nopointings,['gri','yz','all'],True)
+        self.plotStat_night(ax_b_1,stat,'Npixels_observed',legy,nopointings,['g','r','i'],True)
         #print(pixels)
         #idtest = pixels['healpixID'].isin([39143,39149,39154])
         #print('test',night,pixels[idtest])
@@ -949,8 +889,8 @@ class MoviePixels:
         axa = ax_a
         plt.sca(axa)
        
-
-        self.plotMollview(pixels['gri'],axa,fig)
+        if pixels['gri'] is not None:
+            self.plotMollview(pixels['gri'],axa,fig,night)
         
         if self.saveFig:
             plt.savefig('{}/{}_{}.png'.format(self.plotDir,self.dbName,str(night).zfill(3)))
@@ -958,7 +898,7 @@ class MoviePixels:
         if not self.realTime:
             plt.close(fig)
             
-    def plotMollview(self,pixels,axa,fig):
+    def plotMollview(self,pixels,axa,fig,night):
         """
         Method to display a Mollweid view
 
@@ -970,10 +910,12 @@ class MoviePixels:
           axis to use for the plot
         fig: matplotlib figure
           figure to use for plot
+        night: int
+          night number
         """
         
         
-        xmin = -1.e-8
+        xmin = 0.99999
         xmax = np.max([np.max(pixels['deltaT']),1])
     
         norm = plt.cm.colors.Normalize(xmin, xmax)
@@ -981,7 +923,7 @@ class MoviePixels:
         n = int(xmax)+1
         n = 9
         from_list = matplotlib.colors.LinearSegmentedColormap.from_list
-        cmap = from_list(None, plt.cm.Set1(range(0,n)), n)
+        cmap = from_list(None, plt.cm.Set1(range(1,n)), n-1)
         cmap.set_under('w')
 
         hpxmap = np.zeros(self.npixels, dtype=np.int)
@@ -999,10 +941,10 @@ class MoviePixels:
         hp.graticule(verbose=False)
         ax = plt.gca()
         image = ax.get_images()[0]
-        cbar= fig.colorbar(image, ax=ax, ticks=range(0,n+1), orientation='horizontal')
+        cbar= fig.colorbar(image, ax=ax, ticks=range(1,n), orientation='horizontal')
         #cbar = fig.colorbar(ax[0,0], ticks=range(0,n), orientation='horizontal')  # set some values to ticks
 
-        labels = list(range(0,n))
+        labels = list(range(1,n))
     
         tick_label = list(map(str, labels))
     
@@ -1012,9 +954,83 @@ class MoviePixels:
         cbar.ax.tick_params(size=0)
         for j, lab in enumerate(tick_label):
             cbar.ax.text(labels[j]+0.5, -10.,lab)
+    
+        ax.text(-3.5,0.7,self.dbName,fontsize=15,color='r')
+        ax.text(-3.5,0.4,'night {}'.format(night),fontsize=15,color='k')
+    
+    def plotHist(self,axa,pixels,keys):
+        """
+        Method to plot deltaT histogram
 
-  
+        Parameters
+        ---------------
+        axa: matplotlib axis
+        pixels: dict
+          data to plot
+        keys: list(str)
+          list of pixels keys to consider
+
+        """
+        
+        
+        plt.sca(axa)
+        for key in keys:
+            val = pixels[key]
+            if val is not None:
+                idx = val['night_last']>-1
+                idx &= val['deltaT']<=self.deltaT_cut
+                axa.hist(val[idx]['deltaT'],histtype='step',color=self.colors[key],bins=np.arange(1,self.deltaT_cut,1.))
             
+        axa.set_xlabel('$\Delta$T',fontsize=12)
+        axa.set_ylabel('Number of entries',fontsize=12)
+        axa.tick_params(axis='x',labelsize=12)
+        axa.tick_params(axis='y', labelsize=12)
+        #axa.set_ylabel('Number of entries',rotation=270)
+        #axa.yaxis.set_label_position("right")
+        #axa.yaxis.tick_right()
+            
+    def plotStat_night(self,axa,stat,whaty,legy,nopointings,keys,draw_legend=False):
+        """
+        Method to plot stat infos vs night
+
+        Parameters
+        ---------------
+        axa: matplotlib axis
+        stat: dict
+          data to plot
+         whaty: str
+            y-variable to drax
+         legy: str
+           y-axis legend corresponding to whaty
+         nopointings: list
+           list of night with telescope downtime
+        keys: list(str)
+          list of stat keys to consider
+         draw_legend: bool, opt
+           to draw the legend (default: False)
+
+        """
+        
+        plt.sca(axa)
+        for key in keys:
+            val = stat[key]
+            if val is not None:
+                axa.plot(val['night'],val[whaty],color=self.colors[key],label=key)
+        ll = legy
+        axa.set_ylabel(ll,fontsize=12)
+        axa.set_xlabel('night',fontsize=12)
+        # put a line when no pointings
+        ymin,ymax = axa.get_ylim()
+        ymin= np.max([00,ymin])
+        for vv in nopointings:
+            axa.plot([vv,vv],[ymin,ymax],color='r',linestyle=(0, (1, 10)))
+
+        #axa.legend(loc='lower center', bbox_to_anchor=(0., -0.3),ncol=3,fontsize=10,frameon=False)
+        if draw_legend:
+            axa.legend(bbox_to_anchor=(-0.3, 0.7),ncol=1,fontsize=12,frameon=False)
+        axa.tick_params(axis='x',labelsize=12)
+        axa.tick_params(axis='y', labelsize=12)
+        
     def makeMovie(self):
         """
         Method to make a movie from png files
