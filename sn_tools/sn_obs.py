@@ -1180,10 +1180,11 @@ class DataToPixels:
         matched_pixels = groups.apply(
             lambda x: self.match(x, self.healpixIDs, self.pixRA, self.pixDec)).reset_index()
 
-        
-        #print('after matching', time.time()-time_ref,
-        #      len(matched_pixels['healpixID'].unique()),matched_pixels.columns)
-        
+        """
+        print('after matching', time.time()-time_ref,
+              len(matched_pixels['healpixID'].unique()),matched_pixels.columns)
+        """
+
         return matched_pixels
 
     def match(self, grp, healpixIDs, pixRA, pixDec):
@@ -1246,11 +1247,21 @@ class DataToPixels:
         pixID_matched = list(healpixIDs[idf])
         pixRA_matched = list(pixRA[idf])
         pixDec_matched = list(pixDec[idf])
-
+ 
         # names = [grp.name]*len(pixID_matched)
         df_pix = pd.DataFrame({'healpixID': pixID_matched,
                                'pixRA': pixRA_matched,
-                               'pixDec': pixDec_matched, })
+                               'pixDec': pixDec_matched, 
+                               })
+
+        listcols = ['observationStartMJD','fieldRA', 'fieldDec','visitExposureTime',
+                    'fiveSigmaDepth', 'numExposures','seeingFwhmEff']
+        df_pix[listcols]= grp[listcols].mean().tolist()
+        """
+        for ll in listcols:
+            print(ll,grp[ll].mean())
+            df_pix[ll]= grp[ll].mean()
+        """
         # 'groupName': names})
 
         return df_pix
