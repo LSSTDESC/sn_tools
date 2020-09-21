@@ -628,7 +628,7 @@ class MoviePixels:
       time of persistency for the plot displayed (default: 5 sec)
 
     """
-    def __init__(self, dbDir, dbDir_pixels,outDirPlot,outDirMovie,dbName,saveMovie=False, realTime=False, saveFig=False, nightmin=0,nightmax=365,time_display=5,nside=64):
+    def __init__(self, dbDir, dbDir_pixels,figDir,movieDir,dbName,saveMovie=False, realTime=False, saveFig=False, nightmin=0,nightmax=365,time_display=5,nside=64):
 
         self.realTime = realTime
         self.dbName = dbName
@@ -639,20 +639,20 @@ class MoviePixels:
         self.nightmin = nightmin
         self.nightmax = nightmax
         self.saveMovie = saveMovie
-        self.outDirMovie = outDirMovie
+        self.movieDir= movieDir
 
         if saveMovie:
             self.saveFig = True
-             if not os.path.isdir(outDirMovie):
-                os.makedirs(outDirMovie)
+            if not os.path.isdir(movieDir):
+                os.makedirs(movieDir)
 
         self.npixels = hp.nside2npix(nside)
         # prepare output directory
-        self.plotDir = '{}/{}'.format(outDirPlot,self.dbName)
+        self.plotDir = '{}/{}'.format(figDir,self.dbName)
 
         if self.saveFig:
-            if not os.path.isdir(plotDir_gen):
-                os.makedirs(plotDir_gen)
+            if not os.path.isdir(figDir):
+                os.makedirs(figDir)
 
             if os.path.isdir(self.plotDir):
                 os.system('rm -rf {}'.format(self.plotDir))
@@ -1040,5 +1040,5 @@ class MoviePixels:
         Method to make a movie from png files
         """
         dirFigs = self.plotDir
-        cmd = 'ffmpeg -r 3 -f image2 -s 1920x1080 -i {}/{}_%03d.png -vcodec libx264 -crf 25  -pix_fmt yuv420p {}/{}.mp4 -y'.format(self.plotDir,self.dbName,self.outdirMovie,self.dbName)
+        cmd = 'ffmpeg -r 3 -f image2 -s 1920x1080 -i {}/{}_%03d.png -vcodec libx264 -crf 25  -pix_fmt yuv420p {}/{}.mp4 -y'.format(self.plotDir,self.dbName,self.movieDir,self.dbName)
         os.system(cmd)
