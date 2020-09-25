@@ -16,6 +16,8 @@ from shapely import affinity
 import os
 import glob
 import healpy as hp
+#import ffmpeg
+#import sys
 
 def fieldType(obs, RACol, DecCol):
     """
@@ -647,6 +649,7 @@ class MoviePixels:
                 os.makedirs(movieDir)
 
         self.npixels = hp.nside2npix(nside)
+        self.pixel_area = hp.nside2pixarea(nside,degrees=True)
         # prepare output directory
         self.plotDir = '{}/{}'.format(figDir,self.dbName)
 
@@ -707,7 +710,7 @@ class MoviePixels:
         # selection per night
         nVisits_min = {}
         nVisits_min['gri'] = dict(zip(['g','r','i'],[1,1,1]))
-        nVisits_min['yz'] = dict(zip(['y','z'],[1,1]))
+        nVisits_min['yz'] = dict(zip(['z','y'],[1,1]))
         nVisits_min['all'] = dict(zip(['u','g','r','i','z','y'],[1,1,1,1,1,1]))
         nVisits_min['g'] = dict(zip(['g'],[1]))
         nVisits_min['r'] = dict(zip(['r'],[1]))
@@ -801,18 +804,23 @@ class MoviePixels:
         # pixsel_night: pixels selected for this night
         pixsel_night = groups[~idx][['healpixID','night']]
         pixsel_night = pixsel_night.rename(columns={'night':'night_last'})
-
+        
         # update pixel_night from infos of pixsel_night
         idx = pixel_night['healpixID'].isin(pixsel_night['healpixID'])
             
         pixel_night = pd.concat((pixel_night[~idx],pixsel_night))
 
+        # get the observed area per night
+        iap = np.abs(night-pixel_night['night_last'])<1.e-5
+        observed_area = len(pixel_night[iap])*self.pixel_area
+        
         # some selection to avoid biased stat
         iop = pixel_night['night_last']>-1
         iop &= (night-pixel_night['night_last'])<=self.deltaT_cut
 
-        r.append((night,np.median(night-pixel_night[iop]['night_last']),len(pixel_night[iop])))
-        rhere = np.rec.fromrecords(r, names=['night','deltaT_median','Npixels_observed'])
+        
+        r.append((night,np.median(night-pixel_night[iop]['night_last']),len(pixel_night[iop]),observed_area))
+        rhere = np.rec.fromrecords(r, names=['night','deltaT_median','Npixels_observed','observed_area'])
         if res is None:
             res = rhere
         else:
@@ -848,6 +856,7 @@ class MoviePixels:
     
         #fig, ax =plt.subplots(nrows=2,ncols=2,figsize=(15,12))
         fig = plt.figure(figsize=(15,12))
+        fig.subplots_adjust(top=0.99)
         #fig.suptitle('{} - night {}'.format(self.dbName,int(night)))
 
         """
@@ -857,7 +866,7 @@ class MoviePixels:
         ax_d = fig.add_axes([0.1,0.7,0.25,0.25])
         """
 
-        ax_a = fig.add_axes([0.275,0.55,0.45,0.45])
+        ax_a = fig.add_axes([0.20,0.55,0.45,0.45])
         
         ax_b = fig.add_axes([0.15,0.30,0.2,0.2])
         ax_c = fig.add_axes([0.45,0.30,0.2,0.2])
@@ -867,7 +876,8 @@ class MoviePixels:
         ax_c_1 = fig.add_axes([0.45,0.05,0.2,0.2])
         ax_d_1 = fig.add_axes([0.75,0.05,0.2,0.2])
 
-        
+        ax_b_2 = fig.add_axes([0.75,0.55,0.2,0.2])
+        ax_c_2 = fig.add_axes([0.75,0.80,0.2,0.2])
 
         ## Plot: delta_T distribution
         #axa = ax[0,1]
@@ -888,6 +898,12 @@ class MoviePixels:
         #idtest = pixels['healpixID'].isin([39143,39149,39154])
         #print('test',night,pixels[idtest])
 
+        # plot obs area per night
+        legy = 'obs. area [deg$^2$]'
+        self.plotStat_night(ax_c_2,stat,'observed_area',legy,nopointings,['gri','yz','all'])
+        self.plotStat_night(ax_b_2,stat,'observed_area',legy,nopointings,['g','r','i'])
+
+        
         # Plot: Mollview of deltaT for this night
         #axa = ax[0,0]
         axa = ax_a
@@ -895,12 +911,15 @@ class MoviePixels:
        
         if pixels['gri'] is not None:
             self.plotMollview(pixels['gri'],axa,fig,night)
+
+        #plt.tight_layout()
         
         if self.saveFig:
-            plt.savefig('{}/{}_{}.png'.format(self.plotDir,self.dbName,str(night).zfill(3)))
+            plt.savefig('{}/{}_{}.jpg'.format(self.plotDir,self.dbName,str(night).zfill(3)))
 
         if not self.realTime:
             plt.close(fig)
+
             
     def plotMollview(self,pixels,axa,fig,night):
         """
@@ -959,8 +978,8 @@ class MoviePixels:
         for j, lab in enumerate(tick_label):
             cbar.ax.text(labels[j]+0.5, -10.,lab)
     
-        ax.text(-3.5,0.7,self.dbName,fontsize=15,color='r')
-        ax.text(-3.5,0.4,'night {}'.format(night),fontsize=15,color='k')
+        ax.text(-3.5,0.9,self.dbName,fontsize=15,color='r')
+        ax.text(-3.5,0.6,'night {}'.format(night),fontsize=15,color='k')
     
     def plotHist(self,axa,pixels,keys):
         """
@@ -1026,9 +1045,12 @@ class MoviePixels:
         # put a line when no pointings
         ymin,ymax = axa.get_ylim()
         ymin= np.max([00,ymin])
-        for vv in nopointings:
-            axa.plot([vv,vv],[ymin,ymax],color='r',linestyle=(0, (1, 10)))
-
+        for ii,vv in enumerate(nopointings):
+            if ii==0:
+                axa.plot([vv,vv],[ymin,ymax],color='r',linestyle=(0, (1, 10)),label='dtime')
+            else:
+                axa.plot([vv,vv],[ymin,ymax],color='r',linestyle=(0, (1, 10)))
+                
         #axa.legend(loc='lower center', bbox_to_anchor=(0., -0.3),ncol=3,fontsize=10,frameon=False)
         if draw_legend:
             axa.legend(bbox_to_anchor=(-0.3, 0.7),ncol=1,fontsize=12,frameon=False)
@@ -1040,5 +1062,20 @@ class MoviePixels:
         Method to make a movie from png files
         """
         dirFigs = self.plotDir
-        cmd = 'ffmpeg -r 3 -f image2 -s 1920x1080 -i {}/{}_%03d.png -vcodec libx264 -crf 25  -pix_fmt yuv420p {}/{}.mp4 -y'.format(self.plotDir,self.dbName,self.movieDir,self.dbName)
+        
+        cmd = 'ffmpeg -r 1 -f image2 -s 1920x1080 -i {}/{}_%03d.jpg -vcodec libx264 -crf 25  -pix_fmt yuv420p {}/{}.mp4 -y'.format(self.plotDir,self.dbName,self.movieDir,self.dbName)
         os.system(cmd)
+        """
+        out, err = (
+            ffmpeg
+            .input('{}/{}_%03d.jpg'.format(self.plotDir,self.dbName), format='image2')
+            #.filter('select', 'gte(n,{})'.format(frame_num))
+            #.output('{}/{}.mp4'.format(self.movieDir,self.dbName),vframes=1,vcodec='libx264',pix_fmt='yuv420p',r='3',s='1920x1080')
+            .output('{}/{}.mp4'.format(self.movieDir,self.dbName),r=1,vcodec='libx264',s='1920x1080',pix_fmt='yuv420p')
+            #.output('pipe:',vframes=1,r='3',s='1920x1080',vcodec='libx264',pix_fmt='yuv420p')
+            .overwrite_output()
+            .run()
+            )
+        """
+        #sys.stdout.buffer.write(out)
+       
