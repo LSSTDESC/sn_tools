@@ -1062,8 +1062,9 @@ class MoviePixels:
         Method to make a movie from png files
         """
         dirFigs = self.plotDir
-        
-        cmd = 'ffmpeg -r 1 -f image2 -s 1920x1080 -i {}/{}_%03d.jpg -vcodec libx264 -crf 25  -pix_fmt yuv420p {}/{}.mp4 -y'.format(self.plotDir,self.dbName,self.movieDir,self.dbName)
+        ffmpeg_cmd = '../../ffmpeg/ffmpeg-4.3.1-i686-static/ffmpeg'
+
+        cmd = '{} -r 1 -f image2 -s 1920x1080 -i {}/{}_%03d.jpg -vcodec libx264 -crf 25  -pix_fmt yuv420p {}/{}.mp4 -y'.format(ffmpeg_cmd,self.plotDir,self.dbName,self.movieDir,self.dbName)
         os.system(cmd)
         """
         out, err = (
