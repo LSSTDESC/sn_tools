@@ -628,9 +628,11 @@ class MoviePixels:
       last night of observation (default: 365)
     time_display: int
       time of persistency for the plot displayed (default: 5 sec)
+    ffmpeg_cmd: str
+      command to use ffmpeg
 
     """
-    def __init__(self, dbDir, dbDir_pixels,figDir,movieDir,dbName,saveMovie=False, realTime=False, saveFig=False, nightmin=0,nightmax=365,time_display=5,nside=64):
+    def __init__(self, dbDir, dbDir_pixels,figDir,movieDir,dbName,saveMovie=False, realTime=False, saveFig=False, nightmin=0,nightmax=365,time_display=5,nside=64, ffmpeg_cmd='ffmpeg'):
 
         self.realTime = realTime
         self.dbName = dbName
@@ -642,7 +644,8 @@ class MoviePixels:
         self.nightmax = nightmax
         self.saveMovie = saveMovie
         self.movieDir= movieDir
-
+        self.ffmpeg_cmd = ffmpeg_cmd
+        
         if saveMovie:
             self.saveFig = True
             if not os.path.isdir(movieDir):
@@ -1062,9 +1065,9 @@ class MoviePixels:
         Method to make a movie from png files
         """
         dirFigs = self.plotDir
-        ffmpeg_cmd = '../../ffmpeg/ffmpeg-4.3.1-i686-static/ffmpeg'
+        #ffmpeg_cmd = '../../ffmpeg/ffmpeg-4.3.1-i686-static/ffmpeg'
 
-        cmd = '{} -r 1 -f image2 -s 1920x1080 -i {}/{}_%03d.jpg -vcodec libx264 -crf 25  -pix_fmt yuv420p {}/{}.mp4 -y'.format(ffmpeg_cmd,self.plotDir,self.dbName,self.movieDir,self.dbName)
+        cmd = '{} -r 2 -f image2 -s 1920x1080 -i {}/{}_%03d.jpg -vcodec libx264 -crf 25  -pix_fmt yuv420p {}/{}.mp4 -y'.format(self.ffmpeg_cmd,self.plotDir,self.dbName,self.movieDir,self.dbName)
         os.system(cmd)
         """
         out, err = (
