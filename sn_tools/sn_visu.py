@@ -821,8 +821,14 @@ class MoviePixels:
         iop = pixel_night['night_last']>-1
         iop &= (night-pixel_night['night_last'])<=self.deltaT_cut
 
-        
-        r.append((night,np.median(night-pixel_night[iop]['night_last']),len(pixel_night[iop]),observed_area))
+        """
+        import matplotlib.pyplot as plt
+        print(np.median(night+1-pixel_night[iop]['night_last']),night,pixel_night[iop]['night_last'])
+        plt.hist(night+1-pixel_night[iop]['night_last'],histtype='step')
+        plt.show()
+        """
+        # add +1 to current night for median estimation since this will be displayed the next night
+        r.append((night,np.median(night+1-pixel_night[iop]['night_last']),len(pixel_night[iop]),observed_area))
         rhere = np.rec.fromrecords(r, names=['night','deltaT_median','Npixels_observed','observed_area'])
         if res is None:
             res = rhere
