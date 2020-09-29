@@ -18,6 +18,7 @@ import glob
 import healpy as hp
 #import ffmpeg
 #import sys
+#matplotlib.use('agg')
 
 def fieldType(obs, RACol, DecCol):
     """
@@ -630,9 +631,16 @@ class MoviePixels:
       time of persistency for the plot displayed (default: 5 sec)
     ffmpeg_cmd: str
       command to use ffmpeg
+    mode: str
+      mode to use this programm (interactive/batch)
 
     """
-    def __init__(self, dbDir, dbDir_pixels,figDir,movieDir,dbName,saveMovie=False, realTime=False, saveFig=False, nightmin=0,nightmax=365,time_display=5,nside=64, ffmpeg_cmd='ffmpeg'):
+    def __init__(self, dbDir, dbDir_pixels,figDir,movieDir,dbName,saveMovie=False, realTime=False, saveFig=False, nightmin=0,nightmax=365,time_display=5,nside=64, ffmpeg_cmd='ffmpeg',mode='interactive'):
+
+
+        if mode == 'batch':
+            #matplotlib backend stuff
+            matplotlib.use('agg')
 
         self.realTime = realTime
         self.dbName = dbName
