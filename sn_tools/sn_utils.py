@@ -625,7 +625,7 @@ class SimuParameters:
         zmin = self.params['z']['min']
         zmax = self.params['z']['max']
         zstep = self.params['z']['step']
-        NSN_factor = self.params['NSN factor']
+        NSN_factor = self.params['NSN_factor']
 
         if ztype == 'unique':
             zvals = [zmin]
