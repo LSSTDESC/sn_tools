@@ -10,7 +10,7 @@ from scipy.interpolate import interp1d
 import numpy.lib.recfunctions as rf
 import sqlite3
 import logging
-
+from collections import MutableMapping
 
 def append(metricTot, sel):
     """
@@ -705,4 +705,65 @@ def colName(names, list_search):
 
     return None
 
+def recursive_items(dictionary):
+    """
+    Method to loop on a nested dictionnary
     
+    Parameters
+    --------------
+    dictionnary: dict
+
+    Returns
+    ----------
+    generator (yield) of the 'last' (key,value)
+
+    """
+    for key, value in dictionary.items():
+        if type(value) is dict:
+            yield from recursive_items(value)
+        else:
+            yield (key, value)
+
+def recursive_keys(keys,dictionary):
+    """
+    Method to loop on a nested dictionnary
+    
+    Parameters
+    --------------
+    dictionnary: dict
+
+    Returns
+    ----------
+    generator (yield) the keys
+
+    """
+    for key, value in dictionary.items():
+        if type(value) is dict:
+            keys.append(key)
+            return recursive_keys(keys,value)
+        else:
+            return keys
+            
+def recursive_merge(d1, d2):
+    """
+    Update two dicts of dicts recursively, 
+    if either mapping has leaves that are non-dicts, 
+    the second s leaf overwrites the first s.
+
+    Parameters
+    ---------------
+    d1, d2: dicts to merge
+
+    Returns
+    -----------
+    merged dict
+    """
+    for k, v in d1.items(): # in Python 2, use .iteritems()!
+        if k in d2:
+                # this next check is the only difference!
+                if all(isinstance(e, MutableMapping) for e in (v, d2[k])):
+                    d2[k] = recursive_merge(v, d2[k])
+                    # we could further check types and merge as appropriate here.
+    d3 = d1.copy()
+    d3.update(d2)
+    return d3
