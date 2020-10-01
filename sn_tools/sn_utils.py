@@ -493,7 +493,8 @@ class SimuParameters:
                                H0=cosmo_parameters['H0'],
                                Om0=cosmo_parameters['Omega_m'])
         self.web_path = web_path
-        self.x1_color = self.getDist(self.params['x1_color']['rate'])
+        if dirFiles is not None:
+            self.x1_color = self.getDist(self.params['x1_color']['rate'])
         self.mjdCol = mjdCol
         self.seasonCol = seasonCol
         self.filterCol = filterCol
@@ -559,11 +560,15 @@ class SimuParameters:
         pars = self.zdist(duration)
 
         if pars is None:
-            return None
+            return pars
         # add daymax, which is z-dependent (boundaries effects)
 
         pars = self.daymaxdist(pars, daymin, daymax)
-
+        
+        if self.dirFiles is None:
+            pars=self.complete_pars(pars)
+            return pars.to_records(index=False)
+        
         if len(pars) == 0:
             return None
 
@@ -597,16 +602,21 @@ class SimuParameters:
             for pp in ['x0', 'x1', 'color', 'daymax']:
                 pars['epsilon_{}'.format(pp)] = 0.0
 
-        # finally add min and max rf
+        pars=self.complete_pars(pars)
+        
+        #print('total number of SN to simulate:', len(pars))
+        return pars.to_records(index=False)
+
+    def complete_pars(self, pars):
+        
+         # finally add min and max rf
         pars['min_rf_phase'] = self.min_rf_phase
         pars['max_rf_phase'] = self.max_rf_phase
         pars['min_rf_phase_qual'] = self.min_rf_phase_qual
         pars['max_rf_phase_qual'] = self.max_rf_phase_qual
 
+        return pars
         
-        #print('total number of SN to simulate:', len(pars))
-        return pars.to_records(index=False)
-
     def zdist(self, duration):
         """
         Method to estimate the redshift distribution
