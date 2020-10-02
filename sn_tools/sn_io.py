@@ -767,3 +767,77 @@ def recursive_merge(d1, d2):
     d3 = d1.copy()
     d3.update(d2)
     return d3
+
+def make_dict_from_config(path, config_file):
+    """
+    Function to make a dict from a configuration file
+
+    Parameters
+    ---------------
+    path: str
+      path dir to the config file
+    config_file: str
+       config file name
+
+    Returns
+    ----------
+    dict with the config file infos
+
+    """
+
+    # open and load the file here
+    ffile = open('{}/{}'.format(path,config_file), 'r') 
+    line = ffile.read().splitlines()
+    ffile.close()
+
+    # process the result
+    params = {}
+    for i,ll in enumerate(line):
+        if ll!='' and ll[0]!='#':
+            spla = ll.split('#')
+            lspl = spla[0].split(' ')
+            lspl = ' '.join(lspl).split() 
+            n = len(lspl)
+            keym=''
+            lim = n-2
+            for io,keya in enumerate([lspl[i] for i in range(lim)]):
+                keym += keya
+                if io != lim-1:
+                    keym += '_'
+            params[keym]=(lspl[n-1],lspl[n-2],spla[1])
+    return params
+
+def make_dict_from_optparse(thedict):
+    """
+    Function to make a nested dict from a dict
+    The idea is to split the original dict key(delimiter: _)  to as many keys
+
+    Parameters
+    --------------
+    thedict: dict
+
+    Returns
+    ----------
+    final dict
+
+    """
+
+    params = {}
+    for key,vals in thedict.items():
+        lspl = key.split('_')
+        n = len(lspl)
+        mystr = ''
+        myclose = ''
+        for keya in [lspl[i] for i in range(n)]:
+            mystr += '{\''+keya+ '\':'
+            myclose +=' }'
+            
+        if vals[0] != 'str':
+            dd = '{} {} {}'.format(mystr,eval('{}({})'.format(vals[0],vals[1])),myclose)
+        else:
+            dd = '{} \'{}\' {}'.format(mystr,vals[1],myclose)
+
+        thedict = eval(dd)
+        params = recursive_merge(params, thedict)
+    
+    return params
