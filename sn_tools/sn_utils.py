@@ -493,8 +493,8 @@ class SimuParameters:
                                H0=cosmo_parameters['H0'],
                                Om0=cosmo_parameters['Omega_m'])
         self.web_path = web_path
-        if dirFiles is not None:
-            self.x1_color = self.getDist(self.params['x1_color']['rate'])
+        if 'modelPar' in self.params.keys():
+            self.modelParDist = self.getDist(self.params['modelPar']['name'],self.params['modelPar']['rate'])
         self.mjdCol = mjdCol
         self.seasonCol = seasonCol
         self.filterCol = filterCol
@@ -504,7 +504,7 @@ class SimuParameters:
         self.min_rf_phase_qual = self.params['min_rf_phase_qual']
         self.max_rf_phase_qual = self.params['max_rf_phase_qual']
 
-    def getDist(self, rate):
+    def getDist(self, distname,rate):
         """ get (x1,color) distributions
         Parameters
         --------------
@@ -518,23 +518,27 @@ class SimuParameters:
         """
 
         # prefix = os.getenv('SN_UTILS_DIR')+'/input/Dist_X1_Color_'+rate+'_'
-
-        prefix = '{}/Dist_X1_Color_{}'.format(self.dirFiles, rate)
+        pars = distname.split('_')
+        para = pars[0]
+        if len(pars)>=1:
+            parb = pars[1]
+        
+        prefix = '{}/Dist_{}_{}_{}'.format(self.dirFiles, pars,pars,rate)
         suffix = '.txt'
         # names=['x1','c','weight_x1','weight_c','weight_tot']
-        dtype = np.dtype([('x1', np.float), ('color', np.float),
-                          ('weight_x1', np.float), ('weight_color', np.float),
+        dtype = np.dtype([(para, np.float), (parb, np.float),
+                          ('weight_{}'.format(para), np.float), ('weight_{}'.format(parb), np.float),
                           ('weight', np.float)])
-        x1_color = {}
+        params = {}
         for val in ['low_z', 'high_z']:
             fName = '{}_{}{}'.format(
                 prefix, val, suffix)
-            fName = 'Dist_X1_Color_{}_{}{}'.format(rate, val, suffix)
+            fName = 'Dist_{}_{}_{}_{}{}'.format(para,parb,rate, val, suffix)
             check_get_file(self.web_path, self.dirFiles, fName)
-            x1_color[val] = np.loadtxt(
+            params[val] = np.loadtxt(
                 '{}/{}'.format(self.dirFiles, fName), dtype=dtype)
 
-        return x1_color
+        return params
 
     def Params(self, obs):
         """
@@ -777,9 +781,9 @@ class SimuParameters:
                     idx &= pars['z'] < vv[1]
                     sel = pd.DataFrame(pars[idx])
                     if sel.size > 0:
-                        norm = np.sum(self.x1_color[key]['weight'])
+                        norm = np.sum(self.modelParDist[key]['weight'])
                         sel[pname] = np.random.choice(
-                            self.x1_color[key][pname], len(sel), p=self.x1_color[key]['weight']/norm)
+                            self.modelParDist[key][pname], len(sel), p=self.modelParDist[key]['weight']/norm)
                         pdf = pd.concat((pdf, sel))
             else:
                 pdf = pd.DataFrame(pars)
