@@ -149,7 +149,7 @@ class GenerateSample:
         self.params = sn_parameters
         self.sn_rate = SN_Rate(rate=self.params['z']['rate'],
                                H0=cosmo_parameters['H0'],
-                               Om0=cosmo_parameters['Omega_m'])
+                               Om0=cosmo_parameters['Om'])
 
         self.x1_color = self.getDist(self.params['x1_color']['rate'])
         self.mjdCol = mjdCol
@@ -491,7 +491,7 @@ class SimuParameters:
         self.params = sn_parameters
         self.sn_rate = SN_Rate(rate=self.params['z']['rate'],
                                H0=cosmo_parameters['H0'],
-                               Om0=cosmo_parameters['Omega_m'])
+                               Om0=cosmo_parameters['Om'])
         self.web_path = web_path
         if 'modelPar' in self.params.keys():
             self.modelParDist = self.getDist(self.params['modelPar']['name'],self.params['modelPar']['rate'])
