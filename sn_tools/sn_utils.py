@@ -156,10 +156,10 @@ class GenerateSample:
         self.seasonCol = seasonCol
         self.filterCol = filterCol
         self.area = area
-        self.min_rf_phase = self.params['min_rf_phase']
-        self.max_rf_phase =self.params['max_rf_phase']
-        self.min_rf_phase_qual = self.params['min_rf_phase_qual']
-        self.max_rf_phase_qual =self.params['max_rf_phase_qual']
+        self.min_rf_phase = self.params['minRFphase']
+        self.max_rf_phase =self.params['maxRFphase']
+        self.min_rf_phase_qual = self.params['minRFphaseQual']
+        self.max_rf_phase_qual =self.params['maxRFphaseQual']
         self.web_path = web_path
 
     def __call__(self, obs):
@@ -216,7 +216,7 @@ class GenerateSample:
         if len(r) > 0:
             names = ['z', 'x1', 'color', 'daymax',
                      'epsilon_x0', 'epsilon_x1', 'epsilon_color',
-                     'epsilon_daymax', 'min_rf_phase', 'max_rf_phase','min_rf_phase_qual','max_rf_phase_qual']
+                     'epsilon_daymax', 'minRFphase', 'maxRFphase','minRFphaseQual','maxRFphaseQual']
             types = ['f8']*len(names)
             # params = np.zeros(len(r), dtype=list(zip(names, types)))
             params = np.asarray(r, dtype=list(zip(names, types)))
@@ -361,7 +361,7 @@ class GenerateSample:
                 r.append((z, x1_color[0], x1_color[1], T0, 0.,
                           0., 0., 0., self.min_rf_phase, self.max_rf_phase,self.min_rf_phase_qual, self.max_rf_phase_qual))
         rdiff = []
-        if self.params['differential_flux']:
+        if self.params['differentialFlux']:
             for rstart in r:
                 for kdiff in [4, -4, 5, -5, 6, -6, 7, -7]:
                     rstartc = list(rstart)
@@ -499,10 +499,10 @@ class SimuParameters:
         self.seasonCol = seasonCol
         self.filterCol = filterCol
         self.area = area
-        self.min_rf_phase = self.params['min_rf_phase']
-        self.max_rf_phase = self.params['max_rf_phase']
-        self.min_rf_phase_qual = self.params['min_rf_phase_qual']
-        self.max_rf_phase_qual = self.params['max_rf_phase_qual']
+        self.min_rf_phase = self.params['minRFphase']
+        self.max_rf_phase = self.params['maxRFphase']
+        self.min_rf_phase_qual = self.params['minRFphaseQual']
+        self.max_rf_phase_qual = self.params['maxRFphaseQual']
 
     def getDist(self, distname,rate):
         """ get (x1,color) distributions
@@ -583,7 +583,7 @@ class SimuParameters:
         pars = self.pdist(pars, 'color')
 
         # add epsilon_*
-        if self.params['differential_flux']:
+        if self.params['differentialFlux']:
             epsilon = 1.e-8
             epsi = pd.DataFrame([0]*1+[-1.0, 1.0]+[0.0]*6,
                                 columns=['epsilon_x0'])
@@ -614,10 +614,10 @@ class SimuParameters:
     def complete_pars(self, pars):
         
          # finally add min and max rf
-        pars['min_rf_phase'] = self.min_rf_phase
-        pars['max_rf_phase'] = self.max_rf_phase
-        pars['min_rf_phase_qual'] = self.min_rf_phase_qual
-        pars['max_rf_phase_qual'] = self.max_rf_phase_qual
+        pars['minRFphase'] = self.min_rf_phase
+        pars['maxRFphase'] = self.max_rf_phase
+        pars['minRFphaseQual'] = self.min_rf_phase_qual
+        pars['maxRFphaseQual'] = self.max_rf_phase_qual
 
         return pars
         
@@ -639,7 +639,7 @@ class SimuParameters:
         zmin = self.params['z']['min']
         zmax = self.params['z']['max']
         zstep = self.params['z']['step']
-        NSN_factor = self.params['NSN_factor']
+        NSN_factor = self.params['NSNfactor']
 
         if ztype == 'unique':
             zvals = [zmin]
