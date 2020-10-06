@@ -337,8 +337,8 @@ class LCfast:
                                           valb] = dFlux[vala] * dFlux[valb]
 
         # remove LC points outside the restframe phase range
-        min_rf_phase = gen_par['min_rf_phase'][:, np.newaxis]
-        max_rf_phase = gen_par['max_rf_phase'][:, np.newaxis]
+        min_rf_phase = gen_par['minRFphase'][:, np.newaxis]
+        max_rf_phase = gen_par['maxRFphase'][:, np.newaxis]
         flag = (p >= min_rf_phase) & (p <= max_rf_phase)
 
         # remove LC points outside the (blue-red) range
