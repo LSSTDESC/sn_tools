@@ -21,7 +21,6 @@ import os
 from sn_tools.sn_clusters import ClusterObs
 import copy
 
-
 def DDFields(DDfile=None):
     """
     Function to define DD fields
@@ -1109,7 +1108,7 @@ class DataToPixels:
         """
 
         # display: (RA,Dec) distribution of the data
-
+        
         if display:
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots()
@@ -1121,7 +1120,7 @@ class DataToPixels:
         # print('searching data inside',RA,Dec,widthRA,widthDec)
         dataSel = DataInside(data, RA, Dec, widthRA+1., widthDec+1.,
                              RACol=self.RACol, DecCol=self.DecCol)
-
+  
         # display: (RA,Dec) distribution of the selected data (ie inside the area)
         # if display:
         #    dataSel.plot()
@@ -1140,6 +1139,12 @@ class DataToPixels:
         if nodither:
             dataset[self.RACol] = np.mean(dataset[self.RACol])
             dataset[self.DecCol] = np.mean(dataset[self.DecCol])
+
+        if display:
+            import matplotlib.pyplot as plt
+            fig, ax = plt.subplots()
+            ax.plot(dataset[self.RACol], dataset[self.DecCol], 'ko')
+            plt.show()
 
         self.observations = dataset
 
@@ -1338,7 +1343,8 @@ class ProcessPixels:
         self.outDir = outDir
         self.dbName = dbName
         self.num = ipoint
-
+   
+        
         # data will be save so clean the output directory first
         if self.saveData:
             self.clean()
@@ -1401,8 +1407,10 @@ class ProcessPixels:
 
             dataPixels['iproc'] = [self.num]*len(dataPixels)
 
+            #print('running the metrics')
             self.runMetrics(dataPixels)
-            # print('pixel processed',ipixel,time.time()-time_ref)
+            #print('pixel processed',ipixel,time.time()-time_ref)
+            
             if self.saveData and ipix >= 20:
                 isave += 1
                 self.dump(ip, isave)
