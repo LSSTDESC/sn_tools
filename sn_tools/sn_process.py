@@ -7,7 +7,6 @@ import multiprocessing
 import glob
 import random
 
-
 class Process:
     """
     Class to process data ie run metrics on a set of pixels
@@ -77,6 +76,8 @@ class Process:
         self.nclusters = nclusters
         self.radius = radius
 
+
+        
 
         # loading observations
 
@@ -312,7 +313,7 @@ class Process:
 
             procpix(pixels_run, datapixels.observations, ipoint)
 
-        # print('end of processing for', j, time.time()-time_ref)
+        print('end of processing for', j, time.time()-time_ref)
 
     def procix(self, pixels, observations, j=0, output_q=None):
         """
@@ -331,6 +332,7 @@ class Process:
         """
         time_ref = time.time()
         # print('there we go instance procpix')
+
         procpix = ProcessPixels(
             self.metricList, j, outDir=self.outDir, dbName=self.dbName, saveData=self.saveData)
 
