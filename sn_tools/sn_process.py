@@ -49,7 +49,7 @@ class Process:
     """
 
     def __init__(self, dbDir, dbName, dbExtens,
-                 fieldType, nside,
+                 fieldType, fieldName,nside,
                  RAmin, RAmax,
                  Decmin, Decmax,
                  saveData, remove_dithering,
@@ -61,6 +61,7 @@ class Process:
         self.dbName = dbName
         self.dbExtens = dbExtens
         self.fieldType = fieldType
+        self.fieldName = fieldName
         self.nside = nside
         self.RAmin = RAmin
         self.RAmax = RAmax
@@ -84,6 +85,9 @@ class Process:
        
         obs, patches = self.load()
 
+        if 'DD' in self.fieldType:
+            print('DD clusters',patches[['fieldName','RA', 'Dec', 'radius_RA', 'radius_Dec']])
+        
         #print('in Process - observations loaded')
         """
         import matplotlib.pyplot as plt
@@ -94,7 +98,7 @@ class Process:
         if self.pixelmap_dir == '':
             nnproc = self.nprocs
             if 'DD' in self.fieldType:
-                nnproc = self.nclusters
+                nnproc = len(patches)
             
             self.pixelmap = self.multiprocess_getpixels(patches, obs, func=self.processPatch,nnproc=nnproc).to_records(index=False)
         else:
@@ -170,7 +174,7 @@ class Process:
             self.RACol = 'RA'
             self.DecCol = 'Dec'
         """
-        observations, patches = patchObs(observations, self.fieldType,
+        observations, patches = patchObs(observations, self.fieldType,self.fieldName,
                                          self.dbName,
                                          self.nside,
                                          self.RAmin, self.RAmax,

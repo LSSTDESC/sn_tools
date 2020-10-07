@@ -70,7 +70,7 @@ def DDFields(DDfile=None):
         return fields
 
 
-def patchObs(observations, fieldType,
+def patchObs(observations, fieldType,fieldName,
              dbName, nside, RAmin, RAmax, Decmin, Decmax,
              RACol, DecCol,
              display=False, nclusters=5, radius=4.):
@@ -138,6 +138,12 @@ def patchObs(observations, fieldType,
         patches = patches.rename(
             columns={"width_RA": "radius_RA", "width_Dec": "radius_Dec"})
 
+        if fieldName != 'all':
+            idx = patches['fieldName'] == fieldName
+            if len(patches[idx])>0:
+                patches = patches[idx]
+
+        
     else:
         if fieldType == 'WFD':
             #print('getting observations')
