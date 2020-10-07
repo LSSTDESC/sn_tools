@@ -92,7 +92,11 @@ class Process:
         """
 
         if self.pixelmap_dir == '':
-            self.multiprocess(patches, obs, func=self.processPatch)
+            nnproc = self.nprocs
+            if 'DD' in self.fieldType:
+                nnproc = self.nclusters
+            
+            self.pixelmap = self.multiprocess_getpixels(patches, obs, func=self.processPatch,nnproc=nnproc).to_records(index=False)
         else:
             # load the pixel maps
             print('pixel map loading', self.pixelmap_dir, self.fieldType,
@@ -107,13 +111,14 @@ class Process:
                 print('Severe problem: pixel map does not exist!!!!',search_path)
             else:
                 self.pixelmap = np.load(pixelmap_files[0],allow_pickle=True)
-                if self.npixels == -1:
-                    self.npixels = len(
-                        np.unique(self.pixelmap['healpixID']))
-                random_pixels = self.randomPixels(self.pixelmap, self.npixels)
-                print('number of pixels to process', len(random_pixels),obs.dtype)
-                self.multiprocess(random_pixels, obs,
-                                  func=self.procix)
+
+        if self.npixels == -1:
+            self.npixels = len(
+                np.unique(self.pixelmap['healpixID']))
+        random_pixels = self.randomPixels(self.pixelmap, self.npixels)
+        print('number of pixels to process', len(random_pixels),obs.dtype)
+        self.multiprocess(random_pixels, obs,
+                          func=self.procix)
 
     def load(self):
         """
@@ -176,6 +181,62 @@ class Process:
         
         return observations, patches
 
+    def multiprocess_getpixels(self, patches, observations, func,nnproc):
+        """
+        Method to grab (healpix) pixels matching observations
+
+        Parameters
+        ---------------
+        patches: pandas df
+          patches coordinates on the sky
+        observations: numpy array
+         numpy array with observations
+        func: the function to apply for multiprocessing
+        nnproc: int
+          number of procs to use
+
+        Returns
+        ----------
+        numpy array with a list of pixels and a link to observations
+
+        """
+
+        timeref = time.time()
+
+        healpixels = patches
+        npixels = int(len(healpixels))
+
+        tabpix = np.linspace(0, npixels, nnproc+1, dtype='int')
+        result_queue = multiprocessing.Queue()
+        nmulti = len(tabpix)-1
+     
+        # multiprocessing
+        for j in range(nmulti):
+        
+            ida = tabpix[j]
+            idb = tabpix[j+1]
+
+            print('go for multiprocessing in getpixels', j, func, len(healpixels[ida:idb]))
+            p = multiprocessing.Process(name='Subprocess-'+str(j), target=func, args=(
+                healpixels[ida:idb], observations, j, result_queue))
+
+            p.start()
+
+        #get the results
+        resultdict = {}
+        for i in range(nmulti):
+            resultdict.update(result_queue.get())
+
+        for p in multiprocessing.active_children():
+            p.join()
+
+        
+        restot = pd.DataFrame()
+        # gather the results
+        for key, vals in resultdict.items():
+            restot = pd.concat((restot, vals), sort=False)
+        return restot
+    
     def multiprocess(self, patches, observations, func):
         """
         Method to perform multiprocessing of metrics
@@ -260,7 +321,11 @@ class Process:
                                 pointing['radius_RA'], pointing['radius_Dec'], self.remove_dithering, display=False)
 
             if pixels is None:
-                return
+                if output_q is not None:
+                    output_q.put({j: pixels})
+                else:
+                    return pixels
+                
 
             # select pixels that are inside the original area
             pixels_run = pixels
@@ -294,27 +359,14 @@ class Process:
 
                 pixels_run = pixels[idx]
 
-            """
-            print('cut', pointing['RA'], pointing['radius_RA'],
-                  pointing['Dec'], pointing['radius_Dec'])
-            """
+            
+        print('Grabing pixels - end of processing for', j, time.time()-time_ref)
 
-            # datapixels.plot(pixels)
-            # print('after selection', len(pixels_run), datapixels.observations)
-
-            npixels = len(np.unique(pixels_run['healpixID']))
-
-            if self.npixels > -1:
-                if npixels >= self.npixels:
-                    # too many pixel found: should choose self.npixels among this
-                    random_pixels = self.randomPixels(pixels_run, self.npixels)
-                    idx = np.in1d(pixels_run['healpixID'], random_pixels)
-                    pixels_run = pixels_run[idx]
-
-            procpix(pixels_run, datapixels.observations, ipoint)
-
-        print('end of processing for', j, time.time()-time_ref)
-
+        if output_q is not None:
+            output_q.put({j: pixels_run})
+        else:
+            return pixels_run
+        
     def procix(self, pixels, observations, j=0, output_q=None):
         """
         Method to process a pixel
