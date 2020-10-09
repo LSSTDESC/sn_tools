@@ -734,7 +734,7 @@ class CalcSN:
         tile_band = np.tile(lc['band'], (len(valu), 1))
         tile_snr = np.tile(lc['snr_m5'], (len(valu), 1))
 
-        flag_snr = tile_snr > 5.
+        flag_snr = tile_snr > 0.
 
         # difftime = lc['time']-lc['daymax']
         phase = np.tile(lc['phase'], (len(valu), 1))
