@@ -646,7 +646,9 @@ class SimuParameters:
 
         if ztype == 'uniform':
             zvals = np.arange(zmin, zmax+zstep, zstep)
-
+            if zvals[0]<1.e-6:
+                zvals[0]=0.01
+                
         if ztype == 'random':
             # get sn rate for this z range
 
