@@ -248,7 +248,7 @@ def loadFile(filename, objtype='pandasDataFrame'):
                     res = pd.concat([res, df], sort=False)
                 if objtype == 'astropyTable':
                     df = Table.read(filename, path=kk)
-                    res = vstack([res, df])
+                    res = vstack([res, df], metadata_conflicts='silent')
             return res
         else:
             print(filename)
