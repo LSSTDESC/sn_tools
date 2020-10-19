@@ -256,26 +256,38 @@ class GenerateFakeObservations:
         """
 
         bands = config['bands']
-        cadence = dict(zip(bands, config['cadence']))
+        #cadence = dict(zip(bands, config['cadence']))
+        cadence = config['cadence']
         shift_days = dict(
-            zip(bands, [config['shift_days']*io for io in range(len(bands))]))
-        m5 = dict(zip(bands, config['m5']))
+            zip(bands, [config['shiftDays']*io for io in range(len(bands))]))
+        #m5 = dict(zip(bands, config['m5']))
+        m5 = config['m5']
+        Nvisits = config['Nvisits']
+        Exposure_Time = config['ExposureTime']
+        seeingEff = config['seeingEff']
+        seeingGeom = config['seeingGeom']
+        airmass = config['airmass']
+        sky = config['sky']
+        moonphase = config['moonphase']
+        """
         Nvisits = dict(zip(bands, config['Nvisits']))
         Exposure_Time = dict(zip(bands, config['Exposure_Time']))
-        inter_season_gap = 300.
+       
         seeingEff = dict(zip(bands, config['seeingEff']))
         seeingGeom = dict(zip(bands, config['seeingGeom']))
         airmass = dict(zip(bands, config['airmass']))
         sky = dict(zip(bands, config['sky']))
         moonphase = dict(zip(bands, config['moonphase']))
+        """
+        inter_season_gap = 300.
         RA = config['RA']
         Dec = config['Dec']
         rtot = []
         # for season in range(1, config['nseasons']+1):
         for il, season in enumerate(config['seasons']):
             # mjd_min = config['MJD_min'] + float(season-1)*inter_season_gap
-            mjd_min = config['MJD_min'][il]
-            mjd_max = mjd_min+config['season_length']
+            mjd_min = config['MJDmin'][il]
+            mjd_max = mjd_min+config['seasonLength'][il]
 
             for i, band in enumerate(bands):
                 mjd = np.arange(mjd_min, mjd_max+cadence[band], cadence[band])
