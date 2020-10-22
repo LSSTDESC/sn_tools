@@ -2026,8 +2026,8 @@ class GetReference:
             idx = lc_ref_tot['band'] == band
             lc_sel = Table(lc_ref_tot[idx])
 
-            lc_sel['z'] = lc_sel['z'].data.round(decimals=4)
-            lc_sel['phase'] = lc_sel['phase'].data.round(decimals=4)
+            lc_sel['z'] = lc_sel['z'].data.round(decimals=2)
+            lc_sel['phase'] = lc_sel['phase'].data.round(decimals=1)
 
             """
             select phases between -20 and -50 only
@@ -2060,7 +2060,7 @@ class GetReference:
             # Fluxes and errors
             zmin, zmax, zstep, nz = self.limVals(lc_sel, 'z')
             phamin, phamax, phastep, npha = self.limVals(lc_sel, 'phase')
-
+            
             zstep = np.round(zstep, 3)
             phastep = np.round(phastep, 3)
 
