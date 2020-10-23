@@ -2061,12 +2061,11 @@ class GetReference:
             zmin, zmax, zstep, nz = self.limVals(lc_sel, 'z')
             phamin, phamax, phastep, npha = self.limVals(lc_sel, 'phase')
             
-            zstep = np.round(zstep, 3)
-            phastep = np.round(phastep, 3)
+            zstep = np.round(zstep, 2)
+            phastep = np.round(phastep, 1)
 
+            
             zv = np.linspace(zmin, zmax, nz)
-            # zv = np.round(zv,2)
-            # print(band,zv)
             phav = np.linspace(phamin, phamax, npha)
 
             index = np.lexsort((lc_sel['z'], lc_sel['phase']))
@@ -2080,7 +2079,21 @@ class GetReference:
                 (phav, zv), fluxerr_photo, method=method, bounds_error=False, fill_value=-1.0)
             self.fluxerr_model[band] = RegularGridInterpolator(
                 (phav, zv), fluxerr_model, method=method, bounds_error=False, fill_value=-1.0)
-            
+
+            """
+            zref = 0.8
+            if band == 'g':
+                phases = [-5,12.]
+                interp = self.flux[band]((phases,[zref,zref]))
+                print('interp',interp)
+                import matplotlib.pyplot as plt
+                iu = np.abs(lc_sel['z']-zref)<1.e-8
+                ll = lc_sel[iu]
+                plt.plot(ll['phase'],ll['flux'],'ko',mfc='None')
+                plt.plot(phases,interp,'r*')
+                plt.show()
+              """
+                
             # Flux derivatives
             self.param[band] = {}
             for par in param_Fisher:
@@ -2136,12 +2149,18 @@ class GetReference:
         """
 
         lc.sort(field)
-        vals = np.unique(lc[field].data.round(decimals=4))
-        # print(vals)
+        #vals = np.unique(lc[field].data.round(decimals=4))
+        vals = np.unique(lc[field].data)
         vmin = np.min(vals)
         vmax = np.max(vals)
         vstep = np.median(vals[1:]-vals[:-1])
 
+        # make a check here
+        test = list(np.round(np.arange(vmin,vmax+vstep,vstep),2))
+        if len(test) != len(vals):
+            print('problem here with ',field)
+            print('missing value',set(test).difference(set(vals)))
+            print('Interpolation results may not be accurate!!!!!')
         return vmin, vmax, vstep, len(vals)
 
     def Read_Ref(self, fi, j=-1, output_q=None):
