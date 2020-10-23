@@ -77,12 +77,11 @@ class Process:
         self.nclusters = nclusters
         self.radius = radius
 
-
+        assert(self.RAmin <= self.RAmax)
         
 
         # loading observations
 
-       
         obs, patches = self.load()
 
         if 'DD' in self.fieldType:
@@ -141,7 +140,7 @@ class Process:
         self.RACol = colName(names,['fieldRA','RA','Ra'])
         self.DecCol = colName(names,['fieldDec','Dec'])
 
-        print('dtype',observations.dtype.names)
+        #print('dtype',observations.dtype.names)
         # select observation in this area
         delta_coord = 5.
         idx = observations[self.RACol] >= self.RAmin-delta_coord
@@ -159,7 +158,6 @@ class Process:
             idk = observations[self.RACol] <= delta_coord
             obs = np.concatenate((obs, observations[idk]))
         
-
         # rename fields
         observations = renameFields(obs)
         names = observations.dtype.names
