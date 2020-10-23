@@ -487,13 +487,7 @@ class LCfast:
 
             for colname in ['n_aft', 'n_bef', 'n_phmin', 'n_phmax']:
                 lc.loc[:, colname] = lc[colname].astype(int)
-
-            """
-            idb = (lc['z'] > 0.65) & (lc['z'] < 0.9)
-            print(lc[idb][['z', 'ratio', 'm5', 'flux_e_sec', 'snr_m5']])
-            """
-
-        #print('lc here',lc)
+        
         if len(lc) > 0.:
             lc = self.dust_corrections(lc, ebvofMW)
 
