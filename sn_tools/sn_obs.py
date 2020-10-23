@@ -2682,8 +2682,11 @@ def getFields(observations, fieldType='WFD', fieldIds=None,
 
                 if 'note' in observations.dtype.names:
                     ido = np.core.defchararray.find(observations['note'].astype(str), 'DD')
-                    ies = np.ma.asarray(list(map(lambda st: False if st!=-1 else True,ido)))
-                    return(observations[ies])
+                    if ido.tolist():
+                        ies = np.ma.asarray(list(map(lambda st: False if st!=-1 else True,ido)))
+                        return observations[ies]
+                    else:
+                        return observations
                     """
                     idx = df['note'].str.contains('DD')
                     print('ayer',len(df[~idx]),len(df[idx]))
