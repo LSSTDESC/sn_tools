@@ -157,9 +157,9 @@ class GenerateSample:
         self.filterCol = filterCol
         self.area = area
         self.min_rf_phase = self.params['minRFphase']
-        self.max_rf_phase =self.params['maxRFphase']
+        self.max_rf_phase = self.params['maxRFphase']
         self.min_rf_phase_qual = self.params['minRFphaseQual']
-        self.max_rf_phase_qual =self.params['maxRFphaseQual']
+        self.max_rf_phase_qual = self.params['maxRFphaseQual']
         self.web_path = web_path
 
     def __call__(self, obs):
@@ -216,7 +216,7 @@ class GenerateSample:
         if len(r) > 0:
             names = ['z', 'x1', 'color', 'daymax',
                      'epsilon_x0', 'epsilon_x1', 'epsilon_color',
-                     'epsilon_daymax', 'minRFphase', 'maxRFphase','minRFphaseQual','maxRFphaseQual']
+                     'epsilon_daymax', 'minRFphase', 'maxRFphase', 'minRFphaseQual', 'maxRFphaseQual']
             types = ['f8']*len(names)
             # params = np.zeros(len(r), dtype=list(zip(names, types)))
             params = np.asarray(r, dtype=list(zip(names, types)))
@@ -285,7 +285,7 @@ class GenerateSample:
             # get number of supernovae
             N_SN = int(np.cumsum(nsn)[-1])
             if np.cumsum(nsn)[-1] < 0.5:
-                #print('none',zmin,zmax,duration)
+                # print('none',zmin,zmax,duration)
                 return None
             weight_z = np.cumsum(nsn)/np.sum(np.cumsum(nsn))
 
@@ -344,7 +344,7 @@ class GenerateSample:
 
                 for T0 in T0_values:
                     r.append((z, x1_color[0], x1_color[1], T0, 0.,
-                              0., 0., 0., self.min_rf_phase, self.max_rf_phase,self.min_rf_phase_qual, self.max_rf_phase_qual))
+                              0., 0., 0., self.min_rf_phase, self.max_rf_phase, self.min_rf_phase_qual, self.max_rf_phase_qual))
 
         if self.params['z']['type'] == 'unique':
             daystep = self.params['daymax']['step']
@@ -359,7 +359,7 @@ class GenerateSample:
                 T0_values = [daymin+21.*(1.+z)]
             for T0 in T0_values:
                 r.append((z, x1_color[0], x1_color[1], T0, 0.,
-                          0., 0., 0., self.min_rf_phase, self.max_rf_phase,self.min_rf_phase_qual, self.max_rf_phase_qual))
+                          0., 0., 0., self.min_rf_phase, self.max_rf_phase, self.min_rf_phase_qual, self.max_rf_phase_qual))
         rdiff = []
         if self.params['differentialFlux']:
             for rstart in r:
@@ -486,15 +486,17 @@ class SimuParameters:
     """
 
     def __init__(self, sn_parameters, cosmo_parameters,
-                 mjdCol='mjd', seasonCol='season', filterCol='filter',area=9.6, dirFiles='reference_files', web_path=''):
+                 mjdCol='mjd', seasonCol='season', filterCol='filter', area=9.6, dirFiles='reference_files', web_path=''):
+
         self.dirFiles = dirFiles
         self.params = sn_parameters
         self.sn_rate = SN_Rate(rate=self.params['z']['rate'],
                                H0=cosmo_parameters['H0'],
                                Om0=cosmo_parameters['Om'])
         self.web_path = web_path
-        if 'modelPar' in self.params.keys():
-            self.modelParDist = self.getDist(self.params['modelPar']['name'],self.params['modelPar']['rate'])
+        if 'modelPar' in self.params.keys() and self.params['modelPar']['name'] != 'random':
+            self.modelParDist = self.getDist(
+                self.params['modelPar']['name'], self.params['modelPar']['rate'])
         self.mjdCol = mjdCol
         self.seasonCol = seasonCol
         self.filterCol = filterCol
@@ -504,7 +506,7 @@ class SimuParameters:
         self.min_rf_phase_qual = self.params['minRFphaseQual']
         self.max_rf_phase_qual = self.params['maxRFphaseQual']
 
-    def getDist(self, distname,rate):
+    def getDist(self, distname, rate):
         """ get (x1,color) distributions
         Parameters
         --------------
@@ -520,20 +522,21 @@ class SimuParameters:
         # prefix = os.getenv('SN_UTILS_DIR')+'/input/Dist_X1_Color_'+rate+'_'
         pars = distname.split('_')
         para = pars[0]
-        if len(pars)>=1:
+        if len(pars) >= 1:
             parb = pars[1]
-        
-        prefix = '{}/Dist_{}_{}_{}'.format(self.dirFiles, pars,pars,rate)
+
+        prefix = '{}/Dist_{}_{}_{}'.format(self.dirFiles, pars, pars, rate)
         suffix = '.txt'
         # names=['x1','c','weight_x1','weight_c','weight_tot']
         dtype = np.dtype([(para, np.float), (parb, np.float),
-                          ('weight_{}'.format(para), np.float), ('weight_{}'.format(parb), np.float),
+                          ('weight_{}'.format(para),
+                           np.float), ('weight_{}'.format(parb), np.float),
                           ('weight', np.float)])
         params = {}
         for val in ['low_z', 'high_z']:
             fName = '{}_{}{}'.format(
                 prefix, val, suffix)
-            fName = 'Dist_{}_{}_{}_{}{}'.format(para,parb,rate, val, suffix)
+            fName = 'Dist_{}_{}_{}_{}{}'.format(para, parb, rate, val, suffix)
             check_get_file(self.web_path, self.dirFiles, fName)
             params[val] = np.loadtxt(
                 '{}/{}'.format(self.dirFiles, fName), dtype=dtype)
@@ -568,14 +571,37 @@ class SimuParameters:
         # add daymax, which is z-dependent (boundaries effects)
 
         pars = self.daymaxdist(pars, daymin, daymax)
-        
+
         if self.dirFiles is None:
-            pars=self.complete_pars(pars)
+            pars = self.complete_pars(pars)
             return pars.to_records(index=False)
-        
+
         if len(pars) == 0:
             return None
 
+        if 'Ia' in self.params['type']:
+            pars = self.add_params(pars)
+
+        pars = self.complete_pars(pars)
+
+        #print('total number of SN to simulate:', len(pars))
+        return pars.to_records(index=False)
+
+    def add_params(self, pars):
+        """
+        Method to add simulation parameters for Ias
+
+        Parameters
+        --------------
+        pars: pandas df with simu parameters
+
+
+        Returns
+        -----------
+        pars: pandas df with simu parameters (Ia params added)
+
+
+        """
         # add x1 dist
         pars = self.pdist(pars, 'x1')
 
@@ -606,13 +632,10 @@ class SimuParameters:
             for pp in ['x0', 'x1', 'color', 'daymax']:
                 pars['epsilon_{}'.format(pp)] = 0.0
 
-        pars=self.complete_pars(pars)
-        
-        #print('total number of SN to simulate:', len(pars))
-        return pars.to_records(index=False)
+        return pars
 
     def complete_pars(self, pars):
-        
+
          # finally add min and max rf
         pars['minRFphase'] = self.min_rf_phase
         pars['maxRFphase'] = self.max_rf_phase
@@ -620,7 +643,7 @@ class SimuParameters:
         pars['maxRFphaseQual'] = self.max_rf_phase_qual
 
         return pars
-        
+
     def zdist(self, duration):
         """
         Method to estimate the redshift distribution
@@ -646,9 +669,9 @@ class SimuParameters:
 
         if ztype == 'uniform':
             zvals = np.arange(zmin, zmax+zstep, zstep)
-            if zvals[0]<1.e-6:
-                zvals[0]=0.01
-                
+            if zvals[0] < 1.e-6:
+                zvals[0] = 0.01
+
         if ztype == 'random':
             # get sn rate for this z range
 
@@ -666,7 +689,7 @@ class SimuParameters:
             N_SN = int(N_SN)
 
             #print('nsn from rate', N_SN, NSN_factor)
-            
+
             if N_SN < 0.5:
                 return None
             weight_z = np.cumsum(nsn)/np.sum(np.cumsum(nsn))
@@ -721,8 +744,10 @@ class SimuParameters:
 
         if daymaxtype == 'random':
             daymaxdf = pd.DataFrame(pars)
-            daymaxdf['daymax_min'] = daymin-(1.+pars['z'])*self.min_rf_phase_qual
-            daymaxdf['daymax_max'] = daymax-(1.+pars['z'])*self.max_rf_phase_qual
+            daymaxdf['daymax_min'] = daymin - \
+                (1.+pars['z'])*self.min_rf_phase_qual
+            daymaxdf['daymax_max'] = daymax - \
+                (1.+pars['z'])*self.max_rf_phase_qual
             idx = daymaxdf['daymax_max']-daymaxdf['daymax_min'] >= 10.
             daymaxdf = daymaxdf[idx]
             if len(daymaxdf) > 0:
@@ -2033,9 +2058,9 @@ class GetReference:
             select phases between -20 and -50 only
 
             """
-        
-            idx = lc_sel['phase']<50.
-            idx &= lc_sel['phase']>-20.
+
+            idx = lc_sel['phase'] < 50.
+            idx &= lc_sel['phase'] > -20.
             lc_sel = lc_sel[idx]
 
             """
@@ -2060,19 +2085,20 @@ class GetReference:
             # Fluxes and errors
             zmin, zmax, zstep, nz = self.limVals(lc_sel, 'z')
             phamin, phamax, phastep, npha = self.limVals(lc_sel, 'phase')
-            
+
             zstep = np.round(zstep, 2)
             phastep = np.round(phastep, 1)
 
-            
             zv = np.linspace(zmin, zmax, nz)
             phav = np.linspace(phamin, phamax, npha)
 
             index = np.lexsort((lc_sel['z'], lc_sel['phase']))
             flux = np.reshape(lc_sel[index]['flux'], (npha, nz))
-            fluxerr_photo = np.reshape(lc_sel[index]['fluxerr_photo'], (npha, nz))
-            fluxerr_model = np.reshape(lc_sel[index]['fluxerr_model'], (npha, nz))
-            
+            fluxerr_photo = np.reshape(
+                lc_sel[index]['fluxerr_photo'], (npha, nz))
+            fluxerr_model = np.reshape(
+                lc_sel[index]['fluxerr_model'], (npha, nz))
+
             self.flux[band] = RegularGridInterpolator(
                 (phav, zv), flux, method=method, bounds_error=False, fill_value=-1.0)
             self.fluxerr_photo[band] = RegularGridInterpolator(
@@ -2093,7 +2119,7 @@ class GetReference:
                 plt.plot(phases,interp,'r*')
                 plt.show()
               """
-                
+
             # Flux derivatives
             self.param[band] = {}
             for par in param_Fisher:
@@ -2156,10 +2182,10 @@ class GetReference:
         vstep = np.median(vals[1:]-vals[:-1])
 
         # make a check here
-        test = list(np.round(np.arange(vmin,vmax+vstep,vstep),2))
+        test = list(np.round(np.arange(vmin, vmax+vstep, vstep), 2))
         if len(test) != len(vals):
-            print('problem here with ',field)
-            print('missing value',set(test).difference(set(vals)))
+            print('problem here with ', field)
+            print('missing value', set(test).difference(set(vals)))
             print('Interpolation results may not be accurate!!!!!')
         return vmin, vmax, vstep, len(vals)
 
