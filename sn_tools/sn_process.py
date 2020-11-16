@@ -1,11 +1,12 @@
 from sn_tools.sn_obs import DataToPixels, ProcessPixels, renameFields, patchObs
-from sn_tools.sn_io import getObservations,colName
+from sn_tools.sn_io import getObservations, colName
 import time
 import numpy as np
 import pandas as pd
 import multiprocessing
 import glob
 import random
+
 
 class Process:
     """
@@ -49,7 +50,7 @@ class Process:
     """
 
     def __init__(self, dbDir, dbName, dbExtens,
-                 fieldType, fieldName,nside,
+                 fieldType, fieldName, nside,
                  RAmin, RAmax,
                  Decmin, Decmax,
                  saveData, remove_dithering,
@@ -78,15 +79,15 @@ class Process:
         self.radius = radius
 
         assert(self.RAmin <= self.RAmax)
-        
 
         # loading observations
 
         obs, patches = self.load()
 
         if 'DD' in self.fieldType:
-            print('DD clusters',patches[['fieldName','RA', 'Dec', 'radius_RA', 'radius_Dec']])
-        
+            print('DD clusters', patches[[
+                  'fieldName', 'RA', 'Dec', 'radius_RA', 'radius_Dec']])
+
         #print('in Process - observations loaded')
         """
         import matplotlib.pyplot as plt
@@ -98,8 +99,9 @@ class Process:
             nnproc = self.nprocs
             if 'DD' in self.fieldType:
                 nnproc = len(patches)
-            
-            self.pixelmap = self.multiprocess_getpixels(patches, obs, func=self.processPatch,nnproc=nnproc).to_records(index=False)
+
+            self.pixelmap = self.multiprocess_getpixels(
+                patches, obs, func=self.processPatch, nnproc=nnproc).to_records(index=False)
         else:
             # load the pixel maps
             print('pixel map loading', self.pixelmap_dir, self.fieldType,
@@ -111,15 +113,15 @@ class Process:
                                                                         self.Decmin, self.Decmax)
             pixelmap_files = glob.glob(search_path)
             if not pixelmap_files:
-                print('Severe problem: pixel map does not exist!!!!',search_path)
+                print('Severe problem: pixel map does not exist!!!!', search_path)
             else:
-                self.pixelmap = np.load(pixelmap_files[0],allow_pickle=True)
+                self.pixelmap = np.load(pixelmap_files[0], allow_pickle=True)
 
         if self.npixels == -1:
             self.npixels = len(
                 np.unique(self.pixelmap['healpixID']))
         random_pixels = self.randomPixels(self.pixelmap, self.npixels)
-        print('number of pixels to process', len(random_pixels),obs.dtype)
+        print('number of pixels to process', len(random_pixels), obs.dtype)
         self.multiprocess(random_pixels, obs,
                           func=self.procix)
 
@@ -137,10 +139,10 @@ class Process:
         observations = getObservations(self.dbDir, self.dbName, self.dbExtens)
 
         names = observations.dtype.names
-        self.RACol = colName(names,['fieldRA','RA','Ra'])
-        self.DecCol = colName(names,['fieldDec','Dec'])
+        self.RACol = colName(names, ['fieldRA', 'RA', 'Ra'])
+        self.DecCol = colName(names, ['fieldDec', 'Dec'])
 
-        #print('dtype',observations.dtype.names)
+        # print('dtype',observations.dtype.names)
         # select observation in this area
         delta_coord = 5.
         idx = observations[self.RACol] >= self.RAmin-delta_coord
@@ -149,7 +151,7 @@ class Process:
         # idx &= observations[self.DecCol] < Decmax+delta_coord
 
         obs = observations[idx]
-                
+
         if self.RAmin < delta_coord:
             idk = observations[self.RACol] >= 360.-delta_coord
             obs = np.concatenate((obs, observations[idk]))
@@ -157,12 +159,12 @@ class Process:
         if self.RAmax >= 360.-delta_coord:
             idk = observations[self.RACol] <= delta_coord
             obs = np.concatenate((obs, observations[idk]))
-        
+
         # rename fields
         observations = renameFields(obs)
         names = observations.dtype.names
-        self.RACol = colName(names,['fieldRA','RA','Ra'])
-        self.DecCol = colName(names,['fieldDec','Dec'])
+        self.RACol = colName(names, ['fieldRA', 'RA', 'Ra'])
+        self.DecCol = colName(names, ['fieldDec', 'Dec'])
 
         """
         self.RACol = 'fieldRA'
@@ -172,7 +174,7 @@ class Process:
             self.RACol = 'RA'
             self.DecCol = 'Dec'
         """
-        observations, patches = patchObs(observations, self.fieldType,self.fieldName,
+        observations, patches = patchObs(observations, self.fieldType, self.fieldName,
                                          self.dbName,
                                          self.nside,
                                          self.RAmin, self.RAmax,
@@ -180,10 +182,10 @@ class Process:
                                          self.RACol, self.DecCol,
                                          display=False,
                                          nclusters=self.nclusters, radius=self.radius)
-        
+
         return observations, patches
 
-    def multiprocess_getpixels(self, patches, observations, func,nnproc):
+    def multiprocess_getpixels(self, patches, observations, func, nnproc):
         """
         Method to grab (healpix) pixels matching observations
 
@@ -211,20 +213,20 @@ class Process:
         tabpix = np.linspace(0, npixels, nnproc+1, dtype='int')
         result_queue = multiprocessing.Queue()
         nmulti = len(tabpix)-1
-     
+
         # multiprocessing
         for j in range(nmulti):
-        
             ida = tabpix[j]
             idb = tabpix[j+1]
 
-            print('go for multiprocessing in getpixels', j, func, len(healpixels[ida:idb]))
+            print('go for multiprocessing in getpixels',
+                  j, func, len(healpixels[ida:idb]))
             p = multiprocessing.Process(name='Subprocess-'+str(j), target=func, args=(
                 healpixels[ida:idb], observations, j, result_queue))
 
             p.start()
 
-        #get the results
+        # get the results
         resultdict = {}
         for i in range(nmulti):
             resultdict.update(result_queue.get())
@@ -232,13 +234,12 @@ class Process:
         for p in multiprocessing.active_children():
             p.join()
 
-        
         restot = pd.DataFrame()
         # gather the results
         for key, vals in resultdict.items():
             restot = pd.concat((restot, vals), sort=False)
         return restot
-    
+
     def multiprocess(self, patches, observations, func):
         """
         Method to perform multiprocessing of metrics
@@ -264,7 +265,7 @@ class Process:
         # print('in multi process', npixels, self.nprocs)
         # multiprocessing
         for j in range(len(tabpix)-1):
-        
+
             ida = tabpix[j]
             idb = tabpix[j+1]
 
@@ -325,9 +326,9 @@ class Process:
             if pixels is None:
                 if output_q is not None:
                     output_q.put({j: pixels})
+                    return pixels
                 else:
                     return pixels
-                
 
             # select pixels that are inside the original area
             pixels_run = pixels
@@ -361,14 +362,13 @@ class Process:
 
                 pixels_run = pixels[idx]
 
-            
         print('Grabing pixels - end of processing for', j, time.time()-time_ref)
 
         if output_q is not None:
             output_q.put({j: pixels_run})
         else:
             return pixels_run
-        
+
     def procix(self, pixels, observations, j=0, output_q=None):
         """
         Method to process a pixel
