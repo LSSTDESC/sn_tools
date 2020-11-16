@@ -21,6 +21,7 @@ import os
 from sn_tools.sn_clusters import ClusterObs
 import copy
 
+
 def DDFields(DDfile=None):
     """
     Function to define DD fields
@@ -70,7 +71,7 @@ def DDFields(DDfile=None):
         return fields
 
 
-def patchObs(observations, fieldType,fieldName,
+def patchObs(observations, fieldType, fieldName,
              dbName, nside, RAmin, RAmax, Decmin, Decmax,
              RACol, DecCol,
              display=False, nclusters=5, radius=4.):
@@ -125,8 +126,10 @@ def patchObs(observations, fieldType,fieldName,
         # radius = 4.
 
         DD = DDFields()
-        clusters = ClusterObs(
-            observations, nclusters=nclusters, dbName=dbName, fields=DD).clusters
+        clus = ClusterObs(observations, nclusters=nclusters,
+                          dbName=dbName, fields=DD)
+        clusters = clus.clusters
+        dataclusters = clus.dataclus
 
         # clusters = rf.append_fields(clusters, 'radius', [radius]*len(clusters))
         clusters['radius'] = radius
@@ -140,10 +143,13 @@ def patchObs(observations, fieldType,fieldName,
 
         if fieldName != 'all':
             idx = patches['fieldName'] == fieldName
-            if len(patches[idx])>0:
+            if len(patches[idx]) > 0:
                 patches = patches[idx]
-
-        
+                ido = dataclusters['fieldName'] == fieldName
+                obsid = dataclusters[ido]['observationId'].tolist()
+                myobs = pd.DataFrame(np.copy(observations))
+                ib = myobs['observationId'].isin(obsid)
+                observations = myobs[ib].to_records(index=False)
     else:
         if fieldType == 'WFD':
             #print('getting observations')
@@ -1114,7 +1120,7 @@ class DataToPixels:
         """
 
         # display: (RA,Dec) distribution of the data
-        
+
         if display:
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots()
@@ -1126,7 +1132,7 @@ class DataToPixels:
         # print('searching data inside',RA,Dec,widthRA,widthDec)
         dataSel = DataInside(data, RA, Dec, widthRA+1., widthDec+1.,
                              RACol=self.RACol, DecCol=self.DecCol)
-  
+
         # display: (RA,Dec) distribution of the selected data (ie inside the area)
         # if display:
         #    dataSel.plot()
@@ -1178,14 +1184,14 @@ class DataToPixels:
             plt.show()
 
         # make groups by (RA,dec)
-    
+
         """
         dataset = dataset.round({self.RACol: 4, self.DecCol: 4})
         groups = dataset.groupby([self.RACol, self.DecCol])
         
         """
 
-        groups = dataset.groupby(['observationId','night','filter'])
+        groups = dataset.groupby(['observationId', 'night', 'filter'])
         # match pixels to data
         time_ref = time.time()
         matched_pixels = groups.apply(
@@ -1258,16 +1264,16 @@ class DataToPixels:
         pixID_matched = list(healpixIDs[idf])
         pixRA_matched = list(pixRA[idf])
         pixDec_matched = list(pixDec[idf])
- 
+
         # names = [grp.name]*len(pixID_matched)
         df_pix = pd.DataFrame({'healpixID': pixID_matched,
                                'pixRA': pixRA_matched,
-                               'pixDec': pixDec_matched, 
+                               'pixDec': pixDec_matched,
                                })
 
-        listcols = ['observationStartMJD','fieldRA', 'fieldDec','visitExposureTime',
-                    'fiveSigmaDepth', 'numExposures','seeingFwhmEff']
-        df_pix[listcols]= grp[listcols].mean().tolist()
+        listcols = ['observationStartMJD', 'fieldRA', 'fieldDec', 'visitExposureTime',
+                    'fiveSigmaDepth', 'numExposures', 'seeingFwhmEff']
+        df_pix[listcols] = grp[listcols].mean().tolist()
         """
         for ll in listcols:
             print(ll,grp[ll].mean())
@@ -1349,8 +1355,7 @@ class ProcessPixels:
         self.outDir = outDir
         self.dbName = dbName
         self.num = ipoint
-   
-        
+
         # data will be save so clean the output directory first
         if self.saveData:
             self.clean()
@@ -1416,7 +1421,7 @@ class ProcessPixels:
             #print('running the metrics')
             self.runMetrics(dataPixels)
             #print('pixel processed',ipixel,time.time()-time_ref)
-            
+
             if self.saveData and ipix >= 20:
                 isave += 1
                 self.dump(ip, isave)
@@ -2677,13 +2682,15 @@ def getFields(observations, fieldType='WFD', fieldIds=None,
                 #df = pd.DataFrame(np.copy(observations))
                 #df = observations
                 ##print('end of copy')
-               
-                #print(test)
+
+                # print(test)
 
                 if 'note' in observations.dtype.names:
-                    ido = np.core.defchararray.find(observations['note'].astype(str), 'DD')
+                    ido = np.core.defchararray.find(
+                        observations['note'].astype(str), 'DD')
                     if ido.tolist():
-                        ies = np.ma.asarray(list(map(lambda st: False if st!=-1 else True,ido)))
+                        ies = np.ma.asarray(
+                            list(map(lambda st: False if st != -1 else True, ido)))
                         return observations[ies]
                     else:
                         return observations
