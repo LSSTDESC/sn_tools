@@ -494,7 +494,7 @@ class SimuParameters:
                                H0=cosmo_parameters['H0'],
                                Om0=cosmo_parameters['Om'])
         self.web_path = web_path
-        if 'modelPar' in self.params.keys() and self.params['modelPar']['name'] != 'random':
+        if 'modelPar' in self.params.keys() and self.params['modelPar']['name'] != 'none':
             self.modelParDist = self.getDist(
                 self.params['modelPar']['name'], self.params['modelPar']['rate'])
         self.mjdCol = mjdCol
