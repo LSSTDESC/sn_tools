@@ -106,11 +106,14 @@ class Process:
             # load the pixel maps
             print('pixel map loading', self.pixelmap_dir, self.fieldType,
                   self.nside, self.dbName, self.npixels)
-            search_path = '{}/{}/{}_{}_nside_{}_{}_{}_{}_{}.npy'.format(self.pixelmap_dir,
+            search_path = '{}/{}/{}_{}_nside_{}_{}_{}_{}_{}'.format(self.pixelmap_dir,
                                                                         self.dbName, self.dbName,
                                                                         self.fieldType, self.nside,
                                                                         self.RAmin, self.RAmax,
                                                                         self.Decmin, self.Decmax)
+            if self.fieldType == 'DD':
+                search_path += '_{}'.format(self.fieldName)
+            search_path += '.npy'
             pixelmap_files = glob.glob(search_path)
             if not pixelmap_files:
                 print('Severe problem: pixel map does not exist!!!!', search_path)
