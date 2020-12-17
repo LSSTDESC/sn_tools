@@ -694,8 +694,8 @@ class SimuParameters:
             N_SN *= NSN_factor
             N_SN = int(N_SN)
 
-            print('nsn from rate', zmin, zmax,
-                  duration, self.area, self.min_rf_phase_qual, self.max_rf_phase_qual, N_SN, NSN_factor)
+            #print('nsn from rate', zmin, zmax,
+            #      duration, self.area, self.min_rf_phase_qual, self.max_rf_phase_qual, N_SN, NSN_factor)
 
             if N_SN < 0.5:
                 return None
