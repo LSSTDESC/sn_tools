@@ -147,9 +147,6 @@ class GenerateSample:
     def __init__(self, sn_parameters, cosmo_parameters, mjdCol='mjd', seasonCol='season', filterCol='filter', area=9.6, dirFiles='reference_files', web_path=''):
         self.dirFiles = dirFiles
         self.params = sn_parameters
-        self.sn_rate = SN_Rate(rate=self.params['z']['rate'],
-                               H0=cosmo_parameters['H0'],
-                               Om0=cosmo_parameters['Om'])
 
         self.x1_color = self.getDist(self.params['x1_color']['rate'])
         self.mjdCol = mjdCol
@@ -161,6 +158,12 @@ class GenerateSample:
         self.min_rf_phase_qual = self.params['minRFphaseQual']
         self.max_rf_phase_qual = self.params['maxRFphaseQual']
         self.web_path = web_path
+
+        self.sn_rate = SN_Rate(rate=self.params['z']['rate'],
+                               H0=cosmo_parameters['H0'],
+                               Om0=cosmo_parameters['Om'],
+                               min_rf_phase=self.params['minRFphaseQual'],
+                               max_rf_phase=self.params['maxRFphaseQual'])
 
     def __call__(self, obs):
         """
@@ -292,7 +295,7 @@ class GenerateSample:
             if N_SN < 1:
                 N_SN = 1
                 # weight_z = 1
-            #print('nsn', N_SN)
+            print('nsn', zmin, zmax, survey_area, duration, N_SN)
             for j in range(N_SN):
                 z = self.getVal(self.params['z']['type'], zmin, zz, weight_z)
                 zrange = 'low_z'
@@ -490,9 +493,7 @@ class SimuParameters:
 
         self.dirFiles = dirFiles
         self.params = sn_parameters
-        self.sn_rate = SN_Rate(rate=self.params['z']['rate'],
-                               H0=cosmo_parameters['H0'],
-                               Om0=cosmo_parameters['Om'])
+
         self.web_path = web_path
         if 'modelPar' in self.params.keys() and self.params['modelPar']['name'] != 'none':
             self.modelParDist = self.getDist(
@@ -505,6 +506,11 @@ class SimuParameters:
         self.max_rf_phase = self.params['maxRFphase']
         self.min_rf_phase_qual = self.params['minRFphaseQual']
         self.max_rf_phase_qual = self.params['maxRFphaseQual']
+        self.sn_rate = SN_Rate(rate=self.params['z']['rate'],
+                               H0=cosmo_parameters['H0'],
+                               Om0=cosmo_parameters['Om'],
+                               min_rf_phase=self.params['minRFphaseQual'],
+                               max_rf_phase=self.params['maxRFphaseQual'])
 
     def getDist(self, distname, rate):
         """ get (x1,color) distributions
@@ -636,7 +642,7 @@ class SimuParameters:
 
     def complete_pars(self, pars):
 
-         # finally add min and max rf
+            # finally add min and max rf
         pars['minRFphase'] = self.min_rf_phase
         pars['maxRFphase'] = self.max_rf_phase
         pars['minRFphaseQual'] = self.min_rf_phase_qual
@@ -688,7 +694,8 @@ class SimuParameters:
             N_SN *= NSN_factor
             N_SN = int(N_SN)
 
-            #print('nsn from rate', N_SN, NSN_factor)
+            print('nsn from rate', zmin, zmax,
+                  duration, self.area, self.min_rf_phase_qual, self.max_rf_phase_qual, N_SN, NSN_factor)
 
             if N_SN < 0.5:
                 return None
