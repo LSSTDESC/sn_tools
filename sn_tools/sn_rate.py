@@ -19,21 +19,34 @@ class SN_Rate:
       type of rate chosen (Ripoche, Perrett, Dilday) (default : Perrett)
     H0 : float, opt
        Hubble constant value :math:`H_{0}`(default : 70.)
+    H0_err: float, opt
+       H0 error (default: 2)
     Om0 : float, opt
         matter density value :math:`\Omega_{0}`  (default : 0.25)
+    Om0_err: float, opt
+       Om0 error (default: 0.025)
     min_rf_phase : float, opt
        min rest-frame phase (default : -15.)
     max_rf_phase : float, opt
        max rest-frame phase (default : 30.)
+    error_params: bool, opt
+      to propagate parameter errors (default: False)
     """
 
-    def __init__(self, rate='Perrett', H0=70, Om0=0.25,
-                 min_rf_phase=-15., max_rf_phase=30.):
+    def __init__(self, rate='Perrett', H0=70., H0_err=2.,
+                 Om0=0.25,Om0_err=0.025,
+                 min_rf_phase=-15., max_rf_phase=30.,
+                 error_params=False):
 
+        self.H0 = H0
+        self.H0_err = H0_err
+        self.Om0 = Om0
+        self.Om0_err= Om0_err
         self.astropy_cosmo = FlatLambdaCDM(H0=H0, Om0=Om0)
         self.rate = rate
         self.min_rf_phase = min_rf_phase
         self.max_rf_phase = max_rf_phase
+        self.error_params = error_params
 
     def __call__(self, zmin=0.1, zmax=0.2,
                  dz=0.01, survey_area=9.6,
@@ -90,7 +103,6 @@ class SN_Rate:
         # or area= self.survey_area/41253.
 
         dvol = norm*self.astropy_cosmo.comoving_volume(thebins).value
-
         dvol = dvol[1:] - dvol[:-1]
 
         if account_for_edges:
@@ -105,10 +117,54 @@ class SN_Rate:
 
         normz = (1.+zz)
         nsn = rate * area * dvol * effective_duration / normz
-        err_nsn = err_rate*area * dvol * effective_duration / normz
+        err_rate= err_rate*area * dvol * effective_duration / normz
 
+        err_dvol = 0.
+        if self.error_params:
+             dvol_err = self.comoving_volume_error(norm,thebins)
+             err_dvol = rate * area * dvol_err * effective_duration / normz
+        
+        err_nsn = np.sqrt(err_rate**2+err_dvol**2)
         return zz, rate, err_rate, nsn, err_nsn
 
+    def comoving_volume_error(self, norm,thebins):
+        """
+        Method to estimate the comoving volume error
+
+        Parameters
+        ---------------
+        norm: float
+          normalisation factor
+        thebins: array
+          redshift bins
+
+        Returns
+        ----------
+        the comoving volume error
+
+        """
+
+        
+        dx = 1.e-8
+
+        dvol  = {}
+
+        for sign in [(-1,0),(+1,0),(0,-1),(0,+1)]:
+            astropy_cosmo = FlatLambdaCDM(H0=self.H0+sign[0]*dx, Om0=self.Om0+sign[1]*dx)
+            tag = 'H0_{}_Om0_{}'.format(sign[0],sign[1])
+            dvol[tag] = norm*astropy_cosmo.comoving_volume(thebins).value
+
+        for key in dvol.keys():
+            dvol[key] = dvol[key][1:]-dvol[key][:-1]
+        
+        dvol_err_H0 = (dvol['H0_1_Om0_0']-dvol['H0_-1_Om0_0'])/(2.*dx)
+        dvol_err_Om0 = (dvol['H0_0_Om0_1']-dvol['H0_0_Om0_-1'])/(2.*dx)
+  
+        dvol_err = (dvol_err_H0*self.H0_err)**2
+        dvol_err +=  (dvol_err_Om0*self.Om0_err)**2
+        
+        return np.sqrt(dvol_err)
+    
     def RipocheRate(self, z):
         """The SNLS SNIa rate according to the (unpublished) Ripoche et al study.
 
