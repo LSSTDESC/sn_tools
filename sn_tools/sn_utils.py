@@ -2062,11 +2062,11 @@ class GetReference:
             lc_sel['phase'] = lc_sel['phase'].data.round(decimals=1)
 
             """
-            select phases between -20 and -50 only
+            select phases between -20 and -60 only
 
             """
 
-            idx = lc_sel['phase'] < 50.
+            idx = lc_sel['phase'] < 60.
             idx &= lc_sel['phase'] > -20.
             lc_sel = lc_sel[idx]
 
