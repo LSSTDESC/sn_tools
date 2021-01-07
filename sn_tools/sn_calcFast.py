@@ -577,6 +577,10 @@ class LCfast:
         for vv in ['flux', 'flux_e_sec']:
             grp[vv] *= corrdust
 
+        corrdust = self.dustcorr[band]['ratio_fluxerr_model'](
+            (grp['phase'], grp['z'], grp['ebvofMW']))
+        grp['fluxerr_model'] *= corrdust
+            
         for va in ['x0', 'x1', 'color', 'daymax']:
             for vb in ['x0', 'x1', 'color', 'daymax']:
                 corrdusta = self.dustcorr[band]['ratio_d{}'.format(va)](

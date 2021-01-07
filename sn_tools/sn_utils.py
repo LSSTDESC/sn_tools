@@ -2441,7 +2441,7 @@ class LoadDust:
                 (rec['ebvofMW'], rec['z'], rec['phase']))
 
             self.dustcorr[b] = {}
-            for vv in ['flux', 'dx0', 'dx1', 'dcolor', 'ddaymax']:
+            for vv in ['flux', 'dx0', 'dx1', 'dcolor', 'ddaymax','fluxerr_model']:
                 ratio = np.reshape(
                     rec[index]['ratio_{}'.format(vv)], (nphase, nz, nebvofMW))
                 self.dustcorr[b]['ratio_{}'.format(vv)] = RegularGridInterpolator(
