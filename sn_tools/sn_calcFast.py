@@ -8,7 +8,10 @@ from scipy.linalg import lapack
 import scipy.linalg as la
 import operator
 import numpy.lib.recfunctions as rf
+import warnings
 
+#this is to remove runtime warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 class LCfast:
     """
