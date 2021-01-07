@@ -1963,7 +1963,8 @@ def limVals(lc, field):
     """
 
     lc.sort(field)
-    vals = np.unique(lc[field].data.round(decimals=4))
+    vals = np.unique(lc[field].data)
+    #vals = np.unique(lc[field].data.round(decimals=4))
     # print(vals)
     vmin = np.min(vals)
     vmax = np.max(vals)
@@ -2418,10 +2419,15 @@ class LoadDust:
         self.dustcorr = {}
 
         tab = Table.read('{}/{}'.format(fDir, fName), path='dust')
-
+        tab['z'] = tab['z'].round(2)
+        tab['ebvofMW'] = tab['ebvofMW'].round(2)
+        tab['phase'] = tab['phase'].round(1)
+        tab.convert_bytestring_to_unicode()
+        
         for b in bands:
             idx = tab['band'] == b
             rec = tab[idx]
+            
             phasemin, phasemax, phasestep, nphase = limVals(rec, 'phase')
             zmin, zmax, zstep, nz = limVals(rec, 'z')
             ebvofMWmin, ebvofMWmax, ebvofMWstep, nebvofMW = limVals(
@@ -2432,7 +2438,7 @@ class LoadDust:
             ebvofMW = np.linspace(ebvofMWmin, ebvofMWmax, nebvofMW)
 
             index = np.lexsort(
-                (rec['ebvofMW'], np.round(rec['z'], 4), rec['phase']))
+                (rec['ebvofMW'], rec['z'], rec['phase']))
 
             self.dustcorr[b] = {}
             for vv in ['flux', 'dx0', 'dx1', 'dcolor', 'ddaymax']:
@@ -2441,7 +2447,28 @@ class LoadDust:
                 self.dustcorr[b]['ratio_{}'.format(vv)] = RegularGridInterpolator(
                     (phase, z, ebvofMW), ratio, method='linear', bounds_error=False, fill_value=0.)
 
+    def complete_missing(self, grp, zvals):
+        """
+        Method to complete a grp if missing values
 
+        Parameters
+        ----------------
+        grp: pandas df group
+        zvals: reference zvals
+
+        Returns
+        -----------
+        pandas df with completed (0) values
+
+        """
+
+        if len(grp) != len(zvals):
+            print(len(grp),grp.columns)
+        
+        return pd.DataFrame({'test': [0]})
+                                                            
+
+                                                             
 class Gamma:
     """ 
     Class to estimate gamma parameters
