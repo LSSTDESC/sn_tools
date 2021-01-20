@@ -107,10 +107,10 @@ class Process:
             print('pixel map loading', self.pixelmap_dir, self.fieldType,
                   self.nside, self.dbName, self.npixels)
             search_path = '{}/{}/{}_{}_nside_{}_{}_{}_{}_{}'.format(self.pixelmap_dir,
-                                                                        self.dbName, self.dbName,
-                                                                        self.fieldType, self.nside,
-                                                                        self.RAmin, self.RAmax,
-                                                                        self.Decmin, self.Decmax)
+                                                                    self.dbName, self.dbName,
+                                                                    self.fieldType, self.nside,
+                                                                    self.RAmin, self.RAmax,
+                                                                    self.Decmin, self.Decmax)
             if self.fieldType == 'DD':
                 search_path += '_{}'.format(self.fieldName)
             else:
@@ -127,6 +127,7 @@ class Process:
                 np.unique(self.pixelmap['healpixID']))
         random_pixels = self.randomPixels(self.pixelmap, self.npixels)
         print('number of pixels to process', len(random_pixels), obs.dtype)
+
         self.multiprocess(random_pixels, obs,
                           func=self.procix)
 
