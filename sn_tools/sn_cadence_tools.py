@@ -134,7 +134,10 @@ class GenerateFakeObservations:
 
         # now make fake obs
         if not sequences:
-            self.makeFake(config)
+            if config['m5File'] == 'NoData':
+                self.makeFake(config)
+            else:
+                self.makeFake_from_simu(config)
         else:
             self.makeFake_sqs(config)
 
@@ -316,7 +319,126 @@ class GenerateFakeObservations:
                                np.random.randint(10*len(res), size=len(res)))
 
         self.Observations = res
+        
+    def makeFake_from_simu(self, config):
+        """ Generate Fake observations
+        fiveSigmaDepth are taken from an input file
 
+        Parameters
+        ---------------
+        config : dict
+           dict of parameters (config file)
+
+        Returns
+        -----------
+        recordarray of observations with the fields:
+        MJD, RA, Dec, band,m5,Nexp, ExpTime, Season
+        accessible through self.Observations
+
+        """
+
+        bands = config['bands']
+        #cadence = dict(zip(bands, config['cadence']))
+        cadence = config['cadence']
+        shift_days = dict(
+            zip(bands, [config['shiftDays']*io for io in range(len(bands))]))
+        #m5 = dict(zip(bands, config['m5']))
+        m5 = config['m5']
+        Nvisits = config['Nvisits']
+        Exposure_Time = config['ExposureTime']
+        seeingEff = config['seeingEff']
+        seeingGeom = config['seeingGeom']
+        airmass = config['airmass']
+        sky = config['sky']
+        moonphase = config['moonphase']
+        
+        RA = config['RA']
+        Dec = config['Dec']
+        rtot = []
+        # prepare m5 for interpolation
+        
+
+        # for season in range(1, config['nseasons']+1):
+        for il, season in enumerate(config['seasons']):
+            m5_interp, mjds = self.m5Interp(season,config['m5File'],config['healpixID'])
+            # search for mjdmin and mjdmax for this season
+            mjd_min = mjds[0]
+            mjd_max = mjds[1]
+            for i, band in enumerate(bands):
+                mjd = np.arange(mjd_min, mjd_max+cadence[band], cadence[band])
+                # if mjd_max not in mjd:
+                #    mjd = np.append(mjd, mjd_max)
+                #mjd += shift_days[band]
+                m5_coadded = self.m5coadd(m5_interp[band](mjd),
+                                          Nvisits[band],
+                                          Exposure_Time[band])
+                myarr = np.array(mjd, dtype=[(self.mjdCol, 'f8')])
+                
+                myarr = rf.append_fields(myarr, [self.RACol, self.DecCol, self.filterCol], [
+                                         [RA]*len(myarr), [Dec]*len(myarr), [band]*len(myarr)])
+                myarr = rf.append_fields(myarr, [self.m5Col, self.nexpCol, self.exptimeCol, self.seasonCol], [
+                                         m5_coadded, [Nvisits[band]]*len(myarr), [Nvisits[band]*Exposure_Time[band]]*len(myarr), [season]*len(myarr)])
+                myarr = rf.append_fields(myarr, [self.seeingEffCol, self.seeingGeomCol], [
+                                         [seeingEff[band]]*len(myarr), [seeingGeom[band]]*len(myarr)])
+                myarr = rf.append_fields(myarr, ['airmass', 'sky', 'moonPhase'], [
+                                         [airmass[band]]*len(myarr), [sky[band]]*len(myarr), [moonphase[band]]*len(myarr)])
+                rtot.append(myarr)
+
+        res = np.copy(np.concatenate(rtot))
+        res.sort(order=self.mjdCol)
+
+        res = rf.append_fields(res, 'observationId',
+                               np.random.randint(10*len(res), size=len(res)))
+
+        self.Observations = res
+
+    def m5Interp(self, season,fName,healpixID):
+        """
+        Method to prepare interpolation of m5 vs time per band
+
+        Parameters
+        --------------
+        season: int
+          season number
+        fName: str
+           name of the m5 file with ref values
+        healpixID: int
+          healpixID to tag for ref values
+
+        Returns
+        ----------
+        dictout: dict
+          dict of interpolators (time,m5) (key: band)
+        mjds: pair
+          mjds min and max of the season
+
+        """
+        
+        #load the file
+        tab = np.load(fName, allow_pickle=True)
+        dictout = {}
+
+        if healpixID != -1:
+            ik = tab['healpixID'] == healpixID
+            tab = tab[ik]
+        # now make interps for band and seasons
+        # and get mjdmin and mjdmax
+        
+        idx = tab['season'] == season
+        sela = tab[idx]
+        rmin = []
+        rmax = []
+        for b in np.unique(sela['filter']):
+            idxb = sela['filter'] == b
+            selb = sela[idxb]
+            dictout[b] = interpolate.interp1d(
+                selb['observationStartMJD'], selb['fiveSigmaDepth'], fill_value=0., bounds_error=False)
+            rmin.append(np.min(selb['observationStartMJD']))
+            rmax.append(np.max(selb['observationStartMJD']))
+        mjds =(np.max(rmin),np.min(rmax))
+            
+        return dictout,mjds
+                
     def m5coadd(self, m5, Nvisits, Tvisit):
         """ Coadded :math:`m_{5}` estimation
         use approx. :math:`\Delta m_{5}=1.25*log_{10}(N_{visits}*T_{visits}/30.)
