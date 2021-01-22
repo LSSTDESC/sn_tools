@@ -357,7 +357,6 @@ class GenerateFakeObservations:
         rtot = []
         # prepare m5 for interpolation
         
-
         # for season in range(1, config['nseasons']+1):
         for il, season in enumerate(config['seasons']):
             m5_interp, mjds = self.m5Interp(season,config['m5File'],config['healpixID'])
@@ -417,15 +416,16 @@ class GenerateFakeObservations:
         #load the file
         tab = np.load(fName, allow_pickle=True)
         dictout = {}
-
-        if healpixID != -1:
-            ik = tab['healpixID'] == healpixID
-            tab = tab[ik]
+        
         # now make interps for band and seasons
         # and get mjdmin and mjdmax
         
         idx = tab['season'] == season
+        if healpixID != -1:
+            idx&= tab['healpixID'] == healpixID
+            
         sela = tab[idx]
+        
         rmin = []
         rmax = []
         for b in np.unique(sela['filter']):
