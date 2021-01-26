@@ -1272,7 +1272,7 @@ class DataToPixels:
                                })
 
         listcols = ['observationStartMJD', 'fieldRA', 'fieldDec', 'visitExposureTime',
-                    'fiveSigmaDepth', 'numExposures', 'seeingFwhmEff','visitTime']
+                    'fiveSigmaDepth', 'numExposures', 'seeingFwhmEff']
         df_pix[listcols] = grp[listcols].mean().tolist()
         """
         for ll in listcols:
