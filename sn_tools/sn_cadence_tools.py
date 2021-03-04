@@ -319,7 +319,7 @@ class GenerateFakeObservations:
                                np.random.randint(10*len(res), size=len(res)))
 
         self.Observations = res
-        
+
     def makeFake_from_simu(self, config):
         """ Generate Fake observations
         fiveSigmaDepth are taken from an input file
@@ -351,15 +351,16 @@ class GenerateFakeObservations:
         airmass = config['airmass']
         sky = config['sky']
         moonphase = config['moonphase']
-        
+
         RA = config['RA']
         Dec = config['Dec']
         rtot = []
         # prepare m5 for interpolation
-        
+
         # for season in range(1, config['nseasons']+1):
         for il, season in enumerate(config['seasons']):
-            m5_interp, mjds = self.m5Interp(season,config['m5File'],config['healpixID'])
+            m5_interp, mjds = self.m5Interp(
+                season, config['m5File'], config['healpixID'])
             # search for mjdmin and mjdmax for this season
             mjd_min = mjds[0]
             mjd_max = mjds[1]
@@ -372,7 +373,7 @@ class GenerateFakeObservations:
                                           Nvisits[band],
                                           Exposure_Time[band])
                 myarr = np.array(mjd, dtype=[(self.mjdCol, 'f8')])
-                
+
                 myarr = rf.append_fields(myarr, [self.RACol, self.DecCol, self.filterCol], [
                                          [RA]*len(myarr), [Dec]*len(myarr), [band]*len(myarr)])
                 myarr = rf.append_fields(myarr, [self.m5Col, self.nexpCol, self.exptimeCol, self.seasonCol], [
@@ -391,7 +392,7 @@ class GenerateFakeObservations:
 
         self.Observations = res
 
-    def m5Interp(self, season,fName,healpixID):
+    def m5Interp(self, season, fName, healpixID):
         """
         Method to prepare interpolation of m5 vs time per band
 
@@ -412,20 +413,20 @@ class GenerateFakeObservations:
           mjds min and max of the season
 
         """
-        
-        #load the file
+
+        # load the file
         tab = np.load(fName, allow_pickle=True)
         dictout = {}
-        
+
         # now make interps for band and seasons
         # and get mjdmin and mjdmax
-        
+
         idx = tab['season'] == season
         if healpixID != -1:
-            idx&= tab['healpixID'] == healpixID
-            
+            idx &= tab['healpixID'] == healpixID
+
         sela = tab[idx]
-        
+
         rmin = []
         rmax = []
         for b in np.unique(sela['filter']):
@@ -435,10 +436,10 @@ class GenerateFakeObservations:
                 selb['observationStartMJD'], selb['fiveSigmaDepth'], fill_value=0., bounds_error=False)
             rmin.append(np.min(selb['observationStartMJD']))
             rmax.append(np.max(selb['observationStartMJD']))
-        mjds =(np.max(rmin),np.min(rmax))
-            
-        return dictout,mjds
-                
+        mjds = (np.max(rmin), np.min(rmax))
+
+        return dictout, mjds
+
     def m5coadd(self, m5, Nvisits, Tvisit):
         """ Coadded :math:`m_{5}` estimation
         use approx. :math:`\Delta m_{5}=1.25*log_{10}(N_{visits}*T_{visits}/30.)
