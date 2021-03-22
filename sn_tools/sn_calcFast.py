@@ -474,7 +474,7 @@ class LCfast:
                     lc['flux_e_sec']/lc['snr_m5'])/(lc['flux_5']/5.)
             for key, vals in Fisher_Mat.items():
                 lc.loc[:, 'F_{}'.format(
-                    key)] = vals[~vals.mask]/(lc['fluxerr'].values**2)
+                    key)] = vals[~vals.mask]/(lc['fluxerr_photo'].values**2)
                 # lc.loc[:, 'F_{}'.format(key)] = 999.
             lc.loc[:, 'x1'] = self.x1
             lc.loc[:, 'color'] = self.color
