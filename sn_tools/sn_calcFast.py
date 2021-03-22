@@ -473,7 +473,7 @@ class LCfast:
                     lc['flux_e_sec']/lc['snr_m5'])/(lc['flux_5']/5.)
             for key, vals in Fisher_Mat.items():
                 lc.loc[:, 'F_{}'.format(
-                    key)] = vals[~vals.mask]/(lc['fluxerr'].values**2)
+                    key)] = vals[~vals.mask]/(lc['fluxerr_photo'].values**2)
                 # lc.loc[:, 'F_{}'.format(key)] = 999.
             lc.loc[:, 'x1'] = self.x1
             lc.loc[:, 'color'] = self.color
@@ -539,8 +539,8 @@ class LCfast:
         # snr_m5 correction
         tab['snr_m5'] = 1./srand(tab['gamma'], tab['mag'], tab['m5'])
         tab['magerr'] = (2.5/np.log(10.))/tab['snr_m5']
-        tab['fluxerr_phot'] = tab['flux']/tab['snr_m5']
-        tab['fluxerr'] = np.sqrt(tab['fluxerr_phot']**2+
+        tab['fluxerr_photo'] = tab['flux']/tab['snr_m5']
+        tab['fluxerr'] = np.sqrt(tab['fluxerr_photo']**2+
                                  tab['fluxerr_model']**2)
         
         
@@ -657,9 +657,11 @@ class CalcSN:
         # this would save some memory
         fields = []
         for fi in ['season', 'healpixID', 'pixRA', 'pixDec', 'z',
-                   'daymax', 'band', 'snr_m5', 'time', 'fluxerr', 'phase']:
+                   'daymax', 'band', 'snr_m5', 'time', 'fluxerr', 'fluxerr_photo','phase']:
             fields.append(fi)
-
+        
+            
+            
         # Fisher parameters
         for ia, vala in enumerate(self.params):
             for jb, valb in enumerate(self.params):
@@ -668,9 +670,10 @@ class CalcSN:
 
         # lc to process
         lc = Table(lc_all[fields])
-
+        
+        #lc['fluxerr'] = lc['fluxerr_photo']
         # LC selection
-
+        
         goodlc, badlc = self.selectLC(lc)
 
         res = badlc
