@@ -540,8 +540,8 @@ class LCfast:
         # snr_m5 correction
         tab['snr_m5'] = 1./srand(tab['gamma'], tab['mag'], tab['m5'])
         tab['magerr'] = (2.5/np.log(10.))/tab['snr_m5']
-        tab['fluxerr_phot'] = tab['flux']/tab['snr_m5']
-        tab['fluxerr'] = np.sqrt(tab['fluxerr_phot']**2 +
+        tab['fluxerr_photo'] = tab['flux']/tab['snr_m5']
+        tab['fluxerr'] = np.sqrt(tab['fluxerr_photo']**2 +
                                  tab['fluxerr_model']**2)
 
         # tab['old_flux'] = test['flux']
