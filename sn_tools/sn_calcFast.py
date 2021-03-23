@@ -10,8 +10,9 @@ import operator
 import numpy.lib.recfunctions as rf
 import warnings
 
-#this is to remove runtime warnings
+# this is to remove runtime warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
+
 
 class LCfast:
     """
@@ -59,7 +60,7 @@ class LCfast:
                  telescope, mjdCol='observationStartMJD',
                  RACol='fieldRA', DecCol='fieldDec',
                  filterCol='filter', exptimeCol='visitExposureTime',
-                 m5Col='fiveSigmaDepth', seasonCol='season', nexpCol='numExposures',seeingCol='seeingFwhmEff',
+                 m5Col='fiveSigmaDepth', seasonCol='season', nexpCol='numExposures', seeingCol='seeingFwhmEff',
                  snr_min=5.,
                  lightOutput=True,
                  ebvofMW=-1.0,
@@ -76,7 +77,7 @@ class LCfast:
         self.seasonCol = seasonCol
         self.nexpCol = nexpCol
         self.seeingCol = seeingCol
-        
+
         self.x1 = x1
         self.color = color
         self.lightOutput = lightOutput
@@ -305,7 +306,7 @@ class LCfast:
             fluxes_obs = self.reference_lc.flux[band](pts)
             fluxes_obs_err = self.reference_lc.fluxerr_photo[band](pts)
             fluxes_model_err = self.reference_lc.fluxerr_model[band](pts)
-            
+
             """
             fluxes_obs = np.nan_to_num(fluxes_obs)
             fluxes_obs_err = np.nan_to_num(fluxes_obs_err)
@@ -327,7 +328,6 @@ class LCfast:
         # replace crazy fluxes by dummy values
         fluxes_obs_err[fluxes_obs <= 0.] = 10.
         fluxes_obs[fluxes_obs <= 0.] = 1.e-10
-        
 
         # Fisher matrix components estimation
         # loop on SN parameters (x0,x1,color)
@@ -410,10 +410,10 @@ class LCfast:
             if self.seeingCol in sel_obs.dtype.names:
                 seeings = np.ma.array(
                     np.tile(sel_obs[self.seeingCol], (nvals, 1)), mask=~flag)
-            
+
         healpixIds = np.ma.array(
             np.tile(sel_obs['healpixID'].astype(int), (nvals, 1)), mask=~flag)
-       
+
         pixRAs = np.ma.array(
             np.tile(sel_obs['pixRA'], (nvals, 1)), mask=~flag)
 
@@ -437,14 +437,15 @@ class LCfast:
             lc['flux'] = fluxes[~fluxes.mask]
             lc['fluxerr_photo'] = fluxes_err_photo[~fluxes_err_photo.mask]
             lc['fluxerr_model'] = fluxes_err_model[~fluxes_err_model.mask]
-            lc['fluxerr'] = np.sqrt(lc['fluxerr_photo']**2+lc['fluxerr_model']**2)
+            lc['fluxerr'] = np.sqrt(
+                lc['fluxerr_photo']**2+lc['fluxerr_model']**2)
             lc['phase'] = phases[~phases.mask]
             lc['snr_m5'] = snr_m5[~snr_m5.mask]
             lc['time'] = obs_time[~obs_time.mask]
             lc['mag'] = mag_obs[~mag_obs.mask]
             if not self.lightOutput:
                 lc['gamma'] = gammas[~gammas.mask]
-                lc['m5'] = m5_obs[~m5_obs.mask]            
+                lc['m5'] = m5_obs[~m5_obs.mask]
                 lc['mag'] = mag_obs[~mag_obs.mask]
                 lc['magerr'] = (2.5/np.log(10.))/snr_m5[~snr_m5.mask]
                 lc['time'] = obs_time[~obs_time.mask]
@@ -452,7 +453,7 @@ class LCfast:
                 lc[self.nexpCol] = nexposures[~nexposures.mask]
                 if self.seeingCol in sel_obs.dtype.names:
                     lc[self.seeingCol] = seeings[~seeings.mask]
-                
+
             lc['band'] = ['LSST::'+band]*len(lc)
             lc['zp'] = self.zp[band]
             lc['zp'] = 2.5*np.log10(3631)
@@ -490,7 +491,7 @@ class LCfast:
 
             for colname in ['n_aft', 'n_bef', 'n_phmin', 'n_phmax']:
                 lc.loc[:, colname] = lc[colname].astype(int)
-        
+
         if len(lc) > 0.:
             lc = self.dust_corrections(lc, ebvofMW)
 
@@ -539,11 +540,10 @@ class LCfast:
         # snr_m5 correction
         tab['snr_m5'] = 1./srand(tab['gamma'], tab['mag'], tab['m5'])
         tab['magerr'] = (2.5/np.log(10.))/tab['snr_m5']
-        tab['fluxerr_photo'] = tab['flux']/tab['snr_m5']
-        tab['fluxerr'] = np.sqrt(tab['fluxerr_photo']**2+
+        tab['fluxerr_phot'] = tab['flux']/tab['snr_m5']
+        tab['fluxerr'] = np.sqrt(tab['fluxerr_phot']**2 +
                                  tab['fluxerr_model']**2)
-        
-        
+
         # tab['old_flux'] = test['flux']
         # tab['old_fluxerr'] = test['fluxerr']
 
@@ -580,7 +580,7 @@ class LCfast:
         corrdust = self.dustcorr[band]['ratio_fluxerr_model'](
             (grp['phase'], grp['z'], grp['ebvofMW']))
         grp['fluxerr_model'] *= corrdust
-            
+
         for va in ['x0', 'x1', 'color', 'daymax']:
             for vb in ['x0', 'x1', 'color', 'daymax']:
                 corrdusta = self.dustcorr[band]['ratio_d{}'.format(va)](
