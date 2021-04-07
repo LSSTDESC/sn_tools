@@ -12,6 +12,7 @@ import sqlite3
 import logging
 from collections import MutableMapping
 
+
 def append(metricTot, sel):
     """
     Function to concatenate a numpy array to another numpy array
@@ -254,6 +255,49 @@ def loadFile(filename, objtype='pandasDataFrame'):
             print(filename)
             print('unknown format: file will not be downloaded')
             return None
+
+
+def loopStack_params(namelist, params=dict(zip(['objtype'], ['pandasDataFrame'])), j=0, output_q=None):
+    """
+    Function to load a file according to the type of data it contains
+
+    Parameters
+    ---------------
+    namelist: list(str)
+       list of the name of the files to consider
+    objtype: str, opt
+       type of the data the file contains (default: pandas DataFrame)
+       possible values: pndasDataFrame, astropyTable, numpy array
+
+    Returns
+    -----------
+    object of the file (stacked)
+
+    """
+    objtype = params['objtype']
+    res = pd.DataFrame()
+    if objtype == 'astropyTable':
+        res = Table()
+    if objtype == 'numpyArray':
+        res = None
+
+    for fname in namelist:
+        tab = loadFile(fname, objtype)
+
+        if objtype == 'pandasDataFrame':
+            res = pd.concat([res, tab], sort=False)
+        if objtype == 'astropyTable':
+            res = vstack([res, tab])
+        if objtype == 'numpyArray':
+            if res is None:
+                res = tab
+            else:
+                res = np.concatenate((res, tab))
+
+        if output_q is not None:
+            return output_q.put({j: res})
+        else:
+            return res
 
 
 def loopStack(namelist, objtype='pandasDataFrame'):
@@ -605,15 +649,15 @@ def getObservations(dbDir, dbName, dbExtens):
                                        to_degrees=False,
                                        new_col_names=keymap)
 
-        #save this file on disk if it does not exist
-        outDir = dbDir.replace('/db','/npy')
+        # save this file on disk if it does not exist
+        outDir = dbDir.replace('/db', '/npy')
         if not os.path.isdir(outDir):
             os.mkdir(outDir)
 
-        path = '{}/{}.npy'.format(outDir,dbName)
+        path = '{}/{}.npy'.format(outDir, dbName)
         if not os.path.isfile(path):
-            np.save(path,observations)
- 
+            np.save(path, observations)
+
     return observations
 
 
@@ -682,6 +726,7 @@ def dustmaps(dustDir):
     import dustmaps.sfd
     dustmaps.sfd.fetch()
 
+
 def colName(names, list_search):
     """
     Function to get a name from a list
@@ -705,10 +750,11 @@ def colName(names, list_search):
 
     return None
 
+
 def recursive_items(dictionary):
     """
     Method to loop on a nested dictionnary
-    
+
     Parameters
     --------------
     dictionnary: dict
@@ -724,10 +770,11 @@ def recursive_items(dictionary):
         else:
             yield (key, value)
 
-def recursive_keys(keys,dictionary):
+
+def recursive_keys(keys, dictionary):
     """
     Method to loop on a nested dictionnary
-    
+
     Parameters
     --------------
     dictionnary: dict
@@ -740,10 +787,11 @@ def recursive_keys(keys,dictionary):
     for key, value in dictionary.items():
         if type(value) is dict:
             keys.append(key)
-            return recursive_keys(keys,value)
+            return recursive_keys(keys, value)
         else:
             return keys
-            
+
+
 def recursive_merge(d1, d2):
     """
     Update two dicts of dicts recursively, 
@@ -758,15 +806,16 @@ def recursive_merge(d1, d2):
     -----------
     merged dict
     """
-    for k, v in d1.items(): # in Python 2, use .iteritems()!
+    for k, v in d1.items():  # in Python 2, use .iteritems()!
         if k in d2:
                 # this next check is the only difference!
-                if all(isinstance(e, MutableMapping) for e in (v, d2[k])):
-                    d2[k] = recursive_merge(v, d2[k])
-                    # we could further check types and merge as appropriate here.
+            if all(isinstance(e, MutableMapping) for e in (v, d2[k])):
+                d2[k] = recursive_merge(v, d2[k])
+                # we could further check types and merge as appropriate here.
     d3 = d1.copy()
     d3.update(d2)
     return d3
+
 
 def make_dict_from_config(path, config_file):
     """
@@ -786,26 +835,27 @@ def make_dict_from_config(path, config_file):
     """
 
     # open and load the file here
-    ffile = open('{}/{}'.format(path,config_file), 'r') 
+    ffile = open('{}/{}'.format(path, config_file), 'r')
     line = ffile.read().splitlines()
     ffile.close()
 
     # process the result
     params = {}
-    for i,ll in enumerate(line):
-        if ll!='' and ll[0]!='#':
+    for i, ll in enumerate(line):
+        if ll != '' and ll[0] != '#':
             spla = ll.split('#')
             lspl = spla[0].split(' ')
-            lspl = ' '.join(lspl).split() 
+            lspl = ' '.join(lspl).split()
             n = len(lspl)
-            keym=''
+            keym = ''
             lim = n-2
-            for io,keya in enumerate([lspl[i] for i in range(lim)]):
+            for io, keya in enumerate([lspl[i] for i in range(lim)]):
                 keym += keya
                 if io != lim-1:
                     keym += '_'
-            params[keym]=(lspl[n-1],lspl[n-2],spla[1])
+            params[keym] = (lspl[n-1], lspl[n-2], spla[1])
     return params
+
 
 def make_dict_from_optparse(thedict):
     """
@@ -823,24 +873,26 @@ def make_dict_from_optparse(thedict):
     """
 
     params = {}
-    for key,vals in thedict.items():
+    for key, vals in thedict.items():
         lspl = key.split('_')
         n = len(lspl)
         mystr = ''
         myclose = ''
         for keya in [lspl[i] for i in range(n)]:
-            mystr += '{\''+keya+ '\':'
-            myclose +=' }'
-            
+            mystr += '{\''+keya + '\':'
+            myclose += ' }'
+
         if vals[0] != 'str':
-            dd = '{} {} {}'.format(mystr,eval('{}({})'.format(vals[0],vals[1])),myclose)
+            dd = '{} {} {}'.format(mystr, eval(
+                '{}({})'.format(vals[0], vals[1])), myclose)
         else:
-            dd = '{} \'{}\' {}'.format(mystr,vals[1],myclose)
+            dd = '{} \'{}\' {}'.format(mystr, vals[1], myclose)
 
         thedict = eval(dd)
         params = recursive_merge(params, thedict)
-    
+
     return params
+
 
 def decrypt_parser(parser):
     """
@@ -856,26 +908,27 @@ def decrypt_parser(parser):
     dict with decrypted infos
 
     """
-    
+
     file_name = 'help_script.txt'
-    file_object  = open(file_name,'w')
+    file_object = open(file_name, 'w')
     parser.print_help(file_object)
     file_object.close()
 
-    file = open(file_name, 'r') 
+    file = open(file_name, 'r')
     line = file.read().splitlines()
 
     params = {}
-    for i,ll in enumerate(line):
+    for i, ll in enumerate(line):
         lolo = ' '.join(ll.split(' ')).split()
-        if lolo and lolo[0][:2]=='--':
+        if lolo and lolo[0][:2] == '--':
             key = lolo[0].split('--')[1]
             key = key.split('=')
-            params[key[0]]= (key[1].split('/')[0],key[1].split('/')[1])
+            params[key[0]] = (key[1].split('/')[0], key[1].split('/')[1])
 
     return params
 
-def make_dict_old(thedict,key,what,val):
+
+def make_dict_old(thedict, key, what, val):
     """
     Method to append to a dict infos
     The goal is in fine to create a yaml file
@@ -897,8 +950,7 @@ def make_dict_old(thedict,key,what,val):
       resulting dict
 
     """
-      
-    
+
     keym = key.split('_')[0]
     keys = ''
     if '_' in key:
@@ -907,20 +959,21 @@ def make_dict_old(thedict,key,what,val):
     names = what[0].split(',')
     dtypes = what[1].split(',')
     val = val.split(',')
-    
-    valb = [val[i] if dtypes[i]=='str' else eval('{}({})'.format(dtypes[i],val[i]))  for i in range(len(dtypes))]
-    
-    if keys=='':
+
+    valb = [val[i] if dtypes[i] == 'str' else eval(
+        '{}({})'.format(dtypes[i], val[i])) for i in range(len(dtypes))]
+
+    if keys == '':
         if names[0] != 'value':
-            thedict[keym]=dict(zip(names,valb))
+            thedict[keym] = dict(zip(names, valb))
         else:
-            thedict[keym]=valb[0]
+            thedict[keym] = valb[0]
     else:
         if keym not in thedict.keys():
             thedict[keym] = {}
         if names[0] != 'value':
-            thedict[keym][keys]=dict(zip(names,valb))  
+            thedict[keym][keys] = dict(zip(names, valb))
         else:
-            thedict[keym][keys]=valb[0] 
-            
+            thedict[keym][keys] = valb[0]
+
     return thedict
