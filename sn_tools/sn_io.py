@@ -294,10 +294,10 @@ def loopStack_params(namelist, params=dict(zip(['objtype'], ['pandasDataFrame'])
             else:
                 res = np.concatenate((res, tab))
 
-        if output_q is not None:
-            return output_q.put({j: res})
-        else:
-            return res
+    if output_q is not None:
+        return output_q.put({j: res})
+    else:
+        return res
 
 
 def loopStack(namelist, objtype='pandasDataFrame'):
