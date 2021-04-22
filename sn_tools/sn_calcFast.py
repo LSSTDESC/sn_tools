@@ -306,7 +306,6 @@ class LCfast:
             fluxes_obs = self.reference_lc.flux[band](pts)
             fluxes_obs_err = self.reference_lc.fluxerr_photo[band](pts)
             fluxes_model_err = self.reference_lc.fluxerr_model[band](pts)
-
             """
             fluxes_obs = np.nan_to_num(fluxes_obs)
             fluxes_obs_err = np.nan_to_num(fluxes_obs_err)
@@ -383,6 +382,7 @@ class LCfast:
         print(band, gammaref, gamma_obs, m5,
               sel_obs[self.m5Col], sel_obs[self.exptimeCol])
         """
+
         fluxes_obs_err = fluxes_obs_err/correct_m5
 
         # now apply the flag to select LC points
@@ -657,11 +657,9 @@ class CalcSN:
         # this would save some memory
         fields = []
         for fi in ['season', 'healpixID', 'pixRA', 'pixDec', 'z',
-                   'daymax', 'band', 'snr_m5', 'time', 'fluxerr', 'fluxerr_photo','phase']:
+                   'daymax', 'band', 'snr_m5', 'time', 'fluxerr', 'fluxerr_photo', 'phase']:
             fields.append(fi)
-        
-            
-            
+
         # Fisher parameters
         for ia, vala in enumerate(self.params):
             for jb, valb in enumerate(self.params):
@@ -670,10 +668,10 @@ class CalcSN:
 
         # lc to process
         lc = Table(lc_all[fields])
-        
+
         #lc['fluxerr'] = lc['fluxerr_photo']
         # LC selection
-        
+
         goodlc, badlc = self.selectLC(lc)
 
         res = badlc
