@@ -34,14 +34,14 @@ class SN_Rate:
     """
 
     def __init__(self, rate='Perrett', H0=70., H0_err=2.,
-                 Om0=0.25,Om0_err=0.025,
+                 Om0=0.25, Om0_err=0.025,
                  min_rf_phase=-15., max_rf_phase=30.,
                  error_params=False):
 
         self.H0 = H0
         self.H0_err = H0_err
         self.Om0 = Om0
-        self.Om0_err= Om0_err
+        self.Om0_err = Om0_err
         self.astropy_cosmo = FlatLambdaCDM(H0=H0, Om0=Om0)
         self.rate = rate
         self.min_rf_phase = min_rf_phase
@@ -117,17 +117,17 @@ class SN_Rate:
 
         normz = (1.+zz)
         nsn = rate * area * dvol * effective_duration / normz
-        err_rate= err_rate*area * dvol * effective_duration / normz
+        err_rate = err_rate*area * dvol * effective_duration / normz
 
         err_dvol = 0.
         if self.error_params:
-             dvol_err = self.comoving_volume_error(norm,thebins)
-             err_dvol = rate * area * dvol_err * effective_duration / normz
-        
+            dvol_err = self.comoving_volume_error(norm, thebins)
+            err_dvol = rate * area * dvol_err * effective_duration / normz
+
         err_nsn = np.sqrt(err_rate**2+err_dvol**2)
         return zz, rate, err_rate, nsn, err_nsn
 
-    def comoving_volume_error(self, norm,thebins):
+    def comoving_volume_error(self, norm, thebins):
         """
         Method to estimate the comoving volume error
 
@@ -144,27 +144,27 @@ class SN_Rate:
 
         """
 
-        
         dx = 1.e-8
 
-        dvol  = {}
+        dvol = {}
 
-        for sign in [(-1,0),(+1,0),(0,-1),(0,+1)]:
-            astropy_cosmo = FlatLambdaCDM(H0=self.H0+sign[0]*dx, Om0=self.Om0+sign[1]*dx)
-            tag = 'H0_{}_Om0_{}'.format(sign[0],sign[1])
+        for sign in [(-1, 0), (+1, 0), (0, -1), (0, +1)]:
+            astropy_cosmo = FlatLambdaCDM(
+                H0=self.H0+sign[0]*dx, Om0=self.Om0+sign[1]*dx)
+            tag = 'H0_{}_Om0_{}'.format(sign[0], sign[1])
             dvol[tag] = norm*astropy_cosmo.comoving_volume(thebins).value
 
         for key in dvol.keys():
             dvol[key] = dvol[key][1:]-dvol[key][:-1]
-        
+
         dvol_err_H0 = (dvol['H0_1_Om0_0']-dvol['H0_-1_Om0_0'])/(2.*dx)
         dvol_err_Om0 = (dvol['H0_0_Om0_1']-dvol['H0_0_Om0_-1'])/(2.*dx)
-  
+
         dvol_err = (dvol_err_H0*self.H0_err)**2
-        dvol_err +=  (dvol_err_Om0*self.Om0_err)**2
-        
+        dvol_err += (dvol_err_Om0*self.Om0_err)**2
+
         return np.sqrt(dvol_err)
-    
+
     def RipocheRate(self, z):
         """The SNLS SNIa rate according to the (unpublished) Ripoche et al study.
 
@@ -321,3 +321,69 @@ class SN_Rate:
         plt.xlabel('z')
         plt.ylabel('N$_{SN}$ <')
         plt.grid()
+
+
+class NSN:
+    """
+    class to estimate the number of supernovae from rate
+
+    Parameters
+    ---------------
+    H0: float, opt
+      Hubble cte (default: 70)
+    Om0: float, opt
+      Omega_m value (default: 0.3)
+    min_rf_phase: float, opt
+      min rest-frame phase for nsn estimation (default: -15.)
+    max_rf_phase: float, opt
+      max rest-frame phase for nsn estimation (default: 30à
+
+    """
+
+    def __init__(self, H0=70., Om0=0.3,
+                 min_rf_phase=-15., max_rf_phase=30.):
+
+        self.H0 = H0
+        self.Om0 = Om0
+        self.min_rf_phase = min_rf_phase
+        self.max_rf_phase = max_rf_phase
+
+        self.rateSN = SN_Rate(H0=self.H0, Om0=self.Om0,
+                              min_rf_phase=self.min_rf_phase, max_rf_phase=self.max_rf_phase)
+
+    def __call__(self, zmin, zmax, dz, season_length, survey_area, account_for_edges=True, scale_factor=1):
+        """
+        Method to estimate the number of supernovae
+
+        Parameters
+        ----------------
+        zmin: float
+          min redshift
+        zmax: float
+          max redshift
+        dz: float
+          redshift binning value
+        season_length: float
+          season length (in days)
+        survey_area: float
+          area of the survey (in deg2)
+        account_for_edges: bool, opt
+          to account for edges when estimating nsn (default: True)
+        scale_factor: float, opt
+          scale factor for the number of sn (default: 1)
+
+        Returns
+        ----------
+        The number of supernovae
+
+        """
+        zz, rate, err_rate, nsn, err_nsn = self.rateSN(zmin=zmin,
+                                                       zmax=zmax,
+                                                       dz=dz,
+                                                       duration=season_length,
+                                                       survey_area=survey_area,
+                                                       account_for_edges=account_for_edges)
+
+        res = scale_factor*np.cumsum(nsn)[-1]
+
+        return res
