@@ -411,6 +411,11 @@ class LCfast:
                 seeings = np.ma.array(
                     np.tile(sel_obs[self.seeingCol], (nvals, 1)), mask=~flag)
 
+        # add night value here
+        if 'night' in sel_obs.dtype.names:
+            nights = np.ma.array(
+                np.tile(sel_obs['night'], (nvals, 1)), mask=~flag)
+
         healpixIds = np.ma.array(
             np.tile(sel_obs['healpixID'].astype(int), (nvals, 1)), mask=~flag)
 
@@ -454,6 +459,8 @@ class LCfast:
                 if self.seeingCol in sel_obs.dtype.names:
                     lc[self.seeingCol] = seeings[~seeings.mask]
 
+            if 'night' in sel_obs.dtype.names:
+                lc['night'] = nights[~nights.mask]
             lc['band'] = ['LSST::'+band]*len(lc)
             lc['zp'] = self.zp[band]
             lc['zp'] = 2.5*np.log10(3631)
