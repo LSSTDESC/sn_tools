@@ -46,6 +46,12 @@ class Process:
       location directory where maps pixels<->observations are (default: '')
     npixels: int, opt
       number of pixels to run on (default: 0)
+    nclusters: int, opt
+       number of clusters to make (DD only)(default: 5)
+    radius: float, opt
+      radius to get pixels arounf clusters (DD only) (default: 4 deg)
+    healpixIDs: list, opt
+      list of healpixels to process (default: [])
 
     """
 
@@ -56,7 +62,7 @@ class Process:
                  saveData, remove_dithering,
                  outDir, nprocs, metricList,
                  pixelmap_dir='', npixels=0,
-                 nclusters=5, radius=4.):
+                 nclusters=5, radius=4., healpixIDs=[]):
 
         self.dbDir = dbDir
         self.dbName = dbName
@@ -77,6 +83,7 @@ class Process:
         self.npixels = npixels
         self.nclusters = nclusters
         self.radius = radius
+        self.healpixIDs = healpixIDs
 
         assert(self.RAmin <= self.RAmax)
 
@@ -125,8 +132,11 @@ class Process:
         if self.npixels == -1:
             self.npixels = len(
                 np.unique(self.pixelmap['healpixID']))
-        random_pixels = self.randomPixels(self.pixelmap, self.npixels)
-        print('number of pixels to process', len(random_pixels), obs.dtype)
+        random_pixels = self.healpixIDs
+        if not self.healpixIDs:
+            random_pixels = self.randomPixels(self.pixelmap, self.npixels)
+        print('number of pixels to process', len(
+            random_pixels), random_pixels, obs.dtype)
 
         self.multiprocess(random_pixels, obs,
                           func=self.procix)
