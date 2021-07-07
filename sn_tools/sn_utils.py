@@ -36,7 +36,6 @@ def multiproc(data, params, func, nproc):
 
     """
     nproc = min([len(data), nproc])
-    print('nproc')
     # multiprocessing parameters
     nz = len(data)
     t = np.linspace(0, nz, nproc+1, dtype='int')
