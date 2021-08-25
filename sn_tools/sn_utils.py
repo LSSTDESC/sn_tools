@@ -783,6 +783,7 @@ class SimuParameters:
         zmax = self.params['z']['max']
         zstep = self.params['z']['step']
         NSN_factor = self.params['NSNfactor']
+        NSN_absolute = self.params['NSNabsolute']
 
         if ztype == 'unique':
             zvals = [zmin]
@@ -797,6 +798,7 @@ class SimuParameters:
 
             if zmin < 1.e-6:
                 zmin = 0.01
+
             #print(zmin, zmax, duration, self.area)
             zz, rate, err_rate, nsn, err_nsn = self.sn_rate(
                 zmin=zmin, zmax=zmax,
@@ -807,13 +809,15 @@ class SimuParameters:
             N_SN = np.cumsum(nsn)[-1]
             N_SN *= NSN_factor
             N_SN = int(N_SN)
+            weight_z = np.cumsum(nsn)/np.sum(np.cumsum(nsn))
+            if NSN_absolute > 0:
+                N_SN = NSN_absolute
 
             # print('nsn from rate', zmin, zmax,
             #      duration, self.area, self.min_rf_phase_qual, self.max_rf_phase_qual, N_SN, NSN_factor)
 
             if N_SN < 0.5:
                 return None
-            weight_z = np.cumsum(nsn)/np.sum(np.cumsum(nsn))
 
             if N_SN < 1:
                 N_SN = 1
