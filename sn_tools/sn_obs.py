@@ -1409,6 +1409,9 @@ class ProcessPixels:
             idf = pixels['healpixID'] == vv
             selpix = pixels[idf]
             dataPixels = self.getData(data, selpix)
+            #print(vv,len(dataPixels))
+            if len(dataPixels) < 5:
+                continue
             #print('got datapixels', time.time()-time_ref, selpix)
             # dataPixels = data.iloc[selpix['index'].tolist()].copy()
 
