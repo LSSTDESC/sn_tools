@@ -804,7 +804,7 @@ class SimuParameters:
                 zmin=zmin, zmax=zmax,
                 duration=duration,
                 survey_area=self.area,
-                account_for_edges=True, dz=0.001)
+                account_for_edges=True, dz=1.e-5)
             # get number of supernovae
             N_SN = np.cumsum(nsn)[-1]
             N_SN *= NSN_factor
@@ -812,7 +812,7 @@ class SimuParameters:
             weight_z = np.cumsum(nsn)/np.sum(np.cumsum(nsn))
             if NSN_absolute > 0:
                 N_SN = NSN_absolute
-
+                weight_z = [1./len(zz)]*len(zz)
             # print('nsn from rate', zmin, zmax,
             #      duration, self.area, self.min_rf_phase_qual, self.max_rf_phase_qual, N_SN, NSN_factor)
 
