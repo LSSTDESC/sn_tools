@@ -603,15 +603,21 @@ class SimuParameters:
     """
 
     def __init__(self, sn_parameters, cosmo_parameters,
-                 mjdCol='mjd', seasonCol='season', filterCol='filter', area=9.6, dirFiles='reference_files', web_path=''):
+                 mjdCol='mjd', seasonCol='season', filterCol='filter', area=9.6, web_path=''):
 
-        self.dirFiles = dirFiles
         self.params = sn_parameters
 
+        self.dirFiles = None
+        self.distName = None
+        if 'modelPar' in sn_parameters.keys():
+            self.dirFiles = sn_parameters['modelPar']['dirFile']
+            self.distName = self.params['modelPar']['nameFile']
+            
         self.web_path = web_path
-        if 'modelPar' in self.params.keys() and self.params['modelPar']['name'] != 'none':
-            self.modelParDist = self.getDist(
-                self.params['modelPar']['name'], self.params['modelPar']['rate'])
+        if 'modelPar' in self.params.keys() and self.params['modelPar']['nameFile'] != 'none':
+            self.modelParDist = self.getDist()
+
+
         self.mjdCol = mjdCol
         self.seasonCol = seasonCol
         self.filterCol = filterCol
@@ -626,7 +632,27 @@ class SimuParameters:
                                min_rf_phase=self.params['minRFphaseQual'],
                                max_rf_phase=self.params['maxRFphaseQual'])
 
-    def getDist(self, distname, rate):
+    def getDist(self):
+        """ get (x1,color) distributions
+
+        Returns
+        -----------
+        pandas df of (x1,color) rates with the columns:
+        zrange, param, val, proba
+
+        with
+        zrange = lowz/highz
+        param = x1, color
+       
+        """
+        check_get_file(self.web_path, self.dirFiles, self.distName)
+
+        fullName = '{}/{}'.format(self.dirFiles,self.distName)
+
+        return x1_color_dist(fullName).proba
+
+
+    def getDist_deprecated(self, distname, rate):
         """ get (x1,color) distributions
         Parameters
         --------------
@@ -924,18 +950,27 @@ class SimuParameters:
 
         if ptype == 'random':
             pdf = pd.DataFrame()
+            idp = self.modelParDist['param'] == pname
+            selPar = self.modelParDist[idp]
             # if pmin and pmax are different -> random choice in distribution
             if pmax-pmin > 1.e-5:
                 # have to separate between low and high z-range
                 # distributions may be different
-                for key, vv in dict(zip(['low_z', 'high_z'], [[0., 0.1], [0.1, 1.5]])).items():
+                for key, vv in dict(zip(['lowz', 'highz'], [[0., 0.1], [0.1, 1.5]])).items():
                     idx = pars['z'] > vv[0]
                     idx &= pars['z'] < vv[1]
                     sel = pd.DataFrame(pars[idx])
+                    idpb = selPar['zrange'] == key
+                    selParb = selPar[idpb]
                     if sel.size > 0:
+                        """
                         norm = np.sum(self.modelParDist[key]['weight'])
                         sel[pname] = np.random.choice(
                             self.modelParDist[key][pname], len(sel), p=self.modelParDist[key]['weight']/norm)
+                        """
+                        norm = np.sum(selParb['proba'])
+                        sel[pname] = np.random.choice(selParb['val'], len(sel), p=selParb['proba']/norm)
+
                         pdf = pd.concat((pdf, sel))
             else:
                 pdf = pd.DataFrame(pars)
@@ -2798,3 +2833,162 @@ class SNTimer:
         res = np.rec.fromrecords([self.r], names=self.names)
 
         return res
+
+class x1_color_dist:
+    """
+    class to estimate the (x1,color) distribution
+
+    Parameters
+    --------------
+    fichname: str
+      file with either proba parameters of (x1,color) distributions
+
+    """
+
+    def __init__(self, fichname):
+
+        if 'JLA' in fichname:
+            proba = self.get_proba_hist(fichname)
+        else:
+            proba = self.get_proba_param(fichname)
+
+        self.proba = proba
+
+    def func(self, par, par_mean, sigma):
+        """
+        Function to define the probability of a parameter
+
+        Parameters
+        --------------
+        par: float
+          parameter value
+        par_mean: float
+          mean value of the parameter
+        sigma: float
+           sigma of the distribution
+
+        Returns
+        ----------
+        exp(-(par-par_mean)**2/2/sigma**2
+
+        """
+        return np.exp(-(par-par_mean)**2/(2.*sigma**2))
+
+    def get_proba_param(self, fichname='x1_color_G10.csv'):
+        """
+        Function to estimate the probability distributions of (x1,c)
+
+        Parameters
+        ---------------
+        fichname: str
+         file with parameters to construct proba distributions
+          csv file with the following columns
+         zrange,param,param_min,param_max,param_mean,param_mean_err,sigma_minus,sigma_minus_err,sigma_plus,sigma_plus_err
+
+        Probability destribution are estimated from
+        Measuring Type Ia Supernova Populations of Stretch and Color and Predicting Distance Biases - D.Scolnic and R.Kessler, The Astrophysical Journal Letters, Volume 822, Issue 2 (2016).
+
+        Returns
+        ----------
+        pandas df with the following columns
+        zrange, param, val, proba
+
+        with
+        zrange = lowz/highz
+        param = x1/color
+
+        """
+        x1_color = pd.read_csv(fichname, comment='#')
+
+        # color distrib
+
+        x1_color_probas = pd.DataFrame()
+
+        for io, row in x1_color.iterrows():
+            ppa = np.arange(row.param_min, row.param_mean, 0.001)
+            ppb = np.arange(row.param_mean, row.param_max, 0.001)
+            pp_all = np.concatenate((ppa, ppb))
+            res = pd.DataFrame(pp_all.tolist(), columns=['val'])
+            probaa = self.func(ppa, row.param_mean, row.sigma_minus)
+            probab = self.func(ppb, row.param_mean, row.sigma_plus)
+            proba_all = np.concatenate((probaa, probab))
+            res['proba'] = proba_all.tolist()
+            res['zrange'] = row.zrange
+            res['param'] = row.param
+            x1_color_probas = pd.concat((x1_color_probas, res))
+
+        return x1_color_probas
+
+    def get_proba_hist(self, fichname='jla_lcparams.txt'):
+        """
+        Function to estimate the probability distributions of (x1,c)
+
+        Parameters
+        ---------------
+        fichname: str
+          txt file with x1 and c distributions used to estimate probabilities
+
+
+        Returns
+        ----------
+        pandas df with the following columns
+        zrange, param, val, proba
+
+        with
+        zrange = lowz/highz
+        param = x1/color
+
+        """
+        x1_color = pd.read_csv(fichname, sep=' ')
+
+        df = pd.DataFrame()
+
+        for zrange in ['lowz', 'highz']:
+            for param in ['x1', 'color']:
+                rr = self.pdf(x1_color, param, zrange)
+                df = pd.concat((df, rr))
+
+        return df
+
+    def pdf(self, data, var, zrange='highz'):
+        """
+        Method to estimate a pdf from a distribution
+
+        Parameters
+        ---------------
+        data: pandas df
+          data to process
+        var: str
+          variable to consider
+        zrange: str, opt
+          zrange to consider (lowz, highz) (default: highz)
+
+
+        """
+        idx = data['zcmb'] >= 0.1
+        if zrange == 'highz':
+            data = data[idx]
+        else:
+            data = data[~idx]
+
+        nb = dict(zip(['lowz', 'highz'], [8, 11]))
+        min_var = data[var].min()
+        max_var = data[var].max()
+        nbins = nb[zrange]
+        bins = np.linspace(min_var, max_var, nbins)
+        group = data.groupby(pd.cut(data[var], bins))
+        plot_centers = (bins[:-1] + bins[1:])/2
+        plot_values = group[var].size()
+        from scipy.interpolate import interp1d
+        interp = interp1d(
+            plot_centers, plot_values, bounds_error=False, fill_value=0.)
+
+        pp = np.arange(min_var, max_var, 0.001)
+
+        df = pd.DataFrame(pp.tolist(), columns=['val'])
+
+        df['proba'] = interp(pp)
+        df['param'] = var
+        df['zrange'] = zrange
+
+        return df
