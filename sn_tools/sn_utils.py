@@ -609,10 +609,14 @@ class SimuParameters:
 
         self.dirFiles = None
         self.distName = None
+
+        self.sigma_param = {}
         if 'modelPar' in sn_parameters.keys():
             self.dirFiles = sn_parameters['modelPar']['dirFile']
-            self.distName = self.params['modelPar']['nameFile']
-            
+            self.distName = sn_parameters['modelPar']['nameFile']
+            self.sigma_param['x1'] = sn_parameters['modelPar']['x1sigma']
+            self.sigma_param['color'] = sn_parameters['modelPar']['colorsigma']
+
         self.web_path = web_path
         if 'modelPar' in self.params.keys() and self.params['modelPar']['nameFile'] != 'none':
             self.modelParDist = self.getDist()
@@ -649,7 +653,7 @@ class SimuParameters:
 
         fullName = '{}/{}'.format(self.dirFiles,self.distName)
 
-        return x1_color_dist(fullName).proba
+        return x1_color_dist(fullName,self.sigma_param).proba
 
 
     def getDist_deprecated(self, distname, rate):
@@ -2845,12 +2849,12 @@ class x1_color_dist:
 
     """
 
-    def __init__(self, fichname):
+    def __init__(self, fichname,sigma_param):
 
         if 'JLA' in fichname:
             proba = self.get_proba_hist(fichname)
         else:
-            proba = self.get_proba_param(fichname)
+            proba = self.get_proba_param(fichname,sigma_param)
 
         self.proba = proba
 
@@ -2874,7 +2878,7 @@ class x1_color_dist:
         """
         return np.exp(-(par-par_mean)**2/(2.*sigma**2))
 
-    def get_proba_param(self, fichname='x1_color_G10.csv'):
+    def get_proba_param(self, fichname='x1_color_G10.csv',sigma_param={}):
         """
         Function to estimate the probability distributions of (x1,c)
 
@@ -2909,8 +2913,10 @@ class x1_color_dist:
             ppb = np.arange(row.param_mean, row.param_max, 0.001)
             pp_all = np.concatenate((ppa, ppb))
             res = pd.DataFrame(pp_all.tolist(), columns=['val'])
-            probaa = self.func(ppa, row.param_mean, row.sigma_minus)
-            probab = self.func(ppb, row.param_mean, row.sigma_plus)
+            ppval = row.param_mean+sigma_param[row.param]*row.param_mean_err
+            #print('here',row.param,ppval,row.param_mean)
+            probaa = self.func(ppa, ppval, row.sigma_minus)
+            probab = self.func(ppb, ppval, row.sigma_plus)
             proba_all = np.concatenate((probaa, probab))
             res['proba'] = proba_all.tolist()
             res['zrange'] = row.zrange
