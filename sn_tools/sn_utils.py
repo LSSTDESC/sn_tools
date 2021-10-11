@@ -962,11 +962,11 @@ class SimuParameters:
                 # distributions may be different
                 for key, vv in dict(zip(['lowz', 'highz'], [[0., 0.1], [0.1, 1.5]])).items():
                     idx = pars['z'] > vv[0]
-                    idx &= pars['z'] < vv[1]
+                    idx &= pars['z'] <= vv[1]
                     sel = pd.DataFrame(pars[idx])
-                    idpb = selPar['zrange'] == key
-                    selParb = selPar[idpb]
                     if sel.size > 0:
+                        idpb = selPar['zrange'] == key
+                        selParb = selPar[idpb]
                         """
                         norm = np.sum(self.modelParDist[key]['weight'])
                         sel[pname] = np.random.choice(
@@ -976,6 +976,13 @@ class SimuParameters:
                         sel[pname] = np.random.choice(selParb['val'], len(sel), p=selParb['proba']/norm)
 
                         pdf = pd.concat((pdf, sel))
+                        """
+                        import matplotlib.pyplot as plt
+                        fig, ax = plt.subplots()
+                        fig.suptitle(pname)
+                        ax.hist(sel[pname],histtype='step')
+                        plt.show()
+                        """
             else:
                 pdf = pd.DataFrame(pars)
                 pdf[pname] = pmin
@@ -2922,6 +2929,21 @@ class x1_color_dist:
             res['zrange'] = row.zrange
             res['param'] = row.param
             x1_color_probas = pd.concat((x1_color_probas, res))
+
+
+        """
+        import matplotlib.pyplot as plt
+        idx = x1_color_probas['zrange'] == 'lowz'
+        idx &= x1_color_probas['param'] == 'x1'
+        sel = x1_color_probas[idx]
+        idxb = x1_color_probas['zrange'] == 'highz'
+        idxb &= x1_color_probas['param'] == 'x1'
+        selb = x1_color_probas[idxb]
+        print(sel.columns)
+        plt.plot(sel['val'],sel['proba'])
+        plt.plot(selb['val'],selb['proba'])
+        plt.show()
+        """
 
         return x1_color_probas
 
