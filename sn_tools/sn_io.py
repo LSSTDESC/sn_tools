@@ -808,7 +808,7 @@ def recursive_merge(d1, d2):
     """
     for k, v in d1.items():  # in Python 2, use .iteritems()!
         if k in d2:
-                # this next check is the only difference!
+            # this next check is the only difference!
             if all(isinstance(e, MutableMapping) for e in (v, d2[k])):
                 d2[k] = recursive_merge(v, d2[k])
                 # we could further check types and merge as appropriate here.
