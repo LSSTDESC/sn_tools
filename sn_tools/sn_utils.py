@@ -80,7 +80,7 @@ def gather_results(resultdict):
 
     """
     supported_types = ['pd.core.frame.DataFrame', 'Table', 'np.ndarray',
-                       'np.recarray', 'int']
+                       'np.recarray', 'int', 'dict']
 
     # get outputtype here
     first_value = None
@@ -119,6 +119,12 @@ def gather_results(resultdict):
 
         def concat(a, b):
             return operator.add(a, b)
+
+    if isinstance(first_value, dict):
+        restot = {}
+
+        def concat(a, b):
+            return dict(a, **b)
 
     if restot is None:
         print('Sorry to bother you but: unknown data type', type(first_value))
@@ -172,7 +178,7 @@ class MultiProc:
         # multiprocessing parameters
         nz = len(self.toprocess)
         t = np.linspace(0, nz, self.nproc+1, dtype='int')
-        #print('multi', nz, t)
+        # print('multi', nz, t)
         result_queue = multiprocessing.Queue()
 
         procs = [multiprocessing.Process(name='Subprocess-'+str(j), target=self.process,
@@ -393,7 +399,7 @@ class GenerateSample:
 
             if zmin < 1.e-6:
                 zmin = 0.01
-            #print(zmin, zmax, duration, self.area)
+            # print(zmin, zmax, duration, self.area)
             zz, rate, err_rate, nsn, err_nsn = self.sn_rate(
                 zmin=zmin, zmax=zmax,
                 duration=duration,
@@ -621,7 +627,6 @@ class SimuParameters:
         if 'modelPar' in self.params.keys() and self.params['modelPar']['nameFile'] != 'none':
             self.modelParDist = self.getDist()
 
-
         self.mjdCol = mjdCol
         self.seasonCol = seasonCol
         self.filterCol = filterCol
@@ -647,14 +652,13 @@ class SimuParameters:
         with
         zrange = lowz/highz
         param = x1, color
-       
+
         """
         check_get_file(self.web_path, self.dirFiles, self.distName)
 
-        fullName = '{}/{}'.format(self.dirFiles,self.distName)
+        fullName = '{}/{}'.format(self.dirFiles, self.distName)
 
-        return x1_color_dist(fullName,self.sigma_param).proba
-
+        return x1_color_dist(fullName, self.sigma_param).proba
 
     def getDist_deprecated(self, distname, rate):
         """ get (x1,color) distributions
@@ -734,7 +738,7 @@ class SimuParameters:
 
         pars = self.complete_pars(pars)
 
-        #print('total number of SN to simulate:', len(pars))
+        # print('total number of SN to simulate:', len(pars))
         return pars.to_records(index=False)
 
     def add_params(self, pars):
@@ -829,7 +833,7 @@ class SimuParameters:
             if zmin < 1.e-6:
                 zmin = 0.01
 
-            #print(zmin, zmax, duration, self.area)
+            # print(zmin, zmax, duration, self.area)
             zz, rate, err_rate, nsn, err_nsn = self.sn_rate(
                 zmin=zmin, zmax=zmax,
                 duration=duration,
@@ -973,7 +977,8 @@ class SimuParameters:
                             self.modelParDist[key][pname], len(sel), p=self.modelParDist[key]['weight']/norm)
                         """
                         norm = np.sum(selParb['proba'])
-                        sel[pname] = np.random.choice(selParb['val'], len(sel), p=selParb['proba']/norm)
+                        sel[pname] = np.random.choice(
+                            selParb['val'], len(sel), p=selParb['proba']/norm)
 
                         pdf = pd.concat((pdf, sel))
                         """
@@ -2128,7 +2133,7 @@ def limVals(lc, field):
 
     lc.sort(field)
     vals = np.unique(lc[field].data)
-    #vals = np.unique(lc[field].data.round(decimals=4))
+    # vals = np.unique(lc[field].data.round(decimals=4))
     # print(vals)
     vmin = np.min(vals)
     vmax = np.max(vals)
@@ -2347,7 +2352,7 @@ class GetReference:
         """
 
         lc.sort(field)
-        #vals = np.unique(lc[field].data.round(decimals=4))
+        # vals = np.unique(lc[field].data.round(decimals=4))
         vals = np.unique(lc[field].data)
         vmin = np.min(vals)
         vmax = np.max(vals)
@@ -2845,6 +2850,7 @@ class SNTimer:
 
         return res
 
+
 class x1_color_dist:
     """
     class to estimate the (x1,color) distribution
@@ -2856,12 +2862,12 @@ class x1_color_dist:
 
     """
 
-    def __init__(self, fichname,sigma_param):
+    def __init__(self, fichname, sigma_param):
 
         if 'JLA' in fichname:
             proba = self.get_proba_hist(fichname)
         else:
-            proba = self.get_proba_param(fichname,sigma_param)
+            proba = self.get_proba_param(fichname, sigma_param)
 
         self.proba = proba
 
@@ -2885,7 +2891,7 @@ class x1_color_dist:
         """
         return np.exp(-(par-par_mean)**2/(2.*sigma**2))
 
-    def get_proba_param(self, fichname='x1_color_G10.csv',sigma_param={}):
+    def get_proba_param(self, fichname='x1_color_G10.csv', sigma_param={}):
         """
         Function to estimate the probability distributions of (x1,c)
 
@@ -2921,7 +2927,7 @@ class x1_color_dist:
             pp_all = np.concatenate((ppa, ppb))
             res = pd.DataFrame(pp_all.tolist(), columns=['val'])
             ppval = row.param_mean+sigma_param[row.param]*row.param_mean_err
-            #print('here',row.param,ppval,row.param_mean)
+            # print('here',row.param,ppval,row.param_mean)
             probaa = self.func(ppa, ppval, row.sigma_minus)
             probab = self.func(ppb, ppval, row.sigma_plus)
             proba_all = np.concatenate((probaa, probab))
@@ -2929,7 +2935,6 @@ class x1_color_dist:
             res['zrange'] = row.zrange
             res['param'] = row.param
             x1_color_probas = pd.concat((x1_color_probas, res))
-
 
         """
         import matplotlib.pyplot as plt
