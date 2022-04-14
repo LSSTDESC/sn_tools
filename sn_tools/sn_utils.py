@@ -826,6 +826,8 @@ class SimuParameters:
             zvals = np.arange(zmin, zmax+zstep, zstep)
             if zvals[0] < 1.e-6:
                 zvals[0] = 0.01
+            zvals = zvals.tolist()
+            zvals *= NSN_absolute
 
         if ztype == 'random':
             # get sn rate for this z range
