@@ -738,7 +738,7 @@ class SimuParameters:
 
         pars = self.complete_pars(pars)
 
-        # print('total number of SN to simulate:', len(pars))
+        #print('total number of SN to simulate:', len(pars))
         return pars.to_records(index=False)
 
     def add_params(self, pars):
@@ -790,7 +790,7 @@ class SimuParameters:
 
     def complete_pars(self, pars):
 
-            # finally add min and max rf
+        # finally add min and max rf
         pars['minRFphase'] = self.min_rf_phase
         pars['maxRFphase'] = self.max_rf_phase
         pars['minRFphaseQual'] = self.min_rf_phase_qual
@@ -820,12 +820,14 @@ class SimuParameters:
         NSN_absolute = self.params['NSNabsolute']
 
         if ztype == 'unique':
-            zvals = [zmin]
+            zvals = [zmin]*NSN_absolute
 
         if ztype == 'uniform':
             zvals = np.arange(zmin, zmax+zstep, zstep)
             if zvals[0] < 1.e-6:
                 zvals[0] = 0.01
+            zvals = zvals.tolist()
+            zvals *= NSN_absolute
 
         if ztype == 'random':
             # get sn rate for this z range
