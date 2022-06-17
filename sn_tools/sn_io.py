@@ -537,7 +537,7 @@ class Read_Sqlite:
             sql += 'proposalId=%d' % sel['proposalId']
         return sql
 
-    def get_data(self, cols=None, sql=None, to_degrees=False, new_col_names=None):
+    def get_data(self, cols=None, sql=None, to_degrees=False, new_col_names=None,table='observations'):
         """
         Method to get the contents of the SQL database dumped into a numpy rec array
 
@@ -551,18 +551,20 @@ class Read_Sqlite:
           to convert rad to degrees (default: False)
         new_col_names: bool, opt
           to rename the columns (default: None)
+        table: str, opt
+          sql table to read (default: observations - used to be SummaryAllProp for fbs < v2.0
 
         """
         sql_request = 'SELECT '
         if cols is None:
             sql_request += ' * '
-            self.cur.execute('PRAGMA TABLE_INFO(SummaryAllProps)')
+            self.cur.execute('PRAGMA TABLE_INFO({})'.format(table))
             r = self.cur.fetchall()
             cols = [c[1] for c in r]
         else:
             sql_request += ','.join(cols)
 
-        sql_request += 'FROM SummaryAllProps'
+        sql_request += 'FROM {}'.format(table)
         if sql is not None and len(sql) > 0:
             sql_request += ' WHERE ' + sql
         sql_request += ';'
