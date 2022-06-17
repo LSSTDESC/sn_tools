@@ -306,9 +306,13 @@ class LCfast:
             fluxes_obs = self.reference_lc.flux[band](pts)
             fluxes_obs_err = self.reference_lc.fluxerr_photo[band](pts)
             fluxes_model_err = self.reference_lc.fluxerr_model[band](pts)
+
             """
-            fluxes_obs = np.nan_to_num(fluxes_obs)
-            fluxes_obs_err = np.nan_to_num(fluxes_obs_err)
+            print('***************************', band)
+            print('phases', p)
+            print('redshift', yi_arr)
+            print('fluxes', fluxes_obs)
+            print('flux errors', fluxes_obs_err)
             """
 
             # Fisher components estimation
@@ -325,9 +329,13 @@ class LCfast:
             #                      method=method, fill_value=0.)
 
         # replace crazy fluxes by dummy values
-        fluxes_obs_err[fluxes_obs <= 0.] = 10.
-        fluxes_obs[fluxes_obs <= 0.] = 1.e-10
-
+        #fluxes_obs_err[fluxes_obs <= 0.] = 5.e-10
+        #fluxes_obs[fluxes_obs <= 0.] = 1.e-10
+        """
+        print('***')
+        print('fluxes', fluxes_obs)
+        print('flux errors', fluxes_obs_err)
+        """
         # Fisher matrix components estimation
         # loop on SN parameters (x0,x1,color)
         # estimate: dF/dxi*dF/dxj
@@ -342,16 +350,18 @@ class LCfast:
         min_rf_phase = gen_par['minRFphase'][:, np.newaxis]
         max_rf_phase = gen_par['maxRFphase'][:, np.newaxis]
         flag = (p >= min_rf_phase) & (p <= max_rf_phase)
-
         # remove LC points outside the (blue-red) range
 
         mean_restframe_wavelength = np.array(
             [self.telescope.mean_wavelength[band]]*len(sel_obs))
         mean_restframe_wavelength = np.tile(
             mean_restframe_wavelength, (len(gen_par), 1))/(1.+gen_par['z'][:, np.newaxis])
-        flag &= (mean_restframe_wavelength > 0.) & (
-            mean_restframe_wavelength < 1000000.)
+        # flag &= (mean_restframe_wavelength > 0.) & (
+        #    mean_restframe_wavelength < 1000000.)
+        flag &= (mean_restframe_wavelength > self.blue_cutoff) & (
+            mean_restframe_wavelength < self.red_cutoff)
 
+        flag &= fluxes_obs > 1.e-10
         flag_idx = np.argwhere(flag)
 
         # Correct fluxes_err (m5 in generation probably different from m5 obs)
