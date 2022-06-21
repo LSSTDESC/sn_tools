@@ -7,8 +7,8 @@ import shapely.vectorized
 from astropy_healpix import HEALPix
 from astropy import units as u
 from descartes.patch import PolygonPatch
-#from astropy.coordinates import SkyCoord
-#from dustmaps.sfd import SFDQuery
+# from astropy.coordinates import SkyCoord
+# from dustmaps.sfd import SFDQuery
 from matplotlib.patches import Polygon
 from shapely.geometry import Point
 import pandas as pd
@@ -152,7 +152,7 @@ def patchObs(observations, fieldType, fieldName,
                 observations = myobs[ib].to_records(index=False)
     else:
         if fieldType == 'WFD':
-            #print('getting observations')
+            # print('getting observations')
             observations = getFields(observations, 'WFD')
             minDec = Decmin
             maxDec = Decmax
@@ -161,7 +161,7 @@ def patchObs(observations, fieldType, fieldName,
                 minDec = max(minDec, -90.)
             if maxDec == -1.0:
                 maxDec = np.max(observations['fieldDec'])+radius
-            #print('sky area')
+            # print('sky area')
             areas = PavingSky(RAmin, RAmax, minDec, maxDec, radius, radius)
             # print(observations.dtype)
             if display:
@@ -1056,7 +1056,7 @@ class DataToPixels:
     RACol: str
      name of the RA field
     DecCol: str
-      name of the Dec field      
+      name of the Dec field
     num: int
       index (related to multiprocessing)
     outDir: str
@@ -1073,9 +1073,9 @@ class DataToPixels:
         self.nside = nside
         self.RACol = RACol
         self.DecCol = DecCol
-        #self.obsIdCol = obsIdCol
-        #self.num = num
-        #self.outDir = outDir
+        # self.obsIdCol = obsIdCol
+        # self.num = num
+        # self.outDir = outDir
 
         self.dbName = dbName
 
@@ -1091,7 +1091,7 @@ class DataToPixels:
         # print('theta', theta, np.rad2deg(theta))
         self.fpscale = np.tan(theta)
 
-    def __call__(self, data, RA, Dec, widthRA, widthDec, nodither=False, display=False):
+    def __call__(self, data, RA, Dec, widthRA, widthDec, nodither=False, display=False, inclusive=False):
         """
         call method: this is where the processing is.
 
@@ -1124,6 +1124,7 @@ class DataToPixels:
         if display:
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots()
+            fig.suptitle('Observations')
             ax.plot(data[self.RACol], data[self.DecCol], 'ko')
             plt.show()
 
@@ -1155,6 +1156,7 @@ class DataToPixels:
         if display:
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots()
+            fig.suptitle('Selected data')
             ax.plot(dataset[self.RACol], dataset[self.DecCol], 'ko')
             plt.show()
 
@@ -1167,7 +1169,7 @@ class DataToPixels:
         # get nearby pixels
         vec = hp.pix2vec(self.nside, healpixID, nest=True)
         self.healpixIDs = hp.query_disc(
-            self.nside, vec, 3.*np.deg2rad(widthRA), inclusive=False, nest=True)
+            self.nside, vec, 3.*np.deg2rad(widthRA), inclusive=inclusive, nest=True)
 
         # get pixel coordinates
         coords = hp.pix2ang(self.nside, self.healpixIDs,
@@ -1179,6 +1181,7 @@ class DataToPixels:
             print('number of pixels here', len(self.pixRA))
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots()
+            fig.suptitle('Selected data and pixels')
             ax.plot(self.pixRA, self.pixDec, 'r*')
             dataSel.plot(ax)
             plt.show()
@@ -1188,7 +1191,7 @@ class DataToPixels:
         """
         dataset = dataset.round({self.RACol: 4, self.DecCol: 4})
         groups = dataset.groupby([self.RACol, self.DecCol])
-        
+
         """
 
         groups = dataset.groupby(['observationId', 'night', 'filter'])
@@ -1197,11 +1200,19 @@ class DataToPixels:
         matched_pixels = groups.apply(
             lambda x: self.match(x, self.healpixIDs, self.pixRA, self.pixDec)).reset_index()
 
-        """
         print('after matching', time.time()-time_ref,
-              len(matched_pixels['healpixID'].unique()),matched_pixels.columns)
-        """
+              len(matched_pixels['healpixID'].unique()), matched_pixels.columns)
 
+        if display:
+            print('number of pixels here', len(self.pixRA))
+            import matplotlib.pyplot as plt
+            fig, ax = plt.subplots()
+            fig.suptitle('Selected data and pixels and selected pixels')
+            ax.plot(self.pixRA, self.pixDec, 'r*')
+            dataSel.plot(ax)
+            ax.plot(matched_pixels['pixRA'],
+                    matched_pixels['pixDec'], 'ob', mfc='None')
+            plt.show()
         return matched_pixels
 
     def match(self, grp, healpixIDs, pixRA, pixDec):
@@ -1268,7 +1279,7 @@ class DataToPixels:
         # names = [grp.name]*len(pixID_matched)
         df_pix = pd.DataFrame({'healpixID': pixID_matched,
                                'pixRA': pixRA_matched,
-                               'pixDec': pixDec_matched,
+                              'pixDec': pixDec_matched,
                                })
 
         listcols = ['observationStartMJD', 'fieldRA', 'fieldDec', 'visitExposureTime',
@@ -1294,7 +1305,7 @@ class DataToPixels:
             df_pix = df_pix.append([df_pix]*(n_index-1), ignore_index=True)
 
         df_pix.loc[:, 'index'] = arr_index
-        
+
         return df_pix
         """
 
@@ -1334,7 +1345,7 @@ class ProcessPixels:
         metricList: list(metrics)
           list of sn_metrics to process
         ipoint: int
-         internal parameter 
+         internal parameter
         outDir: str, opt
           output directory (default: '')
         dbName: str,
@@ -1403,16 +1414,16 @@ class ProcessPixels:
               len(pixels['healpixID'].unique()))
         """
         for ipixel, vv in enumerate(pixels['healpixID'].unique()):
-            #print('processing pixel', ipixel, vv)
+            # print('processing pixel', ipixel, vv)
             time_ref = time.time()
             ipix += 1
             idf = pixels['healpixID'] == vv
             selpix = pixels[idf]
             dataPixels = self.getData(data, selpix)
-            #print(vv,len(dataPixels))
+            # print(vv,len(dataPixels))
             if len(dataPixels) < 5:
                 continue
-            #print('got datapixels', time.time()-time_ref, selpix)
+            # print('got datapixels', time.time()-time_ref, selpix)
             # dataPixels = data.iloc[selpix['index'].tolist()].copy()
 
             for val in ['healpixID', 'pixRA', 'pixDec']:
@@ -1421,9 +1432,9 @@ class ProcessPixels:
 
             dataPixels['iproc'] = [self.num]*len(dataPixels)
 
-            #print('running the metrics')
+            # print('running the metrics')
             self.runMetrics(dataPixels)
-            #print('pixel processed',ipixel,time.time()-time_ref)
+            # print('pixel processed',ipixel,time.time()-time_ref)
 
             if self.saveData and ipix >= 20:
                 isave += 1
@@ -1547,7 +1558,7 @@ class ProcessArea:
         RACol: str
           name of the RA field
         DecCol: str
-          name of the Dec field      
+          name of the Dec field
         num: int
           index (related to multiprocessing)
         outDir: str
@@ -1654,9 +1665,10 @@ class ProcessArea:
 
             # display (RA,Dec) of pixels
             if display:
-                print('number of pixels here', len(pixRA))
+                print('number of pixels here ooooo', len(pixRA))
                 import matplotlib.pyplot as plt
                 fig, ax = plt.subplots()
+                fig.suptitle('Selected Observations and pixel centers')
                 ax.plot(pixRA, pixDec, 'r*')
                 dataSel.plot(ax)
                 plt.show()
@@ -1681,10 +1693,9 @@ class ProcessArea:
             matched_pixels = groups.apply(
                 lambda x: self.match(x, healpixIDs, pixRA, pixDec)).reset_index()
 
-            """
             print('after matching', time.time()-time_ref,
                   len(matched_pixels['healpixID'].unique()))
-            """
+
             # print('number of pixels',len(matched_pixels['healpixID'].unique()))
             ipix = -1
             isave = -1
@@ -1899,7 +1910,7 @@ class ProcessArea:
         # print('hhh',arr_index)
         df_pix = pd.DataFrame({'healpixID': pixID_matched,
                                'pixRA': pixRA_matched,
-                               'pixDec': pixDec_matched,
+                              'pixDec': pixDec_matched,
                                'groupName': names})
 
         # print(arr_index,df_pix)
@@ -2678,13 +2689,13 @@ def getFields(observations, fieldType='WFD', fieldIds=None,
             """
             if fieldType == 'WFD':
                 # Take the propId with the largest number of fields
-                #print('hello', res)
-                #propId_WFD = propIds[np.argmax(res['Nobs'])]
-                #print(res, np.argmax(res['Nobs']), propId_WFD)
-                #a = observations['note']
-                #df = pd.DataFrame(np.copy(observations))
-                #df = observations
-                ##print('end of copy')
+                # print('hello', res)
+                # propId_WFD = propIds[np.argmax(res['Nobs'])]
+                # print(res, np.argmax(res['Nobs']), propId_WFD)
+                # a = observations['note']
+                # df = pd.DataFrame(np.copy(observations))
+                # df = observations
+                # print('end of copy')
 
                 # print(test)
 
