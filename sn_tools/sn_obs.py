@@ -1200,10 +1200,9 @@ class DataToPixels:
         matched_pixels = groups.apply(
             lambda x: self.match(x, self.healpixIDs, self.pixRA, self.pixDec)).reset_index()
 
-        print('after matching', time.time()-time_ref,
-              len(matched_pixels['healpixID'].unique()), matched_pixels.columns)
-
         if display:
+            print('after matching', time.time()-time_ref,
+                  len(matched_pixels['healpixID'].unique()), matched_pixels.columns)
             print('number of pixels here', len(self.pixRA))
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots()
