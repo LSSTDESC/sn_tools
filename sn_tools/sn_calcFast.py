@@ -487,8 +487,9 @@ class LCfast:
                     lc['mag'], lc[self.exptimeCol]/lc[self.nexpCol], lc[self.nexpCol]))
                 lc['flux_5'] = self.reference_lc.mag_to_flux[band]((
                     lc['m5'], lc[self.exptimeCol]/lc[self.nexpCol], lc[self.nexpCol]))
+                lc['flux_5_back'] = 10**(-0.4*(lc['m5']-self.zp[band]))
                 lc.loc[:, 'ratio'] = (
-                    lc['flux_e_sec']/lc['snr_m5'])/(lc['flux_5']/5.)
+                    lc['flux_e_sec']/lc['snr_m5'])/np.sqrt((lc['flux_5']/5.)**2+lc['flux_e_sec']/lc[self.exptimeCol])
             for key, vals in Fisher_Mat.items():
                 lc.loc[:, 'F_{}'.format(
                     key)] = vals[~vals.mask]/(lc['fluxerr_photo'].values**2)
