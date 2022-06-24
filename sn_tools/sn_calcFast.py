@@ -261,6 +261,216 @@ class LCfast:
         p = xi/(1.+yi[:, np.newaxis])
         yi_arr = np.ones_like(p)*yi[:, np.newaxis]
 
+        # get fluxes
+        pts = (p, yi_arr)
+        fluxes_obs = self.reference_lc.flux[band](pts)
+        fluxes_obs_err = self.reference_lc.fluxerr_photo[band](pts)
+        fluxes_model_err = self.reference_lc.fluxerr_model[band](pts)
+
+        # Fisher components estimation
+
+        dFlux = {}
+
+        # loop on Fisher parameters
+        for val in self.param_Fisher:
+            dFlux[val] = self.reference_lc.param[band][val](pts)
+
+        # Fisher matrix components estimation
+        # loop on SN parameters (x0,x1,color)
+        # estimate: dF/dxi*dF/dxj
+        Derivative_for_Fisher = {}
+        for ia, vala in enumerate(self.param_Fisher):
+            for jb, valb in enumerate(self.param_Fisher):
+                if jb >= ia:
+                    Derivative_for_Fisher[vala +
+                                          valb] = dFlux[vala] * dFlux[valb]
+
+        flag = self.getFlag(sel_obs, gen_par, fluxes_obs, band, p)
+        flag_idx = np.argwhere(flag)
+
+        # now apply the flag to select LC points - masked arrays
+        fluxes = self.marray(fluxes_obs, flag)
+        fluxes_err_model = self.marray(fluxes_model_err, flag)
+        phases = self.marray(p, flag)
+        z_vals = gen_par['z'][flag_idx[:, 0]]
+        daymax_vals = gen_par['daymax'][flag_idx[:, 0]]
+        Fisher_Mat = {}
+        for key, vals in Derivative_for_Fisher.items():
+            Fisher_Mat[key] = self.marray(vals, flag)
+
+        nvals = len(phases)
+
+        if nvals <= 0:
+            return pd.DataFrame()
+
+        # masked - tile arrays
+
+        sel_obs['healpixID'] = sel_obs['healpixID'].astype(int)
+
+        cols = [self.mjdCol, self.seasonCol, self.m5Col, self.exptimeCol,
+                self.nexpCol, self.seeingCol, 'night', 'healpixID', 'pixRA', 'pixDec']
+
+        # take columns common with obs cols
+        colcoms = set(cols).intersection(sel_obs.dtype.names)
+
+        masked_tile = {}
+        for vv in list(colcoms):
+            masked_tile[vv] = self.tarray(sel_obs[vv], nvals, flag)
+
+        # mag_obs = np.ma.array(mag_obs, mask=~flag)
+
+        # put data in a pandas df
+        lc = pd.DataFrame()
+
+        lc['flux'] = fluxes[~fluxes.mask]
+        lc['mag'] = -2.5*np.log10(lc['flux']/3631.)
+        lc['phase'] = phases[~phases.mask]
+        lc['band'] = ['LSST::'+band]*len(lc)
+        lc['zp'] = self.zp[band]
+        lc['zp'] = 2.5*np.log10(3631)
+        lc['zpsys'] = 'ab'
+        lc['z'] = z_vals
+        lc['daymax'] = daymax_vals
+
+        for key, vals in masked_tile.items():
+            lc[key] = vals[~vals.mask]
+
+        lc['time'] = lc[self.mjdCol]
+        lc.loc[:, 'x1'] = self.x1
+        lc.loc[:, 'color'] = self.color
+
+        # estimate errors
+        lc['fluxerr_model'] = fluxes_err_model[~fluxes_err_model.mask]
+        lc['flux_e_sec'] = self.reference_lc.mag_to_flux[band]((
+            lc['mag'], lc[self.exptimeCol]/lc[self.nexpCol], lc[self.nexpCol]))
+        lc['flux_5'] = 10**(-0.4*(lc[self.m5Col]-self.zp[band]))
+        lc['snr_m5'] = lc['flux_e_sec'] / \
+            np.sqrt((lc['flux_5']/5.)**2 +
+                    lc['flux_e_sec']/lc[self.exptimeCol])
+        lc['fluxerr_photo'] = lc['flux']/lc['snr_m5']
+        lc['magerr'] = (2.5/np.log(10.))/lc['snr_m5']
+        lc['fluxerr'] = np.sqrt(
+            lc['fluxerr_photo']**2+lc['fluxerr_model']**2)
+
+        # Fisher matrix components
+        for key, vals in Fisher_Mat.items():
+            lc.loc[:, 'F_{}'.format(
+                key)] = vals[~vals.mask]/(lc['fluxerr_photo'].values**2)
+
+        lc.loc[:, 'n_aft'] = (np.sign(lc['phase']) == 1) & (
+            lc['snr_m5'] >= self.snr_min)
+        lc.loc[:, 'n_bef'] = (np.sign(lc['phase'])
+                              == -1) & (lc['snr_m5'] >= self.snr_min)
+
+        lc.loc[:, 'n_phmin'] = (lc['phase'] <= -5.)
+        lc.loc[:, 'n_phmax'] = (lc['phase'] >= 20)
+
+        if len(lc) > 0.:
+            lc = self.dust_corrections(lc, ebvofMW)
+
+        if output_q is not None:
+            output_q.put({j: lc})
+        else:
+            return lc
+
+    def getFlag(self, sel_obs, gen_par, fluxes_obs, band, p):
+        """
+        Method to flag events corresponding to selection criteria
+
+        Parameters
+        ---------------
+        sel_obs: array
+          observations
+        gen_par: array
+           simulation parameters
+        fluxes_obs: array
+           LC fluxes
+        band: str
+          filter
+        p: array
+          LC phases
+        """
+        # remove LC points outside the restframe phase range
+        min_rf_phase = gen_par['minRFphase'][:, np.newaxis]
+        max_rf_phase = gen_par['maxRFphase'][:, np.newaxis]
+        flag = (p >= min_rf_phase) & (p <= max_rf_phase)
+
+        # remove LC points outside the (blue-red) range
+        mean_restframe_wavelength = np.array(
+            [self.telescope.mean_wavelength[band]]*len(sel_obs))
+        mean_restframe_wavelength = np.tile(
+            mean_restframe_wavelength, (len(gen_par), 1))/(1.+gen_par['z'][:, np.newaxis])
+        # flag &= (mean_restframe_wavelength > 0.) & (
+        #    mean_restframe_wavelength < 1000000.)
+        flag &= (mean_restframe_wavelength > self.blue_cutoff) & (
+            mean_restframe_wavelength < self.red_cutoff)
+
+        # remove points with neg flux
+        flag &= fluxes_obs > 1.e-10
+
+        return flag
+
+    def marray(self, val, flag):
+
+        return np.ma.array(val, mask=~flag)
+
+    def tarray(self, arr, nvals, flag):
+
+        vv = np.ma.array(np.tile(arr, (nvals, 1)), mask=~flag)
+        return vv
+
+    def processBand_gamma(self, sel_obs, ebvofMW, band, gen_par, j=-1, output_q=None):
+        """ LC simulation of a set of obs corresponding to a band
+        The idea is to use python broadcasting so as to estimate
+        all the requested values (flux, flux error, Fisher components, ...)
+        in a single path (i.e no loop!)
+
+        Parameters
+        ---------------
+        sel_obs: array
+         array of observations
+        band: str
+         band of observations
+        gen_par: array
+         simulation parameters
+        j: int, opt
+         index for multiprocessing (default: -1)
+        output_q: multiprocessing.Queue(),opt
+         queue for multiprocessing (default: None)
+
+
+        Returns
+        -------
+        astropy table with fields corresponding to LC components
+
+        """
+
+        # method used for interpolation
+        method = 'linear'
+        interpType = 'griddata'
+        interpType = 'regular'
+
+        # if there are no observations in this filter: return None
+        if len(sel_obs) == 0:
+            if output_q is not None:
+                output_q.put({j: None})
+            else:
+                return None
+
+        # Get the fluxes (from griddata reference)
+
+        # xi = MJD-T0
+        xi = sel_obs[self.mjdCol]-gen_par['daymax'][:, np.newaxis]
+
+        # yi = redshift simulated values
+        # requested to avoid interpolation problems near boundaries
+        yi = np.round(gen_par['z'], 4)
+        # yi = gen_par['z']
+
+        # p = phases of LC points = xi/(1.+z)
+        p = xi/(1.+yi[:, np.newaxis])
+        yi_arr = np.ones_like(p)*yi[:, np.newaxis]
+
         if interpType == 'griddata':
             # Get reference values: phase, z, flux, fluxerr
             x = self.reference_lc.lc_ref[band]['phase']
@@ -329,8 +539,8 @@ class LCfast:
             #                      method=method, fill_value=0.)
 
         # replace crazy fluxes by dummy values
-        #fluxes_obs_err[fluxes_obs <= 0.] = 5.e-10
-        #fluxes_obs[fluxes_obs <= 0.] = 1.e-10
+        # fluxes_obs_err[fluxes_obs <= 0.] = 5.e-10
+        # fluxes_obs[fluxes_obs <= 0.] = 1.e-10
         """
         print('***')
         print('fluxes', fluxes_obs)
@@ -482,14 +692,20 @@ class LCfast:
             lc['pixDec'] = pixDecs[~pixDecs.mask]
             lc['z'] = z_vals
             lc['daymax'] = daymax_vals
+
             if not self.lightOutput:
                 lc['flux_e_sec'] = self.reference_lc.mag_to_flux[band]((
                     lc['mag'], lc[self.exptimeCol]/lc[self.nexpCol], lc[self.nexpCol]))
                 lc['flux_5'] = self.reference_lc.mag_to_flux[band]((
                     lc['m5'], lc[self.exptimeCol]/lc[self.nexpCol], lc[self.nexpCol]))
                 lc['flux_5_back'] = 10**(-0.4*(lc['m5']-self.zp[band]))
-                lc.loc[:, 'ratio'] = (
-                    lc['flux_e_sec']/lc['snr_m5'])/np.sqrt((lc['flux_5']/5.)**2+lc['flux_e_sec']/lc[self.exptimeCol])
+                lc['snr_back'] = lc['flux_e_sec'] / \
+                    np.sqrt((lc['flux_5_back']/5.)**2 +
+                            lc['flux_e_sec']/lc[self.exptimeCol])
+                lc.loc[:, 'ratio'] = lc['snr_back']/lc['snr_m5']
+                lc['fluxerr_photob'] = lc['flux']/lc['snr_back']
+                # lc['fluxerr_photo'] = lc['fluxerr_photob']
+                # lc['snr_m5'] = lc['snr_back']
             for key, vals in Fisher_Mat.items():
                 lc.loc[:, 'F_{}'.format(
                     key)] = vals[~vals.mask]/(lc['fluxerr_photo'].values**2)
@@ -552,7 +768,7 @@ class LCfast:
             lambda x: self.corrFlux(x)).reset_index()
 
         # mag correction - after flux correction
-        #print('there man',tab['flux'])
+        # print('there man',tab['flux'])
         tab = tab.replace({'flux': 0.0}, 1.e-10)
         tab['mag'] = -2.5 * np.log10(tab['flux'] / 3631.0)
         # snr_m5 correction
@@ -687,7 +903,7 @@ class CalcSN:
         # lc to process
         lc = Table(lc_all[fields])
 
-        #lc['fluxerr'] = lc['fluxerr_photo']
+        # lc['fluxerr'] = lc['fluxerr_photo']
         # LC selection
 
         goodlc, badlc = self.selectLC(lc)
