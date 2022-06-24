@@ -235,11 +235,6 @@ class LCfast:
 
         """
 
-        # method used for interpolation
-        method = 'linear'
-        interpType = 'griddata'
-        interpType = 'regular'
-
         # if there are no observations in this filter: return None
         if len(sel_obs) == 0:
             if output_q is not None:
@@ -264,7 +259,6 @@ class LCfast:
         # get fluxes
         pts = (p, yi_arr)
         fluxes_obs = self.reference_lc.flux[band](pts)
-        fluxes_obs_err = self.reference_lc.fluxerr_photo[band](pts)
         fluxes_model_err = self.reference_lc.fluxerr_model[band](pts)
 
         # Fisher components estimation
