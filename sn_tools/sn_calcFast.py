@@ -292,11 +292,12 @@ class LCfast:
         for key, vals in Derivative_for_Fisher.items():
             Fisher_Mat[key] = self.marray(vals, flag)
 
-        nvals = len(phases)
+        ndata = len(fluxes[~fluxes.mask])
 
-        if nvals <= 0:
+        if ndata <= 0:
             return pd.DataFrame()
 
+        nvals = len(phases)
         # masked - tile arrays
 
         sel_obs['healpixID'] = sel_obs['healpixID'].astype(int)
