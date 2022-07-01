@@ -979,3 +979,12 @@ def make_dict_old(thedict, key, what, val):
             thedict[keym][keys] = valb[0]
 
     return thedict
+
+
+def checkDir(outDir):
+    """
+    function to check whether a directory exist
+    and create it if necessary
+    """
+    if not os.path.isdir(outDir):
+        os.makedirs(outDir)
