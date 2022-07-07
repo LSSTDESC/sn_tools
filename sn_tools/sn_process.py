@@ -136,7 +136,7 @@ class Process:
         if not self.healpixIDs:
             random_pixels = self.randomPixels(self.pixelmap, self.npixels)
         print('number of pixels to process', len(
-            random_pixels), random_pixels, obs.dtype)
+            random_pixels), random_pixels, obs.dtype, random_pixels)
 
         self.multiprocess(random_pixels, obs,
                           func=self.procix)
