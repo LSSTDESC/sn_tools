@@ -1510,7 +1510,7 @@ class ProcessPixels:
             return
         for metric in self.metricList:
             resdict[metric.name] = metric.run(
-                season(dataPixel.to_records(index=False)))
+                season(dataPixel.to_records(index=False)), imulti=self.num)
             # print('running',len(resdict[metric.name]))
 
         # concatenate the results
