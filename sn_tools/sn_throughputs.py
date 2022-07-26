@@ -1,7 +1,7 @@
 import os
 import matplotlib.pyplot as plt
-from lsst.sims.photUtils import Bandpass
-from lsst.sims.photUtils import Sed
+from rubin_sim.photUtils import Bandpass
+from rubin_sim.photUtils import Sed
 import numpy as np
 
 
@@ -16,10 +16,11 @@ class Throughputs(object):
     atmos_dir : str, opt
        directory of atmos files
        Default : THROUGHPUTS_DIR
-    telescope_files : list(str),opt 
+    telescope_files : list(str),opt
        list of of throughput files
-       Default : ['detector.dat', 'lens1.dat','lens2.dat', 'lens3.dat','m1.dat', 'm2.dat', 'm3.dat']
-    filterlist: list(str), opt 
+       Default : ['detector.dat', 'lens1.dat','lens2.dat',
+           'lens3.dat','m1.dat', 'm2.dat', 'm3.dat']
+    filterlist: list(str), opt
        list of filters to consider
        Default : 'ugrizy'
     wave_min : float, opt
@@ -64,6 +65,7 @@ class Throughputs(object):
 
         self.atmos = params['atmos']
         self.throughputsDir = os.getenv(params['through_dir'])
+
         if os.path.exists(os.path.join
                           (os.getenv(params['atmos_dir']), 'atmos')):
             self.atmosDir = os.path.join(
