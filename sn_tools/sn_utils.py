@@ -7,7 +7,7 @@ import os
 import numpy.lib.recfunctions as rf
 from astropy.table import Table, vstack, Column
 from scipy import interpolate, integrate
-from lsst.sims.photUtils import Sed, PhotometricParameters, Bandpass, Sed
+from rubin_sim.photUtils import Sed, PhotometricParameters, Bandpass
 import sncosmo
 import h5py
 from scipy.interpolate import InterpolatedUnivariateSpline as Spline1d

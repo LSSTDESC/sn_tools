@@ -1,7 +1,7 @@
 import os
 import matplotlib.pyplot as plt
-from lsst.sims.photUtils import Bandpass
-from lsst.sims.photUtils import Sed
+from rubin_sim.photUtils import Bandpass
+from rubin_sim.photUtils import Sed
 import numpy as np
 
 

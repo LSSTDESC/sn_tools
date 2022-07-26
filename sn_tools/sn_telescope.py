@@ -1,6 +1,6 @@
-from lsst.sims.photUtils import SignalToNoise
-from lsst.sims.photUtils import PhotometricParameters
-from lsst.sims.photUtils import Bandpass, Sed
+from rubin_sim.photUtils import SignalToNoise
+from rubin_sim.photUtils import PhotometricParameters
+from rubin_sim.photUtils import Bandpass, Sed
 from sn_tools.sn_throughputs import Throughputs
 
 import numpy as np
