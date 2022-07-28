@@ -53,7 +53,10 @@ class LCfast:
        blue cutoff for SN (default: 380.0 nm)
     redcutoff: float, opt
        red cutoff for SN (default: 800.0 nm)
-
+    zp: dict,opt
+      telescope zeropoints (key: band)
+    mean_wavelength: dict, opt
+      telescope mean wevelength (key: band)
     """
 
     def __init__(self, reference_lc, dustcorr, x1, color,
@@ -65,7 +68,10 @@ class LCfast:
                  lightOutput=True,
                  ebvofMW=-1.0,
                  bluecutoff=380.0,
-                 redcutoff=800.0):
+                 redcutoff=800.0,
+                 zp={'u': 27.009, 'g': 28.399, 'r': 28.177,
+                     'i': 27.879, 'z': 27.482, 'y': 26.687},
+                 mean_wavelength={'u': 366.92, 'g': 479.78, 'r': 623.03, 'i': 754.16, 'z': 869.07, 'y': 973.81}):
 
         # grab all vals
         self.RACol = RACol
@@ -86,7 +92,7 @@ class LCfast:
         # Loading reference file
         self.reference_lc = reference_lc
 
-        self.telescope = telescope
+        #self.telescope = telescope
 
         # This cutoffs are used to select observations:
         # phase = (mjd - DayMax)/(1.+z)
@@ -101,18 +107,22 @@ class LCfast:
 
         self.snr_min = snr_min
 
-        # getting the telescope zp
+        # telescope zp and mean_wavelength
+        self.zp = zp
+        self.mean_wavelength = mean_wavelength
+
+        """
         self.zp = {}
         for b in 'ugrizy':
             self.zp[b] = telescope.zp(b)
 
-        """
-        test = np.array(['u','g','g'])
-        index = np.argwhere(zp['band'] == test[:,None])
+        print('telescope zp', self.zp)
+        self.zpn = {'g': 28.186812051401645, 'r': 27.979260503055546,
+                    'i': 27.68961482555567, 'z': 27.296997266117014, 'y': 26.506245199165402}
+        print('telescope new zp', self.zpn)
+        print('mean wl', self.telescope.mean_wavelength)
 
-        print(index)
-        print(zp['zp'][index][:,1])
-        print(toto)
+        self.zp = self.zpn
         """
 
     def __call__(self, obs, ebvofMW, gen_par=None, bands='grizy'):
@@ -392,7 +402,7 @@ class LCfast:
 
         # remove LC points outside the (blue-red) range
         mean_restframe_wavelength = np.array(
-            [self.telescope.mean_wavelength[band]]*len(sel_obs))
+            [self.mean_wavelength[band]]*len(sel_obs))
         mean_restframe_wavelength = np.tile(
             mean_restframe_wavelength, (len(gen_par), 1))/(1.+gen_par['z'][:, np.newaxis])
         # flag &= (mean_restframe_wavelength > 0.) & (
@@ -558,7 +568,7 @@ class LCfast:
         # remove LC points outside the (blue-red) range
 
         mean_restframe_wavelength = np.array(
-            [self.telescope.mean_wavelength[band]]*len(sel_obs))
+            [self.mean_wavelength[band]]*len(sel_obs))
         mean_restframe_wavelength = np.tile(
             mean_restframe_wavelength, (len(gen_par), 1))/(1.+gen_par['z'][:, np.newaxis])
         # flag &= (mean_restframe_wavelength > 0.) & (
