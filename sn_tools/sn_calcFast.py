@@ -53,10 +53,8 @@ class LCfast:
        blue cutoff for SN (default: 380.0 nm)
     redcutoff: float, opt
        red cutoff for SN (default: 800.0 nm)
-    zp: dict,opt
-      telescope zeropoints (key: band)
-    mean_wavelength: dict, opt
-      telescope mean wevelength (key: band)
+    telescope_params : dict(dict),opt
+      telescope zeropoints (key: zp) and mean wavelength (key: mean_wavelength) for each band (key) 
     """
 
     def __init__(self, reference_lc, dustcorr, x1, color,
@@ -69,9 +67,8 @@ class LCfast:
                  ebvofMW=-1.0,
                  bluecutoff=380.0,
                  redcutoff=800.0,
-                 zp={'u': 27.009, 'g': 28.399, 'r': 28.177,
-                     'i': 27.879, 'z': 27.482, 'y': 26.687},
-                 mean_wavelength={'u': 366.92, 'g': 479.78, 'r': 623.03, 'i': 754.16, 'z': 869.07, 'y': 973.81}):
+                 telescope_params={'zp': {'u': 27.009, 'g': 28.399, 'r': 28.177, 'i': 27.879, 'z': 27.482, 'y': 26.687},
+                                   'mean_wavelength': {'u': 366.92, 'g': 479.78, 'r': 623.03, 'i': 754.16, 'z': 869.07, 'y': 973.81}}):
 
         # grab all vals
         self.RACol = RACol
@@ -108,22 +105,8 @@ class LCfast:
         self.snr_min = snr_min
 
         # telescope zp and mean_wavelength
-        self.zp = zp
-        self.mean_wavelength = mean_wavelength
-
-        """
-        self.zp = {}
-        for b in 'ugrizy':
-            self.zp[b] = telescope.zp(b)
-
-        print('telescope zp', self.zp)
-        self.zpn = {'g': 28.186812051401645, 'r': 27.979260503055546,
-                    'i': 27.68961482555567, 'z': 27.296997266117014, 'y': 26.506245199165402}
-        print('telescope new zp', self.zpn)
-        print('mean wl', self.telescope.mean_wavelength)
-
-        self.zp = self.zpn
-        """
+        self.zp = telescope_params['zp']
+        self.mean_wavelength = telescope_params['mean_wavelength']
 
     def __call__(self, obs, ebvofMW, gen_par=None, bands='grizy'):
         """ Simulation of the light curve
@@ -370,13 +353,17 @@ class LCfast:
         lc.loc[:, 'n_phmin'] = (lc['phase'] <= -5.)
         lc.loc[:, 'n_phmax'] = (lc['phase'] >= 20)
 
-        if len(lc) > 0.:
-            lc = self.dust_corrections(lc, ebvofMW)
+        # remove lc points with no flux
+        idx = lc['flux_e_sec'] > 0.
+        lc_flux = lc[idx]
+
+        if len(lc_flux) > 0.:
+            lc_flux = self.dust_corrections(lc_flux, ebvofMW)
 
         if output_q is not None:
-            output_q.put({j: lc})
+            output_q.put({j: lc_flux})
         else:
-            return lc
+            return lc_flux
 
     def getFlag(self, sel_obs, gen_par, fluxes_obs, band, p):
         """
