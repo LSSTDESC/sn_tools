@@ -2204,6 +2204,9 @@ class GetReference:
         gammas = LoadGamma('grizy', gammaDir, gammaName, web_path, telescope)
         self.gamma = gammas.gamma
         self.mag_to_flux = gammas.mag_to_flux
+        self.zp = gammas.zp
+        self.mean_wavelength = gammas.mean_wavelength
+
         # Load references needed for the following
         self.lc_ref = {}
         self.gamma_ref = {}
@@ -2506,6 +2509,8 @@ class LoadGamma:
 
         self.gamma = {}
         self.mag_to_flux = {}
+        self.zp = {}
+        self.mean_wavelength = {}
 
         check_get_file(web_path, fDir, gammaName)
 
@@ -2516,6 +2521,8 @@ class LoadGamma:
         for band in bands:
             rec = Table.read(gammaFullName,
                              path='gamma_{}'.format(band))
+            self.zp = rec.meta['zp']
+            self.mean_wavelength = rec.meta['mean_wavelength']
 
             rec['mag'] = rec['mag'].data.round(decimals=4)
             rec['single_exptime'] = rec['single_exptime'].data.round(
@@ -2694,7 +2701,7 @@ class Gamma:
             idx = tab['band'] == band
             sel = Table(tab[idx])
             sel.write(fileout, path='gamma_{}'.format(band),
-                      append=True, compression=True)
+                      append=True, compression=True, serialize_meta=True)
 
     def loopGamma(self, bands, mag_range, single_exposure_time, nexps, telescope):
         """ 
@@ -2741,6 +2748,18 @@ class Gamma:
         for j in range(len(bands)):
             restot = vstack([restot, resultdict[j]])
 
+        # add zero points and mean wavelengths as metadata
+
+        dict_meta = {}
+        dict_meta['zp'] = {}
+        dict_meta['mean_wavelength'] = {}
+        bands = 'ugrizy'
+        for b in bands:
+            dict_meta['zp'][b] = telescope.zp(b)
+            dict_meta['mean_wavelength'][b] = telescope.mean_wavelength[b]
+
+        print('hello', dict_meta)
+        restot.meta = dict_meta
         return restot
 
     def calcGamma(self, band, mag_range, single_exposure_time, nexps, telescope, j=-1, output_q=None):
