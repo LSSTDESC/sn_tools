@@ -53,8 +53,6 @@ class LCfast:
        blue cutoff for SN (default: 380.0 nm)
     redcutoff: float, opt
        red cutoff for SN (default: 800.0 nm)
-    telescope_params : dict(dict),opt
-      telescope zeropoints (key: zp) and mean wavelength (key: mean_wavelength) for each band (key) 
     """
 
     def __init__(self, reference_lc, dustcorr, x1, color,
@@ -66,9 +64,7 @@ class LCfast:
                  lightOutput=True,
                  ebvofMW=-1.0,
                  bluecutoff=380.0,
-                 redcutoff=800.0,
-                 telescope_params={'zp': {'u': 27.009, 'g': 28.399, 'r': 28.177, 'i': 27.879, 'z': 27.482, 'y': 26.687},
-                                   'mean_wavelength': {'u': 366.92, 'g': 479.78, 'r': 623.03, 'i': 754.16, 'z': 869.07, 'y': 973.81}}):
+                 redcutoff=800.0):
 
         # grab all vals
         self.RACol = RACol
@@ -103,10 +99,6 @@ class LCfast:
         self.param_Fisher = ['x0', 'x1', 'daymax', 'color']
 
         self.snr_min = snr_min
-
-        # telescope zp and mean_wavelength
-        self.zp = telescope_params['zp']
-        self.mean_wavelength = telescope_params['mean_wavelength']
 
     def __call__(self, obs, ebvofMW, gen_par=None, bands='grizy'):
         """ Simulation of the light curve
@@ -314,7 +306,7 @@ class LCfast:
         lc['mag'] = -2.5*np.log10(lc['flux']/3631.)
         lc['phase'] = phases[~phases.mask]
         lc['band'] = ['LSST::'+band]*len(lc)
-        lc['zp'] = self.zp[band]
+        lc['zp'] = self.reference_lc.zp[band]
         lc['zp'] = 2.5*np.log10(3631)
         lc['zpsys'] = 'ab'
         lc['z'] = z_vals
@@ -331,7 +323,7 @@ class LCfast:
         lc['fluxerr_model'] = fluxes_err_model[~fluxes_err_model.mask]
         lc['flux_e_sec'] = self.reference_lc.mag_to_flux[band]((
             lc['mag'], lc[self.exptimeCol]/lc[self.nexpCol], lc[self.nexpCol]))
-        lc['flux_5'] = 10**(-0.4*(lc[self.m5Col]-self.zp[band]))
+        lc['flux_5'] = 10**(-0.4*(lc[self.m5Col]-self.reference_lc.zp[band]))
         lc['snr_m5'] = lc['flux_e_sec'] / \
             np.sqrt((lc['flux_5']/5.)**2 +
                     lc['flux_e_sec']/lc[self.exptimeCol])
@@ -389,7 +381,7 @@ class LCfast:
 
         # remove LC points outside the (blue-red) range
         mean_restframe_wavelength = np.array(
-            [self.mean_wavelength[band]]*len(sel_obs))
+            [self.reference_lc.mean_wavelength[band]]*len(sel_obs))
         mean_restframe_wavelength = np.tile(
             mean_restframe_wavelength, (len(gen_par), 1))/(1.+gen_par['z'][:, np.newaxis])
         # flag &= (mean_restframe_wavelength > 0.) & (
