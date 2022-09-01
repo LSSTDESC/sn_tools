@@ -323,7 +323,10 @@ class LCfast:
         lc['fluxerr_model'] = fluxes_err_model[~fluxes_err_model.mask]
         lc['flux_e_sec'] = self.reference_lc.mag_to_flux[band]((
             lc['mag'], lc[self.exptimeCol]/lc[self.nexpCol], lc[self.nexpCol]))
-        lc['flux_5'] = 10**(-0.4*(lc[self.m5Col]-self.reference_lc.zp[band]))
+        lc['flux_5_old'] = 10**(-0.4*(lc[self.m5Col] -
+                                      self.reference_lc.zp[band]))
+        lc['flux_5'] = self.reference_lc.mag_to_flux[band]((
+            lc[self.m5Col], lc[self.exptimeCol]/lc[self.nexpCol], lc[self.nexpCol]))
         lc['snr_m5'] = lc['flux_e_sec'] / \
             np.sqrt((lc['flux_5']/5.)**2 +
                     lc['flux_e_sec']/lc[self.exptimeCol])
