@@ -2193,7 +2193,7 @@ class GetReference:
         keys = list(f.keys())
         # lc_ref_tot = Table.read(filename, path=keys[0])
         lc_ref_tot = Table.from_pandas(pd.read_hdf(lcFullName))
-
+        lc_ref_tot.convert_bytestring_to_unicode()
         idx = lc_ref_tot['z'] > 0.005
         lc_ref_tot = np.copy(lc_ref_tot[idx])
 
@@ -2232,7 +2232,6 @@ class GetReference:
         for band in bands:
             idx = lc_ref_tot['band'] == band
             lc_sel = Table(lc_ref_tot[idx])
-
             lc_sel['z'] = lc_sel['z'].data.round(decimals=2)
             lc_sel['phase'] = lc_sel['phase'].data.round(decimals=1)
 
@@ -2259,8 +2258,8 @@ class GetReference:
 
             # these reference data will be used for griddata interp.
             self.lc_ref[band] = lc_sel
-            self.gamma_ref[band] = lc_sel['gamma'][0]
-            self.m5_ref[band] = np.unique(lc_sel['m5'])[0]
+            #self.gamma_ref[band] = lc_sel['gamma'][0]
+            #self.m5_ref[band] = np.unique(lc_sel['m5'])[0]
 
             # Another interpolator, faster than griddata: regulargridinterpolator
 
