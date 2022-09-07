@@ -738,7 +738,7 @@ class SimuParameters:
 
         pars = self.complete_pars(pars)
 
-        #print('total number of SN to simulate:', len(pars))
+        # print('total number of SN to simulate:', len(pars))
         return pars.to_records(index=False)
 
     def add_params(self, pars):
@@ -2260,8 +2260,6 @@ class GetReference:
             self.lc_ref[band] = lc_sel
             #self.gamma_ref[band] = lc_sel['gamma'][0]
             #self.m5_ref[band] = np.unique(lc_sel['m5'])[0]
-
-            # Another interpolator, faster than griddata: regulargridinterpolator
 
             # Fluxes and errors
             zmin, zmax, zstep, nz = self.limVals(lc_sel, 'z')
