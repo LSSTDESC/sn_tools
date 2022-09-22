@@ -11,8 +11,9 @@ from sn_tools.sn_io import Read_Sqlite
 from sn_tools.sn_obs import renameFields, getFields
 from sn_tools.sn_io import getObservations
 import pandas as pd
-from sn_tools.sn_obs import DataInside
+from sn_tools.sn_obs import DataInside, season
 from sn_tools.sn_clusters import ClusterObs
+from sn_tools.sn_utils import multiproc
 
 
 class ReferenceData:
@@ -1217,3 +1218,204 @@ def Match_DD(fields_DD, df, radius=5):
             dfb = pd.concat([dfb, dfSel], sort=False)
 
     return dfb
+
+
+class Stat_DD:
+    """
+    class to estimate statistical estimator related to DD fields
+
+    Parameters
+    --------------
+    dbDir: str
+      db directory
+    dbName: str
+      db name
+    dbExtens: str
+      db extension
+    prefix: str, opt
+      prefix to tag DD fields in data (default: DD)
+    """
+
+    def __init__(self, dbDir, dbName, dbExtens, prefix='DD'):
+
+        self.dbDir = dbDir
+        self.dbName = dbName
+        self.dbExtens = dbExtens
+        self.prefix = prefix
+
+        self.obs = self.load()
+        self.obs_DD = self.get_DD()
+        budget = self.time_budget()
+
+        print('DD budget', budget)
+
+        params = []
+        res = multiproc(
+            np.unique(self.obs_DD['note']), params, self.ana_DDF, 6)
+
+        tab = Table.from_pandas(res)
+        tab.meta = dict(zip(['dbName', 'time_budget'], [dbName, budget]))
+
+        self.summary = tab
+
+    def load(self):
+        """
+        Method to load data
+
+        Returns
+        ----------
+        numpy array of data
+        """
+
+        fName = '{}/{}.{}'.format(self.dbDir, self.dbName, self.dbExtens)
+        data = np.load(fName)
+
+        return data
+
+    def get_DD(self):
+        """
+        Method to select observations corresponding to DD fields
+
+        Returns
+        ----------
+        array of obs corresponding to DD fields
+
+        """
+        field_list = np.unique(self.obs['note'])
+        self.field_DD = list(
+            filter(lambda x: x.startswith(self.prefix), field_list))
+
+        # select DD only
+        id_ddf = np.in1d(self.obs['note'], self.field_DD)
+
+        return np.copy(self.obs[id_ddf])
+
+    def time_budget(self):
+        """"
+        Method to estimate the time budget from DD
+
+        Returns
+        -----------
+        time budget (float)
+        """
+        return len(self.obs_DD)/len(self.obs)
+
+    def ana_DDF(self, list_DD, params, j, output_q):
+        """
+        Method to analyze DDFs
+
+        """
+
+        res_DD = pd.DataFrame()
+
+        for field in list_DD:
+            print('analyzing', field)
+            idx = self.obs_DD['note'] == field
+            res = self.ana_field(np.copy(self.obs_DD[idx]))
+            res_DD = pd.concat((res_DD, res))
+
+        if output_q is not None:
+            return output_q.put({j: res_DD})
+        else:
+            return res_DD
+
+    def ana_field(self, obs):
+        """
+        Method to analyze a single DD field
+
+        Parameters
+        --------------
+        obs: array
+          observation corresponding to a single DD field
+
+        """
+        # estimate seasons
+        obs = season(obs, mjdCol='mjd')
+        #print('aoooo', np.unique(obs[['note', 'season']]), obs.dtype.names)
+        # print(test)
+        field = np.unique(np.copy(obs['note']))[0]
+
+        res = self.ana_visits(obs, field)
+        res['dbName'] = self.dbName
+
+        return res
+        # self.summary(res)
+
+    def ana_visits(self, obs, field):
+        """
+        Method to analyze the number of visits per obs night
+
+        Parameters
+        --------------
+        obs: array
+          array of observations
+        field: str
+          field name
+
+        Returns
+        ----------
+        pandas df with the number of visits per night and per band
+
+        """
+
+        list_moon = ['moonAz', 'moonRA', 'moonDec', 'moonDistance', 'season']
+        rtot = pd.DataFrame()
+        for night in np.unique(obs['night']):
+            idx = obs['night'] == night
+            obs_night = obs[idx]
+            #print('night', night)
+
+            dd = {}
+            dd['field'] = field
+            dd['night'] = night
+            for ll in list_moon:
+                dd[ll] = np.median(obs_night[ll])
+
+            for b in np.unique(obs_night['band']):
+                idb = obs_night['band'] == b
+                obs_filter = obs_night[idb]
+                dd[b] = len(obs_filter)
+
+            str_combi = ''
+            for b in 'ugrizy':
+                if not b in dd.keys():
+                    dd[b] = 0
+                str_combi += '{}{}'.format(dd[b], b)
+            dd['config'] = str_combi
+            # print(dd)
+            ddmod = {}
+            for key, val in dd.items():
+                ddmod[key] = [val]
+            rtt = pd.DataFrame.from_dict(ddmod)
+            rtot = pd.concat((rtot, rtt))
+
+        # print(rtot)
+
+        """
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
+        ax.plot(rtot['config'], rtot['moonDistance'], 'ko')
+        plt.show()
+        """
+        return rtot
+
+    def summary(self, res):
+
+        for config in res['config'].unique():
+            idx = res['config'] == config
+            sel = res[idx]
+            print(config, len(sel)/len(res))
+
+        self.seas_cad(res)
+
+    def seas_cad(self, obs):
+
+        for seas in obs['season'].unique():
+            idx = obs['season'] == seas
+            sel = obs[idx]
+            seas_min, seas_max = np.min(sel['night']), np.max(sel['night'])
+            seas_length = seas_max-seas_min
+            diff = np.diff(sel['night'])
+            cad, cad_std = np.mean(diff), np.std(diff)
+
+            print(seas, cad, cad_std, seas_length)
