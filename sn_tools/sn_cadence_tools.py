@@ -1245,13 +1245,15 @@ class Stat_DD:
 
         self.obs = self.load()
         self.obs_DD = self.get_DD()
-        budget = self.time_budget()
+        budget = time_budget(self.obs, self.obs_DD)
 
         print('DD budget', budget)
 
-        params = []
+        params = {}
+        params['obs_DD'] = self.obs_DD
+        params['dbName'] = self.dbName
         res = multiproc(
-            np.unique(self.obs_DD['note']), params, self.ana_DDF, 6)
+            np.unique(self.obs_DD['note']), params, ana_DDF, 6)
 
         tab = Table.from_pandas(res)
         tab.meta = dict(zip(['dbName', 'time_budget'], [dbName, budget]))
@@ -1290,132 +1292,129 @@ class Stat_DD:
 
         return np.copy(self.obs[id_ddf])
 
-    def time_budget(self):
-        """"
-        Method to estimate the time budget from DD
 
-        Returns
-        -----------
-        time budget (float)
-        """
-        return len(self.obs_DD)/len(self.obs)
+def time_budget(obs, obs_DD):
+    """"
+    Method to estimate the time budget from DD
 
-    def ana_DDF(self, list_DD, params, j, output_q):
-        """
-        Method to analyze DDFs
+    Returns
+    -----------
+    time budget (float)
+    """
+    return len(obs_DD)/len(obs)
 
-        """
 
-        res_DD = pd.DataFrame()
+def ana_DDF(list_DD, params, j, output_q):
+    """
+    Method to analyze DDFs
 
-        for field in list_DD:
-            print('analyzing', field)
-            idx = self.obs_DD['note'] == field
-            res = self.ana_field(np.copy(self.obs_DD[idx]))
-            res_DD = pd.concat((res_DD, res))
+    """
+    obs_DD = params['obs_DD']
+    dbName = params['dbName']
+    res_DD = pd.DataFrame()
 
-        if output_q is not None:
-            return output_q.put({j: res_DD})
-        else:
-            return res_DD
+    for field in list_DD:
+        print('analyzing', field)
+        idx = obs_DD['note'] == field
+        res = ana_field(np.copy(obs_DD[idx]), dbName)
+        res_DD = pd.concat((res_DD, res))
 
-    def ana_field(self, obs):
-        """
-        Method to analyze a single DD field
+    if output_q is not None:
+        return output_q.put({j: res_DD})
+    else:
+        return res_DD
 
-        Parameters
-        --------------
-        obs: array
-          observation corresponding to a single DD field
 
-        """
-        # estimate seasons
-        obs = season(obs, mjdCol='mjd')
-        #print('aoooo', np.unique(obs[['note', 'season']]), obs.dtype.names)
-        # print(test)
-        field = np.unique(np.copy(obs['note']))[0]
+def ana_field(obs, dbName):
+    """
+    Method to analyze a single DD field
 
-        res = self.ana_visits(obs, field)
-        res['dbName'] = self.dbName
+    Parameters
+    --------------
+    obs: array
+        observation corresponding to a single DD field
 
-        return res
-        # self.summary(res)
+    """
+    # estimate seasons
+    obs = season(obs, mjdCol='mjd')
+    #print('aoooo', np.unique(obs[['note', 'season']]), obs.dtype.names)
+    # print(test)
+    field = np.unique(np.copy(obs['note']))[0]
 
-    def ana_visits(self, obs, field):
-        """
-        Method to analyze the number of visits per obs night
+    res = ana_visits(obs, field)
+    res['dbName'] = dbName
 
-        Parameters
-        --------------
-        obs: array
-          array of observations
-        field: str
-          field name
+    return res
 
-        Returns
-        ----------
-        pandas df with the number of visits per night and per band
 
-        """
+def ana_visits(obs, field):
+    """
+    Method to analyze the number of visits per obs night
 
-        list_moon = ['moonAz', 'moonRA', 'moonDec', 'moonDistance', 'season']
-        rtot = pd.DataFrame()
-        for night in np.unique(obs['night']):
-            idx = obs['night'] == night
-            obs_night = obs[idx]
-            #print('night', night)
+    Parameters
+    --------------
+    obs: array
+        array of observations
+    field: str
+        field name
 
-            dd = {}
-            dd['field'] = field
-            dd['night'] = night
-            for ll in list_moon:
-                dd[ll] = np.median(obs_night[ll])
+    Returns
+    ----------
+    pandas df with the number of visits per night and per band
 
-            for b in np.unique(obs_night['band']):
-                idb = obs_night['band'] == b
-                obs_filter = obs_night[idb]
-                dd[b] = len(obs_filter)
+    """
 
-            str_combi = ''
-            for b in 'ugrizy':
-                if not b in dd.keys():
-                    dd[b] = 0
-                str_combi += '{}{}'.format(dd[b], b)
-            dd['config'] = str_combi
-            # print(dd)
-            ddmod = {}
-            for key, val in dd.items():
-                ddmod[key] = [val]
-            rtt = pd.DataFrame.from_dict(ddmod)
-            rtot = pd.concat((rtot, rtt))
+    list_moon = ['moonAz', 'moonRA', 'moonDec', 'moonDistance', 'season']
+    rtot = pd.DataFrame()
+    for night in np.unique(obs['night']):
+        idx = obs['night'] == night
+        obs_night = obs[idx]
+        #print('night', night)
 
-        # print(rtot)
+        dd = {}
+        dd['field'] = field
+        dd['night'] = night
+        for ll in list_moon:
+            dd[ll] = np.median(obs_night[ll])
 
-        """
-        import matplotlib.pyplot as plt
-        fig, ax = plt.subplots()
-        ax.plot(rtot['config'], rtot['moonDistance'], 'ko')
-        plt.show()
-        """
-        return rtot
+        for b in np.unique(obs_night['band']):
+            idb = obs_night['band'] == b
+            obs_filter = obs_night[idb]
+            dd[b] = len(obs_filter)
 
-    def summary(self, res):
+        str_combi = ''
+        for b in 'ugrizy':
+            if not b in dd.keys():
+                dd[b] = 0
+            str_combi += '{}{}'.format(dd[b], b)
+        dd['config'] = str_combi
+        # print(dd)
+        ddmod = {}
+        for key, val in dd.items():
+            ddmod[key] = [val]
+        rtt = pd.DataFrame.from_dict(ddmod)
+        rtot = pd.concat((rtot, rtt))
+    return rtot
 
-        for config in res['config'].unique():
-            idx = res['config'] == config
-            sel = res[idx]
-            print(config, len(sel)/len(res))
 
-        self.seas_cad(res)
+def summary(res):
 
-    def seas_cad(self, obs):
+    for config in res['config'].unique():
+        idx = res['config'] == config
+        sel = res[idx]
+        print(config, len(sel)/len(res))
 
-        for seas in obs['season'].unique():
-            idx = obs['season'] == seas
-            sel = obs[idx]
-            seas_min, seas_max = np.min(sel['night']), np.max(sel['night'])
-            seas_length = seas_max-seas_min
-            diff = np.diff(sel['night'])
-            cad, cad_std = np.mean(diff), np.std(diff)
+    seas_cad(res)
 
-            print(seas, cad, cad_std, seas_length)
+
+def seas_cad(obs):
+
+    for seas in obs['season'].unique():
+        idx = obs['season'] == seas
+        sel = obs[idx]
+        seas_min, seas_max = np.min(sel['night']), np.max(sel['night'])
+        seas_length = seas_max-seas_min
+        diff = np.diff(sel['night'])
+        cad, cad_std = np.mean(diff), np.std(diff)
+
+        print(seas, cad, cad_std, seas_length)
