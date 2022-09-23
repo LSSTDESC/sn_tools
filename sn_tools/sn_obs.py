@@ -74,7 +74,7 @@ def DDFields(DDfile=None):
 def patchObs(observations, fieldType, fieldName,
              dbName, nside, RAmin, RAmax, Decmin, Decmax,
              RACol, DecCol,
-             display=False, nclusters=5, radius=4.):
+             display=False, nclusters=5, radius=10.):
     """
     Function to grab informations and patches in the sky
 
@@ -115,41 +115,52 @@ def patchObs(observations, fieldType, fieldName,
     # radius = 5.
 
     if fieldType == 'DD':
+        # go faster with observations here
+        fieldName = fieldName.split(',')
+        if 'note' in observations.dtype.names:
+            observations = getDD_from_note(
+                observations, nside, RACol, DecCol, fieldName)
+            patches = cluster_from_obs(observations, dbName, radius)
+        else:
+            # print(np.unique(observations['fieldId']))
+            fieldIds = [290, 744, 1427, 2412, 2786]
+            observations = getFields(
+                observations, fieldType, fieldIds, nside)
 
-        # print(np.unique(observations['fieldId']))
-        fieldIds = [290, 744, 1427, 2412, 2786]
-        observations = getFields(
-            observations, fieldType, fieldIds, nside)
+            # print('before cluster', len(observations),observations.dtype, nclusters)
+            # get clusters out of these obs
+            # radius = 4.
 
-        # print('before cluster', len(observations),observations.dtype, nclusters)
-        # get clusters out of these obs
-        # radius = 4.
+            print('aoooo', fieldName, np.unique(observations['note']))
+            nclusters = len(fieldName)
+            DD = DDFields()
+            clus = ClusterObs(observations, nclusters=nclusters,
+                              dbName=dbName, fields=DD)
+            clusters = clus.clusters
+            dataclusters = clus.dataclus
 
-        DD = DDFields()
-        clus = ClusterObs(observations, nclusters=nclusters,
-                          dbName=dbName, fields=DD)
-        clusters = clus.clusters
-        dataclusters = clus.dataclus
+            # clusters = rf.append_fields(clusters, 'radius', [radius]*len(clusters))
+            clusters['radius'] = radius
+            # areas = rf.rename_fields(clusters, {'RA': 'RA'})
+            areas = clusters.rename(columns={'RA': 'RA'})
+            patches = pd.DataFrame(areas)
+            patches['width_RA'] = radius
+            patches['width_Dec'] = radius
+            patches = patches.rename(
+                columns={"width_RA": "radius_RA", "width_Dec": "radius_Dec"})
 
-        # clusters = rf.append_fields(clusters, 'radius', [radius]*len(clusters))
-        clusters['radius'] = radius
-        # areas = rf.rename_fields(clusters, {'RA': 'RA'})
-        areas = clusters.rename(columns={'RA': 'RA'})
-        patches = pd.DataFrame(areas)
-        patches['width_RA'] = radius
-        patches['width_Dec'] = radius
-        patches = patches.rename(
-            columns={"width_RA": "radius_RA", "width_Dec": "radius_Dec"})
-
-        if fieldName != 'all':
-            idx = patches['fieldName'] == fieldName
-            if len(patches[idx]) > 0:
-                patches = patches[idx]
-                ido = dataclusters['fieldName'] == fieldName
-                obsid = dataclusters[ido]['observationId'].tolist()
-                myobs = pd.DataFrame(np.copy(observations))
-                ib = myobs['observationId'].isin(obsid)
-                observations = myobs[ib].to_records(index=False)
+            print('patches', patches.columns, patches)
+            """
+            if fieldName != 'all':
+            """
+            idx = np.in1d(patches['fieldName'], fieldName)
+            patches = patches[idx]
+            ido = np.in1d(dataclusters['fieldName'], fieldName)
+            obsid = dataclusters[ido]['observationId'].tolist()
+            myobs = pd.DataFrame(np.copy(observations))
+            ib = myobs['observationId'].isin(obsid)
+            print('jjjj', len(patches), len(myobs[ib]))
+            observations = myobs[ib].to_records(index=False)
     else:
         if fieldType == 'WFD':
             # print('getting observations')
@@ -2717,34 +2728,103 @@ def getFields(observations, fieldType='WFD', fieldIds=None,
                 # return observations[observations[pName] == propId_WFD]
             if fieldType == 'DD':
                 # could be tricky here depending on the database structure
-                if 'fieldId' in observations.dtype.names:
-                    # print('hello', np.unique(
-                    #    observations['fieldId']), len(propIds))
-                    fieldIds = np.unique(observations['fieldId'])
-                    # easy one: grab DDF from fieldIds
-                    # if len(propIds) >= 3:
-                    if len(fieldIds) >= 3:
-                        obser = getFields_fromId(observations, fieldIds)
-                    else:
-                        obser = getFields_fromId(observations, [0])
-                    return pixelate(obser, nside, RACol=RACol, DecCol=DecCol)
+                dd_get = getDD_from_note(
+                    observations, nside, RACol=RACol, DecCol=DecCol, fieldName='')
+                if dd_get is not None:
+                    return dd_get
 
                 else:
-                    """
-                    Tricky
-                    we do not have other ways to identify
-                    DD except by selecting pixels with a large number of visits
-                    """
-                    pixels = pixelate(observations, nside,
-                                      RACol=RACol, DecCol=DecCol)
+                    if 'fieldId' in observations.dtype.names:
+                        fieldIds = np.unique(observations['fieldId'])
+                        if len(fieldIds) >= 3:
+                            obser = getFields_fromId(observations, fieldIds)
+                        else:
+                            obser = getFields_fromId(observations, [0])
 
-                    df = pd.DataFrame(np.copy(pixels))
+                        print('resultat fieldids', np.unique(obser['note']))
+                        return pixelate(obser, nside, RACol=RACol, DecCol=DecCol)
 
-                    groups = df.groupby('healpixID').filter(
-                        lambda x: len(x) > 5000)
+                    else:
+                        """
+                        Tricky
+                        we do not have other ways to identify
+                        DD except by selecting pixels with a large number of visits
+                        """
+                        print('there ticky')
+                        pixels = pixelate(observations, nside,
+                                          RACol=RACol, DecCol=DecCol)
 
-                    group_DD = groups.groupby([RACol, DecCol]).filter(
-                        lambda x: len(x) > 4000)
+                        df = pd.DataFrame(np.copy(pixels))
 
-                    # return np.array(group_DD.to_records().view(type=np.matrix))
-                    return group_DD.to_records(index=False)
+                        groups = df.groupby('healpixID').filter(
+                            lambda x: len(x) > 5000)
+
+                        group_DD = groups.groupby([RACol, DecCol]).filter(
+                            lambda x: len(x) > 4000)
+
+                        # return np.array(group_DD.to_records().view(type=np.matrix))
+                        return group_DD.to_records(index=False)
+
+
+def getDD_from_note(observations, nside, RACol, DecCol, fieldName=''):
+
+    if 'note' in observations.dtype.names:
+        ido = np.core.defchararray.find(
+            observations['note'].astype(str), 'DD')
+        if ido.tolist():
+            ies = np.ma.asarray(
+                list(map(lambda st: False if st != -1 else True, ido)))
+            obser = observations[~ies]
+
+        if len(obser) == 0:
+            return None
+        # rename fields here
+        obser['note'] = np.char.replace(obser['note'], 'DD:', '')
+        bb = obser['note']
+        torep = dict(zip(['ECDFS', 'EDFS, a', 'EDFS, b'], [
+            'CDFS', 'EDFSa', 'EDFSb']))
+
+        for key, vals in torep.items():
+            idx = np.in1d(bb, [key])
+            bb[idx] = vals
+
+        obser['note'] = bb
+
+        if fieldName:
+            idx = np.in1d(obser['note'], fieldName)
+            obser = obser[idx]
+
+        return pixelate(obser, nside, RACol=RACol, DecCol=DecCol)
+    return None
+
+
+def cluster_from_obs(obs, dbName, radius):
+
+    cluster = pd.DataFrame()
+    fieldName = np.unique(obs['note'])
+    for io, field in enumerate(fieldName):
+        idx = obs['note'] == field
+        sel_obs = obs[idx]
+        dd = {}
+        dd['clusid'] = io
+        dd['RA'] = np.mean(sel_obs['fieldRA'])
+        dd['Dec'] = np.mean(sel_obs['fieldDec'])
+        dd['radius_RA'] = radius
+        dd['radius_Dec'] = radius
+        dd['area'] = -1
+        dd['dbName'] = dbName
+        dd['fieldName'] = field
+        dd['Nvisits'] = len(sel_obs)
+        dd['Nvisits_all'] = len(sel_obs)
+        for b in 'ugrizy':
+            dd['Nvisits_{}'.format(b)] = len(sel_obs[sel_obs['filter'] == b])
+        dd['radius'] = radius
+
+        ddn = {}
+        for key, vals in dd.items():
+            ddn[key] = [vals]
+
+        df = pd.DataFrame.from_dict(ddn)
+        cluster = pd.concat((cluster, df))
+
+    return cluster
