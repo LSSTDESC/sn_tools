@@ -1220,9 +1220,9 @@ def Match_DD(fields_DD, df, radius=5):
     return dfb
 
 
-class Stat_DD:
+class Stat_DD_night:
     """
-    class to estimate statistical estimator related to DD fields
+    class to estimate statistical estimator related to DD fields per night
 
     Parameters
     --------------
@@ -1387,6 +1387,8 @@ def ana_visits(obs, field):
             if not b in dd.keys():
                 dd[b] = 0
             str_combi += '{}{}'.format(dd[b], b)
+            if b != 'y':
+                str_combi += '-'
         dd['config'] = str_combi
         # print(dd)
         ddmod = {}
@@ -1409,12 +1411,54 @@ def summary(res):
 
 def seas_cad(obs):
 
-    for seas in obs['season'].unique():
-        idx = obs['season'] == seas
-        sel = obs[idx]
-        seas_min, seas_max = np.min(sel['night']), np.max(sel['night'])
-        seas_length = seas_max-seas_min
-        diff = np.diff(sel['night'])
-        cad, cad_std = np.mean(diff), np.std(diff)
+    dictout = {}
 
-        print(seas, cad, cad_std, seas_length)
+    # get cadence and season length
+    seas_min, seas_max = np.min(obs['night']), np.max(obs['night'])
+    seas_length = seas_max-seas_min
+    diff = np.diff(obs['night'])
+    cad_med, cad, cad_std = np.median(diff), np.mean(diff), np.std(diff)
+
+    dictout['cadence_median'] = [cad_med]
+    dictout['cadence_mean'] = [cad]
+    dictout['cadence_std'] = [cad_std]
+    dictout['season_length'] = [seas_length]
+
+    # get gaps_stat
+    df_diff = pd.DataFrame(diff, columns=['cad'])
+    gapvals = [5, 10, 15, 20, 25, 30, 100]
+    group = df_diff.groupby(pd.cut(df_diff.cad, np.array(gapvals)))
+
+    for group_name, df_group in group:
+        gmin = group_name.left
+        gmax = group_name.right
+        dictout['gap_{}_{}'.format(gmin, gmax)] = [len(df_group)]
+
+    # stat on filter allocation
+    combis = obs.groupby(['config'])['config'].count()/len(obs)
+    dictout['filter_alloc'] = [combis.index.to_list()]
+    dictout['filter_frac'] = [
+        list(np.around(np.array(combis.values.tolist()), 2))]
+
+    return pd.DataFrame.from_dict(dictout)
+
+
+def Stat_DD_season(data_tab, cols=['field', 'season']):
+    """
+    Method to analyze a set of observing data per obs night
+
+    Parameters
+    --------------
+    data_tab: astopy table
+      data to process
+
+    """
+
+    print(data_tab.meta)
+
+    res = data_tab.to_pandas().groupby(cols).apply(
+        lambda x: seas_cad(x)).reset_index()
+
+    res['dbName'] = data_tab.meta['dbName']
+    res['time_budget'] = np.round(data_tab.meta['time_budget'], 3)
+    return res
