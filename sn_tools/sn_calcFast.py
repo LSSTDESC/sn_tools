@@ -8,8 +8,11 @@ from scipy.linalg import lapack
 import scipy.linalg as la
 import operator
 import numpy.lib.recfunctions as rf
-import warnings
+from sn_tools.sn_io import check_get_file
+import h5py
+from scipy.interpolate import RegularGridInterpolator
 
+import warnings
 # this is to remove runtime warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
@@ -29,8 +32,6 @@ class LCfast:
       SN stretch
     color: float
       SN color
-    telescope: Telescope()
-      telescope for the study
     mjdCol: str, opt
       name of the MJD col in data to simulate (default: observationStartMJD)
     RACol: str, opt
@@ -55,8 +56,7 @@ class LCfast:
        red cutoff for SN (default: 800.0 nm)
     """
 
-    def __init__(self, reference_lc, dustcorr, x1, color,
-                 telescope, mjdCol='observationStartMJD',
+    def __init__(self, reference_lc, dustcorr, x1, color, mjdCol='observationStartMJD',
                  RACol='fieldRA', DecCol='fieldDec',
                  filterCol='filter', exptimeCol='visitExposureTime',
                  m5Col='fiveSigmaDepth', seasonCol='season', nexpCol='numExposures', seeingCol='seeingFwhmEff',
@@ -84,8 +84,6 @@ class LCfast:
         self.dustcorr = dustcorr
         # Loading reference file
         self.reference_lc = reference_lc
-
-        #self.telescope = telescope
 
         # This cutoffs are used to select observations:
         # phase = (mjd - DayMax)/(1.+z)
@@ -134,7 +132,8 @@ class LCfast:
             idx = obs[self.filterCol] == band
             if len(obs[idx]) > 0:
                 resband = self.processBand(obs[idx], ebvofMW, band, gen_par)
-                tab_tot = tab_tot.append(resband, ignore_index=True)
+                #tab_tot = tab_tot.append(resband, ignore_index=True)
+                tab_tot = pd.concat((tab_tot, resband))
 
         # return produced LC
         return tab_tot
@@ -1635,3 +1634,536 @@ def faster_inverse(A):
     b = np.identity(A.shape[1], dtype=A.dtype)
     # u, piv, x, info = lapack.dgesv(A, b)
     return la.solve(A, b)
+
+
+class GetReference:
+    """
+    Class to load reference data
+    used for the fast SN simulator
+
+    Parameters
+    ----------------
+    templateDir: str
+      location dir of the reference LC files
+    lcName: str
+      name of the reference file to load (lc)
+    gammaDir: str
+       location dir where gamma files are located
+    gammaName: str
+      name of the reference file to load (gamma)
+    web_path: str
+      web adress where files (LC reference and gamma) can be found if not already on disk
+    param_Fisher : list(str),opt
+      list of SN parameter for Fisher estimation to consider
+      (default: ['x0', 'x1', 'color', 'daymax'])
+
+    Returns
+    -----------
+    The following dict can be accessed:
+
+    mag_to_flux_e_sec : Interp1D of mag to flux(e.sec-1)  conversion
+    flux : dict of RegularGridInterpolator of fluxes (key: filters, (x,y)=(phase, z), result=flux)
+    fluxerr : dict of RegularGridInterpolator of flux errors (key: filters, (x,y)=(phase, z), result=fluxerr)
+    param : dict of dict of RegularGridInterpolator of flux derivatives wrt SN parameters
+                  (key: filters plus param_Fisher parameters; (x,y)=(phase, z), result=flux derivatives)
+    gamma : dict of RegularGridInterpolator of gamma values (key: filters)
+
+
+    """""
+
+    def __init__(self, templateDir, lcName,
+                 gammaDir, gammaName,
+                 web_path, param_Fisher=['x0', 'x1', 'color', 'daymax']):
+
+        check_get_file(web_path, templateDir, lcName)
+
+        # Load the file - lc reference
+        lcFullName = '{}/{}'.format(templateDir, lcName)
+        f = h5py.File(lcFullName, 'r')
+        keys = list(f.keys())
+        # lc_ref_tot = Table.read(filename, path=keys[0])
+        lc_ref_tot = Table.from_pandas(pd.read_hdf(lcFullName))
+        lc_ref_tot.convert_bytestring_to_unicode()
+        idx = lc_ref_tot['z'] > 0.005
+        lc_ref_tot = np.copy(lc_ref_tot[idx])
+
+        # telescope requested
+        # Load the file - gamma values
+
+        # fgamma = h5py.File(gammaName, 'r')
+        gammas = LoadGamma('grizy', gammaDir, gammaName, web_path)
+        self.gamma = gammas.gamma
+        self.mag_to_flux = gammas.mag_to_flux
+        self.zp = gammas.zp
+        self.mean_wavelength = gammas.mean_wavelength
+
+        # Load references needed for the following
+        self.lc_ref = {}
+        self.gamma_ref = {}
+        # self.gamma = {}
+        self.m5_ref = {}
+        # self.mag_to_flux_e_sec = {}
+
+        self.flux = {}
+        self.fluxerr_photo = {}
+        self.fluxerr_model = {}
+        self.param = {}
+
+        bands = np.unique(lc_ref_tot['band'])
+        mag_range = np.arange(10., 38., 0.01)
+        # exptimes = np.linspace(15.,30.,2)
+        # exptimes = [15.,30.,60.,100.]
+
+        # gammArray = self.loopGamma(bands, mag_range, exptimes,telescope)
+
+        method = 'linear'
+
+        # for each band: load data to be used for interpolation
+        for band in bands:
+            idx = lc_ref_tot['band'] == band
+            lc_sel = Table(lc_ref_tot[idx])
+            lc_sel['z'] = lc_sel['z'].data.round(decimals=2)
+            lc_sel['phase'] = lc_sel['phase'].data.round(decimals=1)
+
+            """
+            select phases between -20 and -60 only
+
+            """
+
+            idx = lc_sel['phase'] < 60.
+            idx &= lc_sel['phase'] > -20.
+            lc_sel = lc_sel[idx]
+
+            """
+            for z in np.unique(lc_sel['z']):
+                ig = lc_sel['z'] == z
+                print(band,z,len(lc_sel[ig]))
+            """
+            """
+            fluxes_e_sec = telescope.mag_to_flux_e_sec(
+                mag_range, [band]*len(mag_range), [30]*len(mag_range))
+            self.mag_to_flux_e_sec[band] = interpolate.interp1d(
+                mag_range, fluxes_e_sec[:, 1], fill_value=0., bounds_error=False)
+            """
+
+            # these reference data will be used for griddata interp.
+            self.lc_ref[band] = lc_sel
+            #self.gamma_ref[band] = lc_sel['gamma'][0]
+            #self.m5_ref[band] = np.unique(lc_sel['m5'])[0]
+
+            # Fluxes and errors
+            zmin, zmax, zstep, nz = self.limVals(lc_sel, 'z')
+            phamin, phamax, phastep, npha = self.limVals(lc_sel, 'phase')
+
+            zstep = np.round(zstep, 2)
+            phastep = np.round(phastep, 1)
+
+            zv = np.linspace(zmin, zmax, nz)
+            phav = np.linspace(phamin, phamax, npha)
+
+            index = np.lexsort((lc_sel['z'], lc_sel['phase']))
+            flux = np.reshape(lc_sel[index]['flux'], (npha, nz))
+            fluxerr_photo = np.reshape(
+                lc_sel[index]['fluxerr_photo'], (npha, nz))
+            fluxerr_model = np.reshape(
+                lc_sel[index]['fluxerr_model'], (npha, nz))
+
+            self.flux[band] = RegularGridInterpolator(
+                (phav, zv), flux, method=method, bounds_error=False, fill_value=-1.0)
+            self.fluxerr_photo[band] = RegularGridInterpolator(
+                (phav, zv), fluxerr_photo, method=method, bounds_error=False, fill_value=-1.0)
+            self.fluxerr_model[band] = RegularGridInterpolator(
+                (phav, zv), fluxerr_model, method=method, bounds_error=False, fill_value=-1.0)
+
+            """
+            zref = 0.8
+            if band == 'g':
+                phases = [-5,12.]
+                interp = self.flux[band]((phases,[zref,zref]))
+                print('interp',interp)
+                import matplotlib.pyplot as plt
+                iu = np.abs(lc_sel['z']-zref)<1.e-8
+                ll = lc_sel[iu]
+                plt.plot(ll['phase'],ll['flux'],'ko',mfc='None')
+                plt.plot(phases,interp,'r*')
+                plt.show()
+              """
+
+            # Flux derivatives
+            self.param[band] = {}
+            for par in param_Fisher:
+                valpar = np.reshape(
+                    lc_sel[index]['d{}'.format(par)], (npha, nz))
+                self.param[band][par] = RegularGridInterpolator(
+                    (phav, zv), valpar, method=method, bounds_error=False, fill_value=0.)
+
+            # gamma estimator
+
+            """
+            rec = Table.read(gammaName, path='gamma_{}'.format(band))
+
+            rec['mag'] = rec['mag'].data.round(decimals=4)
+            rec['exptime'] = rec['exptime'].data.round(decimals=4)
+
+            magmin, magmax, magstep, nmag = self.limVals(rec, 'mag')
+            expmin, expmax, expstep, nexp = self.limVals(rec, 'exptime')
+            mag = np.linspace(magmin, magmax, nmag)
+            exp = np.linspace(expmin, expmax, nexp)
+
+            index = np.lexsort((np.round(rec['exptime'], 4), rec['mag']))
+            gammab = np.reshape(rec[index]['gamma'], (nmag, nexp))
+            self.gamma[band] = RegularGridInterpolator(
+                (mag, exp), gammab, method=method, bounds_error=False, fill_value=0.)
+            # print(band, gammab, mag, exp)
+            """
+
+    def limVals(self, lc, field):
+        """ Get unique values of a field in  a table
+
+        Parameters
+        ----------
+        lc: Table
+         astropy Table (here probably a LC)
+        field: str
+         name of the field of interest
+
+        Returns
+        -------
+        vmin: float
+         min value of the field
+        vmax: float
+         max value of the field
+        vstep: float
+         step value for this field (median)
+        nvals: int
+         number of unique values
+
+
+
+
+        """
+
+        lc.sort(field)
+        # vals = np.unique(lc[field].data.round(decimals=4))
+        vals = np.unique(lc[field].data)
+        vmin = np.min(vals)
+        vmax = np.max(vals)
+        vstep = np.median(vals[1:]-vals[:-1])
+
+        # make a check here
+        test = list(np.round(np.arange(vmin, vmax+vstep, vstep), 2))
+        if len(test) != len(vals):
+            print('problem here with ', field)
+            print('missing value', set(test).difference(set(vals)))
+            print('Interpolation results may not be accurate!!!!!')
+        return vmin, vmax, vstep, len(vals)
+
+    def Read_Ref(self, fi, j=-1, output_q=None):
+        """" Load the reference file and
+        make a single astopy Table from a set of.
+
+        Parameters
+        ----------
+        fi: str,
+         name of the file to be loaded
+
+        Returns
+        -------
+        tab_tot: astropy table
+         single table = vstack of all the tables in fi.
+
+        """
+
+        tab_tot = Table()
+        """
+        keys=np.unique([int(z*100) for z in zvals])
+        print(keys)
+        """
+        f = h5py.File(fi, 'r')
+        keys = f.keys()
+        zvals = np.arange(0.01, 0.9, 0.01)
+        zvals_arr = np.array(zvals)
+
+        for kk in keys:
+
+            tab_b = Table.read(fi, path=kk)
+
+            if tab_b is not None:
+                tab_tot = vstack([tab_tot, tab_b], metadata_conflicts='silent')
+                """
+                diff = tab_b['z']-zvals_arr[:, np.newaxis]
+                # flag = np.abs(diff)<1.e-3
+                flag_idx = np.where(np.abs(diff) < 1.e-3)
+                if len(flag_idx[1]) > 0:
+                    tab_tot = vstack([tab_tot, tab_b[flag_idx[1]]])
+                """
+
+            """
+            print(flag,flag_idx[1])
+            print('there man',tab_b[flag_idx[1]])
+            mtile = np.tile(tab_b['z'],(len(zvals),1))
+            # print('mtile',mtile*flag)
+                
+            masked_array = np.ma.array(mtile,mask=~flag)
+            
+            print('resu masked',masked_array,masked_array.shape)
+            print('hhh',masked_array[~masked_array.mask])
+            
+            
+        for val in zvals:
+            print('hello',tab_b[['band','z','time']],'and',val)
+            if np.abs(np.unique(tab_b['z'])-val)<0.01:
+            # print('loading ref',np.unique(tab_b['z']))
+            tab_tot=vstack([tab_tot,tab_b])
+            break
+            """
+        if output_q is not None:
+            output_q.put({j: tab_tot})
+        else:
+            return tab_tot
+
+    def Read_Multiproc(self, tab):
+        """
+        Multiprocessing method to read references
+
+        Parameters
+        ---------------
+        tab: astropy Table of data
+
+        Returns
+        -----------
+        stacked astropy Table of data
+
+        """
+        # distrib=np.unique(tab['z'])
+        nlc = len(tab)
+        # n_multi=8
+        if nlc >= 8:
+            n_multi = min(nlc, 8)
+            nvals = nlc/n_multi
+            batch = range(0, nlc, nvals)
+            batch = np.append(batch, nlc)
+        else:
+            batch = range(0, nlc)
+
+        # lc_ref_tot={}
+        # print('there pal',batch)
+        result_queue = multiprocessing.Queue()
+        for i in range(len(batch)-1):
+
+            ida = int(batch[i])
+            idb = int(batch[i+1])
+
+            p = multiprocessing.Process(
+                name='Subprocess_main-'+str(i), target=self.Read_Ref, args=(tab[ida:idb], i, result_queue))
+            p.start()
+
+        resultdict = {}
+        for j in range(len(batch)-1):
+            resultdict.update(result_queue.get())
+
+        for p in multiprocessing.active_children():
+            p.join()
+
+        tab_res = Table()
+        for j in range(len(batch)-1):
+            if resultdict[j] is not None:
+                tab_res = vstack([tab_res, resultdict[j]])
+
+        return tab_res
+
+
+class LoadGamma:
+    """
+    class to load gamma and mag_to_flux values 
+    and make regulargrid out of it
+
+    Parameters
+    ---------------
+    bands: str
+      bands to consider
+    fDir: str
+      location dir of the gamma file
+    gammaName: str
+      name of the file containing gamma values
+    web_path: str
+        web server where the file could be loaded from.
+    telescope: Telescope
+      instrument throughput
+    """
+
+    def __init__(self, bands, fDir, gammaName, web_path):
+
+        self.gamma = {}
+        self.mag_to_flux = {}
+        self.zp = {}
+        self.mean_wavelength = {}
+
+        check_get_file(web_path, fDir, gammaName)
+
+        gammaFullName = '{}/{}'.format(fDir, gammaName)
+        """
+        if not os.path.exists(gammaFullName):
+            self.generateGamma(bands, telescope, gammaFullName)
+        """
+
+        for band in bands:
+            rec = Table.read(gammaFullName,
+                             path='gamma_{}'.format(band))
+            self.zp = rec.meta['zp']
+            self.mean_wavelength = rec.meta['mean_wavelength']
+
+            rec['mag'] = rec['mag'].data.round(decimals=4)
+            rec['single_exptime'] = rec['single_exptime'].data.round(
+                decimals=4)
+
+            magmin, magmax, magstep, nmag = limVals(rec, 'mag')
+            expmin, expmax, expstep, nexpo = limVals(rec, 'single_exptime')
+            nexpmin, nexpmax, nexpstep, nnexp = limVals(rec, 'nexp')
+            mag = np.linspace(magmin, magmax, nmag)
+            exp = np.linspace(expmin, expmax, nexpo)
+            nexp = np.linspace(nexpmin, nexpmax, nnexp)
+
+            index = np.lexsort(
+                (rec['nexp'], np.round(rec['single_exptime'], 4), rec['mag']))
+            gammab = np.reshape(rec[index]['gamma'], (nmag, nexpo, nnexp))
+            fluxb = np.reshape(rec[index]['flux_e_sec'], (nmag, nexpo, nnexp))
+            self.gamma[band] = RegularGridInterpolator(
+                (mag, exp, nexp), gammab, method='linear', bounds_error=False, fill_value=0.)
+            self.mag_to_flux[band] = RegularGridInterpolator(
+                (mag, exp, nexp), fluxb, method='linear', bounds_error=False, fill_value=0.)
+
+    def generateGammas(self, bands, telescope, outName):
+        """
+        Method to generate gamma file (if does not exist)
+
+        Parameters
+        ---------------
+        bands: str
+          bands to consider
+        telescope: Telescope
+           instrument
+        outName: str
+           output file name
+
+        """
+        print('gamma file {} does not exist')
+        print('will generate it - few minutes')
+        mag_range = np.arange(13., 38., 0.05)
+        nexps = range(1, 500, 1)
+        single_exposure_time = [15., 30.]
+        Gamma(bands, telescope, outName,
+              mag_range=mag_range,
+              single_exposure_time=single_exposure_time, nexps=nexps)
+
+        print('end of gamma estimation')
+
+
+class LoadDust:
+
+    """
+    class to load dust correction file
+    and make regulargrid out of it
+
+    Parameters
+    ---------------
+    fDir: str
+      location directory of the file
+    fName: str
+      name of the file containing dust correction values
+    web_path: str
+      web server adress where the file could be retrieved
+    bands: str, opt
+       bands to consider (default: 'grizy')
+    """
+
+    def __init__(self, fDir, fName, web_path, bands='grizy'):
+
+        # check whether the file is available
+        # if not grab it from the web server
+        check_get_file(web_path, fDir, fName)
+
+        self.dustcorr = {}
+
+        tab = Table.read('{}/{}'.format(fDir, fName), path='dust')
+        tab['z'] = tab['z'].round(2)
+        tab['ebvofMW'] = tab['ebvofMW'].round(2)
+        tab['phase'] = tab['phase'].round(1)
+        tab.convert_bytestring_to_unicode()
+
+        for b in bands:
+            idx = tab['band'] == b
+            rec = tab[idx]
+
+            phasemin, phasemax, phasestep, nphase = limVals(rec, 'phase')
+            zmin, zmax, zstep, nz = limVals(rec, 'z')
+            ebvofMWmin, ebvofMWmax, ebvofMWstep, nebvofMW = limVals(
+                rec, 'ebvofMW')
+
+            phase = np.linspace(phasemin, phasemax, nphase)
+            z = np.linspace(zmin, zmax, nz)
+            ebvofMW = np.linspace(ebvofMWmin, ebvofMWmax, nebvofMW)
+
+            index = np.lexsort(
+                (rec['ebvofMW'], rec['z'], rec['phase']))
+
+            self.dustcorr[b] = {}
+            for vv in ['flux', 'dx0', 'dx1', 'dcolor', 'ddaymax', 'fluxerr_model']:
+                ratio = np.reshape(
+                    rec[index]['ratio_{}'.format(vv)], (nphase, nz, nebvofMW))
+                self.dustcorr[b]['ratio_{}'.format(vv)] = RegularGridInterpolator(
+                    (phase, z, ebvofMW), ratio, method='linear', bounds_error=False, fill_value=0.)
+
+    def complete_missing(self, grp, zvals):
+        """
+        Method to complete a grp if missing values
+
+        Parameters
+        ----------------
+        grp: pandas df group
+        zvals: reference zvals
+
+        Returns
+        -----------
+        pandas df with completed (0) values
+
+        """
+
+        if len(grp) != len(zvals):
+            print(len(grp), grp.columns)
+
+        return pd.DataFrame({'test': [0]})
+
+
+def limVals(lc, field):
+    """ Get unique values of a field in  a table
+
+    Parameters
+    --------------
+    lc: Table
+     astropy Table (here probably a LC)
+    field: str
+     name of the field of interest
+
+    Returns
+    -----------
+    vmin: float
+     min value of the field
+    vmax: float
+     max value of the field
+    vstep: float
+     step value for this field (median)
+    nvals: int
+     number of unique values
+
+    """
+
+    lc.sort(field)
+    vals = np.unique(lc[field].data)
+    # vals = np.unique(lc[field].data.round(decimals=4))
+    # print(vals)
+    vmin = np.min(vals)
+    vmax = np.max(vals)
+    vstep = np.median(vals[1:]-vals[:-1])
+
+    return vmin, vmax, vstep, len(vals)
