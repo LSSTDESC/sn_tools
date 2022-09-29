@@ -537,7 +537,7 @@ class Read_Sqlite:
             sql += 'proposalId=%d' % sel['proposalId']
         return sql
 
-    def get_data(self, cols=None, sql=None, to_degrees=False, new_col_names=None,table='observations'):
+    def get_data(self, cols=None, sql=None, to_degrees=False, new_col_names=None, table='observations'):
         """
         Method to get the contents of the SQL database dumped into a numpy rec array
 
