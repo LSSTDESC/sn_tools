@@ -130,8 +130,6 @@ def patchObs(observations, fieldType, fieldName,
             # print('before cluster', len(observations),observations.dtype, nclusters)
             # get clusters out of these obs
             # radius = 4.
-
-            print('aoooo', fieldName, np.unique(observations['note']))
             nclusters = len(fieldName)
             DD = DDFields()
             clus = ClusterObs(observations, nclusters=nclusters,
