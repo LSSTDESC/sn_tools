@@ -2779,8 +2779,8 @@ def getDD_from_note(observations, nside, RACol, DecCol, fieldName=''):
         # rename fields here
         obser['note'] = np.char.replace(obser['note'], 'DD:', '')
         bb = obser['note']
-        torep = dict(zip(['ECDFS', 'EDFS, a', 'EDFS, b', 'EDFS_a', 'EDFS_b', 'XMM_LSS'], [
-            'CDFS', 'EDFSa', 'EDFSb', 'EDFSa', 'EDFSb', 'XMM-LSS']))
+        torep = dict(zip(['ECDFS', 'EDFS, a', 'EDFS, b', 'EDFS_a', 'EDFS_b', 'XMM_LSS', 'EDFS'], [
+            'CDFS', 'EDFSa', 'EDFSb', 'EDFSa', 'EDFSb', 'XMM-LSS', 'EDFSa']))
 
         for key, vals in torep.items():
             idx = np.in1d(bb, [key])
