@@ -14,6 +14,8 @@ import pandas as pd
 from sn_tools.sn_obs import DataInside, season
 from sn_tools.sn_clusters import ClusterObs
 from sn_tools.sn_utils import multiproc
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
 
 
 class ReferenceData:
@@ -1252,6 +1254,14 @@ class Stat_DD_night:
         params = {}
         params['obs_DD'] = self.obs_DD
         params['dbName'] = self.dbName
+        params['mjdCol'] = 'mjd'
+        params['nightCol'] = 'night'
+        params['fieldCol'] = 'field'
+        params['fieldColdb'] = 'note'
+        params['filterCol'] = 'band'
+        params['list_moon'] = ['moonAz', 'moonRA',
+                               'moonDec', 'moonDistance', 'season']
+
         res = multiproc(
             np.unique(self.obs_DD['note']), params, ana_DDF, 6)
 
@@ -1293,6 +1303,60 @@ class Stat_DD_night:
         return np.copy(self.obs[id_ddf])
 
 
+def stat_DD_night_pixel(obsPixelDir, dbName, nproc=8):
+    """
+    Function to perform cadence stat per pixel
+
+    Parameters
+    ---------------
+    obsPixelDir: str
+      directory where the data are to be found
+    dbName: str
+      OS name
+    nproc: int, opt
+      number of procs for multiprocessing (default: 8)
+
+    Returns
+    -----------
+    pandas df with stat values per pixel/season
+
+    """
+    import glob
+    obsPixelFiles = glob.glob('{}/{}/*.npy'.format(obsPixelDir, dbName))
+
+    rtot = pd.DataFrame()
+    for fi in obsPixelFiles:
+        pixels = pd.DataFrame(np.load(fi, allow_pickle=True))
+        print(fi, len(pixels), pixels.columns)
+        if len(pixels) > 0:
+            rr = process_night_pixel(pixels.to_records(), dbName, nproc=nproc)
+            print(rr, rr.columns)
+            rtot = pd.concat((rtot, rr))
+
+    return rtot
+
+
+def process_night_pixel(pixels, dbName, nproc=8):
+
+    params = {}
+    params['obs_DD'] = pixels
+    params['dbName'] = dbName
+    params['mjdCol'] = 'observationStartMJD'
+    params['nightCol'] = 'night'
+    params['fieldCol'] = 'healpixID'
+    params['fieldColdb'] = 'healpixID'
+    params['filterCol'] = 'filter'
+    params['list_moon'] = ['pixRA', 'pixDec', 'season']
+
+    res = multiproc(
+        np.unique(pixels['healpixID']), params, ana_DDF, nproc)
+
+    print('allo', np.unique(pixels['fieldName']))
+    res['field'] = np.unique(pixels['fieldName'])[0]
+
+    return res
+
+
 def time_budget(obs, obs_DD):
     """"
     Method to estimate the time budget from DD
@@ -1311,12 +1375,24 @@ def ana_DDF(list_DD, params, j, output_q):
     """
     obs_DD = params['obs_DD']
     dbName = params['dbName']
+    mjdCol = params['mjdCol']
+    nightCol = params['nightCol']
+    fieldCol = params['fieldCol']
+    fieldColdb = params['fieldColdb']
+    filterCol = params['filterCol']
+    list_moon = params['list_moon']
+
     res_DD = pd.DataFrame()
 
     for field in list_DD:
         print('analyzing', field)
-        idx = obs_DD['note'] == field
-        res = ana_field(np.copy(obs_DD[idx]), dbName)
+        idx = obs_DD[fieldColdb] == field
+        res = ana_field(np.copy(obs_DD[idx]), dbName,
+                        mjdCol=mjdCol,  nightCol=nightCol,
+                        fieldColdb=fieldColdb,
+                        fieldCol=fieldCol,
+                        filterCol=filterCol,
+                        list_moon=list_moon)
         res_DD = pd.concat((res_DD, res))
 
     if output_q is not None:
@@ -1325,7 +1401,8 @@ def ana_DDF(list_DD, params, j, output_q):
         return res_DD
 
 
-def ana_field(obs, dbName):
+def ana_field(obs, dbName, mjdCol='mjd', nightCol='night', fieldColdb='note', fieldCol='field', filterCol='band',
+              list_moon=['moonAz', 'moonRA', 'moonDec', 'moonDistance', 'season']):
     """
     Method to analyze a single DD field
 
@@ -1336,18 +1413,25 @@ def ana_field(obs, dbName):
 
     """
     # estimate seasons
-    obs = season(obs, mjdCol='mjd')
+    obs = season(obs, mjdCol=mjdCol)
     #print('aoooo', np.unique(obs[['note', 'season']]), obs.dtype.names)
     # print(test)
-    field = np.unique(np.copy(obs['note']))[0]
+    field = np.unique(np.copy(obs[fieldColdb]))[0]
 
-    res = ana_visits(obs, field)
+    res = ana_visits(obs, field,
+                     nightCol=nightCol,
+                     fieldCol=fieldCol,
+                     filterCol=filterCol,
+                     list_moon=list_moon)
     res['dbName'] = dbName
 
     return res
 
 
-def ana_visits(obs, field):
+def ana_visits(obs, field,
+               nightCol='night', fieldCol='field',
+               filterCol='band',
+               list_moon=['moonAz', 'moonRA', 'moonDec', 'moonDistance', 'season']):
     """
     Method to analyze the number of visits per obs night
 
@@ -1364,21 +1448,21 @@ def ana_visits(obs, field):
 
     """
 
-    list_moon = ['moonAz', 'moonRA', 'moonDec', 'moonDistance', 'season']
     rtot = pd.DataFrame()
-    for night in np.unique(obs['night']):
-        idx = obs['night'] == night
+    for night in np.unique(obs[nightCol]):
+        idx = obs[nightCol] == night
         obs_night = obs[idx]
         #print('night', night)
 
         dd = {}
-        dd['field'] = field
-        dd['night'] = night
-        for ll in list_moon:
-            dd[ll] = np.median(obs_night[ll])
+        dd[fieldCol] = field
+        dd[nightCol] = night
+        if list_moon:
+            for ll in list_moon:
+                dd[ll] = np.median(obs_night[ll])
 
-        for b in np.unique(obs_night['band']):
-            idb = obs_night['band'] == b
+        for b in np.unique(obs_night[filterCol]):
+            idb = obs_night[filterCol] == b
             obs_filter = obs_night[idb]
             dd[b] = len(obs_filter)
 
@@ -1396,6 +1480,7 @@ def ana_visits(obs, field):
             ddmod[key] = [val]
         rtt = pd.DataFrame.from_dict(ddmod)
         rtot = pd.concat((rtot, rtt))
+
     return rtot
 
 
@@ -1461,4 +1546,28 @@ def Stat_DD_season(data_tab, cols=['field', 'season']):
 
     res['dbName'] = data_tab.meta['dbName']
     res['time_budget'] = np.round(data_tab.meta['time_budget'], 3)
+    return res
+
+
+def stat_DD_season_pixel(data_tab, cols=['healpixID', 'field', 'pixRA', 'pixDec', 'season', 'dbName']):
+    """
+    Function to analyze a set of observing data per obs night and per pixel
+
+    Parameters
+    --------------
+    data_tab: astopy table
+      data to process
+    cols: list(str)
+      list of variable to use foe groupby estimation
+      default: ['healpixID', 'field', 'pixRA', 'pixDec', 'season', 'dbName']
+
+    Returns
+    ----------
+    pandas df with stat cadence data
+
+    """
+
+    res = data_tab.groupby(cols).apply(
+        lambda x: seas_cad(x)).reset_index()
+
     return res
