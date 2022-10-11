@@ -1280,7 +1280,7 @@ class Stat_DD_night:
         """
 
         fName = '{}/{}.{}'.format(self.dbDir, self.dbName, self.dbExtens)
-        data = np.load(fName)
+        data = np.load(fName, allow_pickle=True)
 
         return data
 
