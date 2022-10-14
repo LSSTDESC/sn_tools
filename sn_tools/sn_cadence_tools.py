@@ -1260,7 +1260,7 @@ class Stat_DD_night:
         params['fieldColdb'] = 'note'
         params['filterCol'] = 'band'
         params['list_moon'] = ['moonAz', 'moonRA',
-                               'moonDec', 'moonDistance', 'season']
+                               'moonDec', 'moonDistance', 'season', 'moonPhase']
 
         res = multiproc(
             np.unique(self.obs_DD['note']), params, ana_DDF, 6)
