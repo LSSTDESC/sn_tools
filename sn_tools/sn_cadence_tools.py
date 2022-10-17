@@ -1461,10 +1461,20 @@ def ana_visits(obs, field,
             for ll in list_moon:
                 dd[ll] = np.median(obs_night[ll])
 
-        for b in np.unique(obs_night[filterCol]):
+        # for b in np.unique(obs_night[filterCol]):
+        for b in 'ugrizy':
             idb = obs_night[filterCol] == b
             obs_filter = obs_night[idb]
-            dd[b] = len(obs_filter)
+            resa, resb = -1.0, -1.0
+            if len(obs_filter) > 0:
+                dd[b] = len(obs_filter)
+                if 'mjd' in obs_filter.dtype.names:
+                    diff = np.diff(obs_filter['mjd'])
+                    resa = np.mean(diff)
+                    resb = np.std(diff)
+
+            dd['deltaT_{}_mean'.format(b)] = resa
+            dd['deltaT_{}_rms'.format(b)] = resb
 
         str_combi = ''
         for b in 'ugrizy':
