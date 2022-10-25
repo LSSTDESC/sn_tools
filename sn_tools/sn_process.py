@@ -402,20 +402,22 @@ class Process:
         time_ref = time.time()
         # print('there we go instance procpix')
 
+        print('processing pixel', pixels, len(observations))
         procpix = ProcessPixels(
             self.metricList, j, outDir=self.outDir, dbName=self.dbName, saveData=self.saveData)
 
         # print('continuing')
         valsdf = pd.DataFrame(self.pixelmap)
         ido = valsdf['healpixID'].isin(pixels)
-        if len(valsdf[ido]) > 0:
-            minDec = np.min(valsdf[ido]['pixDec'])
-            maxDec = np.max(valsdf[ido]['pixDec'])
+        ppix = valsdf[ido]
+        if len(ppix) > 0:
+            minDec = np.min(ppix['pixDec'])
+            maxDec = np.max(ppix['pixDec'])
             minDecobs = np.min(observations[self.DecCol])
             maxDecobs = np.max(observations[self.DecCol])
-            print('processing pixels', len(
-                valsdf[ido]), minDec, maxDec, minDecobs, maxDecobs)
-            procpix(valsdf[ido], np.copy(observations), self.npixels)
+            print('processing pixels', len(ppix),
+                  minDec, maxDec, minDecobs, maxDecobs)
+            procpix(ppix, np.copy(observations), self.npixels)
         else:
             print('pb here no data in ', pixels)
 

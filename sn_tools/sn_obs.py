@@ -1493,7 +1493,9 @@ class ProcessPixels:
         """
         ido = dataset['observationId'].isin(selpix['observationId'])
 
-        return dataset[ido]
+        datasel = dataset[ido]
+
+        return datasel
         """
         for index, row in selpix.iterrows():
             idfb = np.abs(data[self.RACol] -row[self.RACol])<1.e-4
