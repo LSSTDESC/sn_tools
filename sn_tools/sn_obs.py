@@ -1072,16 +1072,20 @@ class DataToPixels:
       output dir path
     dbName: str
       observing strategy name
-    saveData: bool, opt
-       to save (True) the data or not (False) (default: False)
+    fieldType: str
+      type of field to process (DD or WFD)
+
     """
 
-    def __init__(self, nside, RACol, DecCol, outDir, dbName):
+    def __init__(self, nside, RACol, DecCol, outDir, dbName, fieldType, project_FP, VRO_FP):
 
         # load parameters
         self.nside = nside
         self.RACol = RACol
         self.DecCol = DecCol
+        self.project_FP = project_FP
+        self.VRO_FP = VRO_FP
+        self.fieldType = fieldType
         # self.obsIdCol = obsIdCol
         # self.num = num
         # self.outDir = outDir
@@ -1140,21 +1144,20 @@ class DataToPixels:
         # select data inside an area centered in (RA,Dec) with width (widthRA+1,widthDec+1)
 
         # print('searching data inside',RA,Dec,widthRA,widthDec)
-        dataSel = DataInside(data, RA, Dec, widthRA+1., widthDec+1.,
-                             RACol=self.RACol, DecCol=self.DecCol)
+        # dataset: pandas df of data
+        if self.fieldType == 'WFD':
+            dataSel = DataInside(data, RA, Dec, widthRA+1., widthDec+1.,
+                                 RACol=self.RACol, DecCol=self.DecCol).data
+            dataset = pd.DataFrame(np.copy(dataSel.data))
+        else:
+            dataset = pd.DataFrame(np.copy(data))
+
+        if len(dataset) == 0:
+            return None
 
         # display: (RA,Dec) distribution of the selected data (ie inside the area)
         # if display:
         #    dataSel.plot()
-
-        self.observations = None
-
-        # print('there man',len(dataSel.data))
-        if len(dataSel.data) == 0:
-            return None
-
-        # mv to panda df
-        dataset = pd.DataFrame(np.copy(dataSel.data))
 
         # Possible to remove DD dithering here
         # This is usually to test impact of dithering on DDF
@@ -1206,9 +1209,13 @@ class DataToPixels:
         groups = dataset.groupby(['observationId', 'night', 'filter'])
         # match pixels to data
         time_ref = time.time()
-        matched_pixels = groups.apply(
-            lambda x: self.match(x, self.healpixIDs, self.pixRA, self.pixDec)).reset_index()
 
+        if self.project_FP == 'gnomonic':
+            matched_pixels = groups.apply(
+                lambda x: self.match_gnomonic(x, self.healpixIDs, self.pixRA, self.pixDec)).reset_index()
+
+        print('after matching', time.time()-time_ref,
+              len(matched_pixels['healpixID'].unique()), matched_pixels['healpixID'].unique())
         if display:
             print('after matching', time.time()-time_ref,
                   len(matched_pixels['healpixID'].unique()), matched_pixels.columns)
@@ -1223,9 +1230,10 @@ class DataToPixels:
             plt.show()
         return matched_pixels
 
-    def match(self, grp, healpixIDs, pixRA, pixDec):
+    def match_gnomonic(self, grp, healpixIDs, pixRA, pixDec):
         """
         Method to match a set of pixels to a grp of observations
+        using gnomonic projection
 
         Parameters
         ---------------
@@ -1261,8 +1269,10 @@ class DataToPixels:
         # x, y = proj_gnomonic_plane(np.deg2rad(self.LSST_RA-pRA),np.deg2rad(self.LSST_Dec-pDec), pixRA_rad, pixDec_rad)
 
         # get LSST FP with the good scale
-        # pnew = LSSTPointing(0., 0., area=np.pi*self.fpscale**2)
-        fpnew = LSSTPointing_circular(0., 0., maxbound=self.fpscale)
+        if self.VRO_FP == 'realistic':
+            fpnew = LSSTPointing(0., 0., maxbound=self.fpscale)
+        if self.VRO_FP == 'circle':
+            fpnew = LSSTPointing_circular(0., 0., maxbound=self.fpscale)
         # fpnew = LSSTPointing(np.deg2rad(self.LSST_RA-pRA),np.deg2rad(self.LSST_Dec-pDec),area=np.pi*self.fpscale**2)
         # maxbound=self.fpscale)
 
@@ -1704,7 +1714,7 @@ class ProcessArea:
                 lambda x: self.match(x, healpixIDs, pixRA, pixDec)).reset_index()
 
             print('after matching', time.time()-time_ref,
-                  len(matched_pixels['healpixID'].unique()))
+                  len(matched_pixels['healpixID'].unique()), matched_pixels.columns)
 
             # print('number of pixels',len(matched_pixels['healpixID'].unique()))
             ipix = -1
@@ -1833,7 +1843,7 @@ class ProcessArea:
 
     def match(self, grp, healpixIDs, pixRA, pixDec, name=None, ax=None):
 
-        # print('hello', grp.columns)
+        #print('hello', grp.columns)
         pixRA_rad = np.deg2rad(pixRA)
         pixDec_rad = np.deg2rad(pixDec)
 
