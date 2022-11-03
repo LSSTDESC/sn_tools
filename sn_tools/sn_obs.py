@@ -20,6 +20,7 @@ import glob
 import os
 from sn_tools.sn_clusters import ClusterObs
 import copy
+from sn_tools.sn_utils import multiproc
 
 
 def DDFields(DDfile=None):
@@ -1054,6 +1055,55 @@ def LSSTPointing_circular(xc, yc, angle_rot=0., area=None, maxbound=None):
                               yoff=yc-rotated_poly.centroid.y)
 
 
+def LSSTPointing_part(xc, yc, angle_rot=0., vertices=[[-7.5, 4.5], [7.5, 4.5], [7.5, -4.5], [-7.5, -4.5]], area=None, maxbound=None):
+    """
+    Function to build a focal plane for LSST
+
+    Parameters
+    ---------------
+
+    xc: float
+       x-position of the center FP (RA)
+    yc: float
+       y-position of the center FP (Dec)
+    angle_rot: float, opt
+      angle of rotation of the FP (default: 0.)
+    area: float
+      area for the FP (default: None)
+    maxbound: float
+      to reduce area  (default: None)
+    Returns
+    ----------
+    LSST FP (geometry.Polygon)
+
+    """
+
+    """
+    arr = [[3, 0], [12, 0], [12, 1], [13, 1], [13, 2], [14, 2], [14, 3], [15, 3],
+           [15, 12], [14, 12], [14, 13], [13, 13], [
+               13, 14], [12, 14], [12, 15],
+           [3, 15], [3, 14], [2, 14], [2, 13], [1, 13], [1, 12], [0, 12],
+           [0, 3], [1, 3], [1, 2], [2, 2], [2, 1], [3, 1]]
+    """
+
+    arr = vertices
+
+    # build polygon
+    poly_orig = geometry.Polygon(arr)
+
+    # set area
+    if area is not None:
+        poly_orig = affinity.scale(poly_orig, xfact=np.sqrt(
+            area/poly_orig.area), yfact=np.sqrt(area/poly_orig.area))
+
+    # set rotation angle
+    rotated_poly = affinity.rotate(poly_orig, angle_rot)
+
+    return affinity.translate(rotated_poly,
+                              xoff=xc-rotated_poly.centroid.x,
+                              yoff=yc-rotated_poly.centroid.y)
+
+
 class DataToPixels:
     """
     class to match observations to sky pixels
@@ -1074,10 +1124,15 @@ class DataToPixels:
       observing strategy name
     fieldType: str
       type of field to process (DD or WFD)
-
+    project_FP: str
+      type of projection (gnomonic or hp_query)
+    VRO_FP: str
+       type of VRO Focal Plane (circular or realistic)
+    FoV: float, opt
+      Field-of-View (deg2) (default: 9.62)
     """
 
-    def __init__(self, nside, RACol, DecCol, outDir, dbName, fieldType, project_FP, VRO_FP):
+    def __init__(self, nside, RACol, DecCol, outDir, dbName, fieldType, project_FP, VRO_FP, FoV=9.62, nproc=8):
 
         # load parameters
         self.nside = nside
@@ -1086,6 +1141,8 @@ class DataToPixels:
         self.project_FP = project_FP
         self.VRO_FP = VRO_FP
         self.fieldType = fieldType
+        self.FoV = FoV
+        self.nproc = nproc
         # self.obsIdCol = obsIdCol
         # self.num = num
         # self.outDir = outDir
@@ -1096,13 +1153,29 @@ class DataToPixels:
         # corresponding to a sphere radius equal to one
         # (which is the default for gnomonic projections here)
 
-        fov = 9.62*(np.pi/180.)**2  # LSST fov in sr
-        theta = 2.*np.arcsin(np.sqrt(fov/(4.*np.pi)))
+        fov_str = FoV*(np.pi/180.)**2  # LSST fov in sr
+        theta = 2.*np.arcsin(np.sqrt(fov_str/(4.*np.pi)))
 
         # if theta >= np.pi/2.:
         #    theta -= np.pi/2.
         # print('theta', theta, np.rad2deg(theta))
         self.fpscale = np.tan(theta)
+        self.fpradius = np.sqrt(self.FoV/np.pi)
+
+        self.obsCol = ['observationStartMJD', 'fieldRA', 'fieldDec',
+                       'visitExposureTime', 'fiveSigmaDepth', 'numExposures', 'seeingFwhmEff']
+
+        self.VRO_vertices = [[[-7.5, 4.5], [7.5, 4.5], [7.5, -4.5], [-7.5, -4.5]],  # main part
+                             [[-4.5, 7.5], [4.5, 7.5], [4.5, -7.5], [-4.5, -7.5]]]
+        """
+        [[-4.5, 7.5], [4.5, 7.5], [4.5, 4.5],
+        [-4.5, 4.5]],  # upper
+        [[-4.5, -4.5], [4.5, -4.5], [4.5, -7.5], [-4.5, -7.5]]]  # lower
+        self.area_part = [135/(135+54)*self.FoV, 27 /
+                          (135+54)*self.FoV, 27/(135+54)*self.FoV]
+        """
+        rat = 135./189.
+        self.area_part = [rat*self.FoV, rat*self.FoV]
 
     def __call__(self, data, RA, Dec, widthRA, widthDec, nodither=False, display=False, inclusive=False):
         """
@@ -1206,16 +1279,26 @@ class DataToPixels:
 
         """
 
-        groups = dataset.groupby(['observationId', 'night', 'filter'])
+        # groups = dataset.groupby(['observationId', 'night', 'filter'])
         # match pixels to data
         time_ref = time.time()
-
+        params = {}
+        params['data'] = dataset
+        params['grpCol'] = ['observationId', 'night', 'filter']
         if self.project_FP == 'gnomonic':
-            matched_pixels = groups.apply(
-                lambda x: self.match_gnomonic(x, self.healpixIDs, self.pixRA, self.pixDec)).reset_index()
 
-        print('after matching', time.time()-time_ref,
-              len(matched_pixels['healpixID'].unique()), matched_pixels['healpixID'].unique())
+            params['healpixIDs'] = self.healpixIDs
+            params['pixRA'] = self.pixRA
+            params['pixDec'] = self.pixDec
+            matched_pixels = multiproc(dataset['observationId'].to_list(
+            ), params, self.match_multiproc_gnomonic, self.nproc)
+            # matched_pixels = groups.apply(
+            #    lambda x: self.match_gnomonic(x, self.healpixIDs, self.pixRA, self.pixDec)).reset_index()
+
+        if self.project_FP == 'hp_query':
+            matched_pixels = multiproc(dataset['observationId'].to_list(
+            ), params, self.match_multiproc_hp_query, self.nproc)
+
         if display:
             print('after matching', time.time()-time_ref,
                   len(matched_pixels['healpixID'].unique()), matched_pixels.columns)
@@ -1229,6 +1312,38 @@ class DataToPixels:
                     matched_pixels['pixDec'], 'ob', mfc='None')
             plt.show()
         return matched_pixels
+
+    def match_multiproc_gnomonic(self, obsid, params, j=0, output_q=None):
+
+        data = params['data']
+        healpixIDs = params['healpixIDs']
+        pixRA = params['pixRA']
+        pixDec = params['pixDec']
+        grpCol = params['grpCol']
+
+        idx = data['observationId'].isin(obsid)
+        seldata = data[idx]
+        matched_pixels = seldata.groupby(grpCol).apply(
+            lambda x: self.match_gnomonic(x, healpixIDs, pixRA, pixDec)).reset_index()
+
+        if output_q is not None:
+            return output_q.put({j: matched_pixels})
+        else:
+            return matched_pixels
+
+    def match_multiproc_hp_query(self, obsid, params, j=0, output_q=None):
+
+        data = params['data']
+        grpCol = params['grpCol']
+        idx = data['observationId'].isin(obsid)
+        seldata = data[idx]
+        matched_pixels = seldata.groupby(grpCol).apply(
+            lambda x: self.match_hp_query(x)).reset_index()
+
+        if output_q is not None:
+            return output_q.put({j: matched_pixels})
+        else:
+            return matched_pixels
 
     def match_gnomonic(self, grp, healpixIDs, pixRA, pixDec):
         """
@@ -1257,7 +1372,7 @@ class DataToPixels:
         # print('hello', grp.columns)
         pixRA_rad = np.deg2rad(pixRA)
         pixDec_rad = np.deg2rad(pixDec)
-
+        rotTelPos = np.mean(grp['rotTelPos'])
         # convert data position in rad
         pRA = np.median(grp[self.RACol])
         pDec = np.median(grp[self.DecCol])
@@ -1270,8 +1385,10 @@ class DataToPixels:
 
         # get LSST FP with the good scale
         if self.VRO_FP == 'realistic':
-            fpnew = LSSTPointing(0., 0., maxbound=self.fpscale)
-        if self.VRO_FP == 'circle':
+            fpnew = LSSTPointing(
+                0., 0., angle_rot=rotTelPos, maxbound=self.fpscale)
+
+        if self.VRO_FP == 'circular':
             fpnew = LSSTPointing_circular(0., 0., maxbound=self.fpscale)
         # fpnew = LSSTPointing(np.deg2rad(self.LSST_RA-pRA),np.deg2rad(self.LSST_Dec-pDec),area=np.pi*self.fpscale**2)
         # maxbound=self.fpscale)
@@ -1300,9 +1417,9 @@ class DataToPixels:
                               'pixDec': pixDec_matched,
                                })
 
-        listcols = ['observationStartMJD', 'fieldRA', 'fieldDec', 'visitExposureTime',
-                    'fiveSigmaDepth', 'numExposures', 'seeingFwhmEff']
-        df_pix[listcols] = grp[listcols].mean().tolist()
+        # listcols = ['observationStartMJD', 'fieldRA', 'fieldDec', 'visitExposureTime',
+        #            'fiveSigmaDepth', 'numExposures', 'seeingFwhmEff']
+        df_pix[self.obsCol] = grp[self.obsCol].mean().tolist()
         """
         for ll in listcols:
             print(ll,grp[ll].mean())
@@ -1326,6 +1443,59 @@ class DataToPixels:
 
         return df_pix
         """
+
+    def match_hp_query(self, grp):
+        """
+        Method to match a set of pixels to a grp of observations
+        using gnomonic projection
+
+        Parameters
+        ---------------
+        grp: pandas grp
+           observations
+
+        Returns:
+        ----------
+        pandas df with the following cols:
+        fieldRA, fieldDec: RA and Dec of observations (FP center)
+        healpixID,pixRA,pixDec: pixels lying inside LSST FP centered in (fieldRA, fieldDec)
+
+        """
+        theta = np.mean(grp['fieldRA'])
+        phi = np.mean(grp['fieldDec'])
+        rotTelPos = np.mean(grp['rotTelPos'])
+
+        healpixIDs = []
+        if self.VRO_FP == 'circular':
+            vec = hp.ang2vec(theta, phi, lonlat=True)
+            healpixIDs = hp.query_disc(self.nside, vec, np.deg2rad(
+                self.fpradius), inclusive=False, nest=True)
+        if self.VRO_FP == 'realistic':
+            #import matplotlib.pyplot as plt
+            #fig, ax = plt.subplots()
+            for io, vv in enumerate(self.VRO_vertices):
+                pointing = LSSTPointing_part(
+                    theta, phi, angle_rot=rotTelPos, vertices=vv, area=self.area_part[io])
+                xx, yy = pointing.exterior.coords.xy
+                vecb = hp.ang2vec(xx[:-1], yy[:-1], lonlat=True)
+                healpixIDs += list(hp.query_polygon(self.nside,
+                                   vecb, nest=True))
+                #print('aaa', vecb.shape)
+                #ax.plot(xx, yy)
+                # ax.grid()
+            # plt.show()
+
+            healpixIDs = list(set(healpixIDs))
+
+        pixRA, pixDec = hp.pix2ang(
+            self.nside, healpixIDs, nest=True, lonlat=True)
+        grp_rec = grp[self.obsCol].to_records(index=False)
+        res = np.repeat(grp_rec, len(healpixIDs))
+        res = rf.append_fields(res, 'healpixID', healpixIDs)
+        res = rf.append_fields(res, 'pixRA', pixRA)
+        res = rf.append_fields(res, 'pixDec', pixDec)
+
+        return pd.DataFrame.from_records(res)
 
     def plot(self, pixels, plt):
         """
@@ -1843,7 +2013,7 @@ class ProcessArea:
 
     def match(self, grp, healpixIDs, pixRA, pixDec, name=None, ax=None):
 
-        #print('hello', grp.columns)
+        # print('hello', grp.columns)
         pixRA_rad = np.deg2rad(pixRA)
         pixDec_rad = np.deg2rad(pixDec)
 
