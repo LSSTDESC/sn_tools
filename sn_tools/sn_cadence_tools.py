@@ -16,6 +16,7 @@ from sn_tools.sn_clusters import ClusterObs
 from sn_tools.sn_utils import multiproc
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 
 class ReferenceData:
@@ -262,7 +263,7 @@ class GenerateFakeObservations:
         """
 
         bands = config['bands']
-        #cadence = dict(zip(bands, config['cadence']))
+        # cadence = dict(zip(bands, config['cadence']))
         cadence = config['cadence']
         shift_days = dict(
             zip(bands, [config['shiftDays']*io for io in range(len(bands))]))
@@ -1251,6 +1252,7 @@ class Stat_DD_night:
 
         print('DD budget', budget)
 
+        # print(test)
         params = {}
         params['obs_DD'] = self.obs_DD
         params['dbName'] = self.dbName
@@ -1266,7 +1268,8 @@ class Stat_DD_night:
             np.unique(self.obs_DD['note']), params, ana_DDF, 6)
 
         tab = Table.from_pandas(res)
-        tab.meta = dict(zip(['dbName', 'time_budget'], [dbName, budget]))
+        tab.meta = dict(zip(['dbName'], [dbName]))
+        tab.meta = {**tab.meta, **budget}
 
         self.summary = tab
 
@@ -1365,7 +1368,19 @@ def time_budget(obs, obs_DD):
     -----------
     time budget (float)
     """
-    return len(obs_DD)/len(obs)
+
+    fields = np.unique(obs_DD['note'])
+
+    dictout = {}
+
+    dictout['time_budget'] = len(obs_DD)/len(obs)
+
+    for fi in fields:
+        idx = obs_DD['note'] == fi
+        sel = obs_DD[idx]
+        dictout['time_budget_{}'.format(fi)] = len(sel)/len(obs)
+
+    return dictout
 
 
 def ana_DDF(list_DD, params, j, output_q):
@@ -1452,11 +1467,18 @@ def ana_visits(obs, field,
     for night in np.unique(obs[nightCol]):
         idx = obs[nightCol] == night
         obs_night = obs[idx]
-        #print('night', night)
+        # estimate the number of filter changes per night
+        obs_night.sort(order='mjd')
+        diff = np.diff(obs_night['mjd'])
+        idx = diff > 0.0005
+        # print('night', night, np.diff(
+        # obs_night['mjd']), obs_night['band'], len(diff[idx]))
 
         dd = {}
         dd[fieldCol] = field
         dd[nightCol] = night
+        dd['Nfc'] = len(diff[idx])
+
         if list_moon:
             for ll in list_moon:
                 dd[ll] = np.median(obs_night[ll])
@@ -1504,9 +1526,14 @@ def summary(res):
     seas_cad(res)
 
 
-def seas_cad(obs):
+def seas_cad(obs, meta={}):
 
     dictout = {}
+
+    if meta:
+        #print('aoooou', obs.name, meta['time_budget_{}'.format(obs.name[0])])
+        dictout['time_budget_field'] = [
+            meta['time_budget_{}'.format(obs.name[0])]]
 
     # get cadence and season length
     seas_min, seas_max = np.min(obs['night']), np.max(obs['night'])
@@ -1535,6 +1562,8 @@ def seas_cad(obs):
     dictout['filter_frac'] = [
         list(np.around(np.array(combis.values.tolist()), 2))]
 
+    dictout['Nfc'] = [np.sum(obs['Nfc'])]
+
     return pd.DataFrame.from_dict(dictout)
 
 
@@ -1549,10 +1578,10 @@ def Stat_DD_season(data_tab, cols=['field', 'season']):
 
     """
 
-    print(data_tab.meta)
+    print('hhh', data_tab.meta)
 
     res = data_tab.to_pandas().groupby(cols).apply(
-        lambda x: seas_cad(x)).reset_index()
+        lambda x: seas_cad(x, data_tab.meta)).reset_index()
 
     res['dbName'] = data_tab.meta['dbName']
     res['time_budget'] = np.round(data_tab.meta['time_budget'], 3)
