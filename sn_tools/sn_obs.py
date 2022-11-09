@@ -1268,7 +1268,7 @@ class DataToPixels:
             fig, ax = plt.subplots()
             fig.suptitle('Selected data and pixels')
             ax.plot(self.pixRA, self.pixDec, 'r*')
-            dataSel.plot(ax)
+            ax.plot(dataset['fieldRA'], dataset['fieldDec'], 'bs')
             plt.show()
 
         # make groups by (RA,dec)
@@ -1290,8 +1290,15 @@ class DataToPixels:
             params['healpixIDs'] = self.healpixIDs
             params['pixRA'] = self.pixRA
             params['pixDec'] = self.pixDec
-            matched_pixels = multiproc(dataset['observationId'].to_list(
-            ), params, self.match_multiproc_gnomonic, self.nproc)
+            params['display'] = display
+            if self.nproc == 1:
+                matched_pixels = self.match_multiproc_gnomonic(
+                    dataset['observationId'].to_list(), params)
+            else:
+                matched_pixels = multiproc(dataset['observationId'].to_list(
+                ), params, self.match_multiproc_gnomonic, self.nproc)
+
+            # self.nproc)
             # matched_pixels = groups.apply(
             #    lambda x: self.match_gnomonic(x, self.healpixIDs, self.pixRA, self.pixDec)).reset_index()
 
@@ -1307,9 +1314,13 @@ class DataToPixels:
             fig, ax = plt.subplots()
             fig.suptitle('Selected data and pixels and selected pixels')
             ax.plot(self.pixRA, self.pixDec, 'r*')
-            dataSel.plot(ax)
+            ax.plot(dataset['fieldRA'], dataset['fieldDec'], 'bs')
             ax.plot(matched_pixels['pixRA'],
                     matched_pixels['pixDec'], 'ob', mfc='None')
+            pixRA, pixDec = hp.pix2ang(
+                self.nside, 109400, nest=True, lonlat=True)
+            print('aaaaa', self.nside, pixRA, pixDec)
+            ax.plot(pixRA, pixDec, 'k*', mfc='None')
             plt.show()
         return matched_pixels
 
@@ -1320,11 +1331,12 @@ class DataToPixels:
         pixRA = params['pixRA']
         pixDec = params['pixDec']
         grpCol = params['grpCol']
+        display = params['display']
 
         idx = data['observationId'].isin(obsid)
         seldata = data[idx]
         matched_pixels = seldata.groupby(grpCol).apply(
-            lambda x: self.match_gnomonic(x, healpixIDs, pixRA, pixDec)).reset_index()
+            lambda x: self.match_gnomonic(x, healpixIDs, pixRA, pixDec, display)).reset_index()
 
         if output_q is not None:
             return output_q.put({j: matched_pixels})
@@ -1345,7 +1357,7 @@ class DataToPixels:
         else:
             return matched_pixels
 
-    def match_gnomonic(self, grp, healpixIDs, pixRA, pixDec):
+    def match_gnomonic(self, grp, healpixIDs, pixRA, pixDec, display=False):
         """
         Method to match a set of pixels to a grp of observations
         using gnomonic projection
@@ -1372,7 +1384,8 @@ class DataToPixels:
         # print('hello', grp.columns)
         pixRA_rad = np.deg2rad(pixRA)
         pixDec_rad = np.deg2rad(pixDec)
-        rotTelPos = np.mean(grp['rotTelPos'])
+        rotTelPos = -np.mean(grp['rotTelPos'])
+        #rotTelPos = 0.0
         # convert data position in rad
         pRA = np.median(grp[self.RACol])
         pDec = np.median(grp[self.DecCol])
@@ -1390,6 +1403,21 @@ class DataToPixels:
 
         if self.VRO_FP == 'circular':
             fpnew = LSSTPointing_circular(0., 0., maxbound=self.fpscale)
+
+        # draw here
+        if display:
+            import matplotlib.pyplot as plt
+            fig, ax = plt.subplots()
+            xx, yy = fpnew.exterior.coords.xy
+            ax.plot(xx, yy)
+            ax.plot(x, y, 'b+')
+            pixRA, pixDec = hp.pix2ang(
+                self.nside, 109400, nest=True, lonlat=True)
+            xb, yb = proj_gnomonic_plane(
+                pRA_rad, pDec_rad, np.deg2rad(pixRA), np.deg2rad(pixDec))
+            ax.plot(xb, yb, 'ro', mfc='None')
+            plt.show()
+
         # fpnew = LSSTPointing(np.deg2rad(self.LSST_RA-pRA),np.deg2rad(self.LSST_Dec-pDec),area=np.pi*self.fpscale**2)
         # maxbound=self.fpscale)
 
@@ -1463,7 +1491,8 @@ class DataToPixels:
         """
         theta = np.mean(grp['fieldRA'])
         phi = np.mean(grp['fieldDec'])
-        rotTelPos = np.mean(grp['rotTelPos'])
+        rotTelPos = -np.mean(grp['rotTelPos'])
+        #rotTelPos = 0.
 
         healpixIDs = []
         if self.VRO_FP == 'circular':
