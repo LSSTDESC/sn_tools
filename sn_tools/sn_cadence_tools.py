@@ -1445,7 +1445,7 @@ def ana_field(obs, dbName, mjdCol='mjd', nightCol='night', fieldColdb='note', fi
 
 def ana_visits(obs, field,
                nightCol='night', fieldCol='field',
-               filterCol='band',
+               filterCol='band', mjdCol='observationStartMJD',
                list_moon=['moonAz', 'moonRA', 'moonDec', 'moonDistance', 'season']):
     """
     Method to analyze the number of visits per obs night
@@ -1468,8 +1468,8 @@ def ana_visits(obs, field,
         idx = obs[nightCol] == night
         obs_night = obs[idx]
         # estimate the number of filter changes per night
-        obs_night.sort(order='mjd')
-        diff = np.diff(obs_night['mjd'])
+        obs_night.sort(order=mjdCol)
+        diff = np.diff(obs_night[mjdCol])
         idx = diff > 0.0005
         # print('night', night, np.diff(
         # obs_night['mjd']), obs_night['band'], len(diff[idx]))
