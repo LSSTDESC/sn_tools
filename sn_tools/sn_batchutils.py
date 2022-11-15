@@ -5,7 +5,16 @@ class BatchIt:
     """
     class to setup environment, create batch script, and launch the batch
     """
-    def __init__(self, logDir='logs',scriptDir='scripts',processName='test_batch'):
+    def __init__(self, logDir='logs',scriptDir='scripts',processName='test_batch',
+                 account='lsst',L='sps',time='20:00:00',mem='10G',n=8):
+
+        self.dict_batch = {}
+
+        self.dict_batch['--account'] = account
+        self.dict_batch['-L'] = L
+        self.dict_batch['--time'] = time
+        self.dict_batch['--mem'] = mem
+        self.dict_batch['-n'] = n
 
         # create output dirs if necessary
         self.checkDirs(logDir,scriptDir)
@@ -59,22 +68,14 @@ class BatchIt:
         Method to write generic parameter to the script
         """
 
-        dict_batch = {}
-        #dict_batch['--account'] = 'ztf'
-        dict_batch['--account'] = 'lsst'
-        dict_batch['-L'] = 'sps'
-        dict_batch['--time'] = '20:00:00'
-        dict_batch['--mem'] = '10G'
-        dict_batch['--output'] = self.logName
-        #dict_batch['--cpus-per-task'] = str(nproc)
-        dict_batch['-n'] = 8
-        dict_batch['--error'] = self.errlogName
+        self.dict_batch['--output'] = self.logName
+        self.dict_batch['--error'] = self.errlogName
 
         # fill the script
         script = open(self.scriptName, "w")
         #script.write(qsub + "\n")
         script.write("#!/bin/env bash\n") 
-        for key, vals in dict_batch.items():
+        for key, vals in self.dict_batch.items():
             script.write("#SBATCH {} {} \n".format(key,vals))
 
         script.write(" cd " + self.cwd + "\n")
