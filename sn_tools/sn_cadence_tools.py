@@ -1250,11 +1250,12 @@ class Stat_DD_night:
         self.obs_DD = self.get_DD()
         budget = time_budget(self.obs, self.obs_DD)
 
-        print('DD budget', budget)
+        print('DD budget', budget, len(self.obs))
 
         # print(test)
         params = {}
         params['obs_DD'] = self.obs_DD
+        params['Nvisits'] = len(self.obs)
         params['dbName'] = self.dbName
         params['mjdCol'] = 'mjd'
         params['nightCol'] = 'night'
@@ -1389,6 +1390,7 @@ def ana_DDF(list_DD, params, j, output_q):
 
     """
     obs_DD = params['obs_DD']
+    Nvisits = params['Nvisits']
     dbName = params['dbName']
     mjdCol = params['mjdCol']
     nightCol = params['nightCol']
@@ -1402,7 +1404,7 @@ def ana_DDF(list_DD, params, j, output_q):
     for field in list_DD:
         print('analyzing', field)
         idx = obs_DD[fieldColdb] == field
-        res = ana_field(np.copy(obs_DD[idx]), dbName,
+        res = ana_field(np.copy(obs_DD[idx]), dbName, Nvisits,
                         mjdCol=mjdCol,  nightCol=nightCol,
                         fieldColdb=fieldColdb,
                         fieldCol=fieldCol,
@@ -1416,7 +1418,7 @@ def ana_DDF(list_DD, params, j, output_q):
         return res_DD
 
 
-def ana_field(obs, dbName, mjdCol='mjd', nightCol='night', fieldColdb='note', fieldCol='field', filterCol='band',
+def ana_field(obs, dbName, Nvisits, mjdCol='mjd', nightCol='night', fieldColdb='note', fieldCol='field', filterCol='band',
               list_moon=['moonAz', 'moonRA', 'moonDec', 'moonDistance', 'season']):
     """
     Method to analyze a single DD field
@@ -1433,7 +1435,7 @@ def ana_field(obs, dbName, mjdCol='mjd', nightCol='night', fieldColdb='note', fi
     # print(test)
     field = np.unique(np.copy(obs[fieldColdb]))[0]
 
-    res = ana_visits(obs, field,
+    res = ana_visits(obs, field, Nvisits,
                      nightCol=nightCol,
                      fieldCol=fieldCol,
                      filterCol=filterCol,
@@ -1443,9 +1445,9 @@ def ana_field(obs, dbName, mjdCol='mjd', nightCol='night', fieldColdb='note', fi
     return res
 
 
-def ana_visits(obs, field,
+def ana_visits(obs, field,Nvisits,
                nightCol='night', fieldCol='field',
-               filterCol='band', mjdCol='observationStartMJD',
+               filterCol='band', mjdCol='mjd',
                list_moon=['moonAz', 'moonRA', 'moonDec', 'moonDistance', 'season']):
     """
     Method to analyze the number of visits per obs night
@@ -1478,7 +1480,7 @@ def ana_visits(obs, field,
         dd[fieldCol] = field
         dd[nightCol] = night
         dd['Nfc'] = len(diff[idx])
-
+        dd['time_budget_night'] = len(obs_night)/Nvisits
         if list_moon:
             for ll in list_moon:
                 dd[ll] = np.median(obs_night[ll])
@@ -1545,6 +1547,7 @@ def seas_cad(obs, meta={}):
     dictout['cadence_mean'] = [cad]
     dictout['cadence_std'] = [cad_std]
     dictout['season_length'] = [seas_length]
+    dictout['time_budget_field_season'] = [np.sum(obs['time_budget_night'])]
 
     # get gaps_stat
     df_diff = pd.DataFrame(diff, columns=['cad'])
