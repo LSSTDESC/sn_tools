@@ -1344,6 +1344,7 @@ def process_night_pixel(pixels, dbName, nproc=8):
 
     params = {}
     params['obs_DD'] = pixels
+    params['Nvisits'] = len(pixels)
     params['dbName'] = dbName
     params['mjdCol'] = 'observationStartMJD'
     params['nightCol'] = 'night'
@@ -1389,6 +1390,7 @@ def ana_DDF(list_DD, params, j, output_q):
     Method to analyze DDFs
 
     """
+
     obs_DD = params['obs_DD']
     Nvisits = params['Nvisits']
     dbName = params['dbName']
@@ -1436,6 +1438,7 @@ def ana_field(obs, dbName, Nvisits, mjdCol='mjd', nightCol='night', fieldColdb='
     field = np.unique(np.copy(obs[fieldColdb]))[0]
 
     res = ana_visits(obs, field, Nvisits,
+                     mjdCol=mjdCol,
                      nightCol=nightCol,
                      fieldCol=fieldCol,
                      filterCol=filterCol,
@@ -1445,7 +1448,7 @@ def ana_field(obs, dbName, Nvisits, mjdCol='mjd', nightCol='night', fieldColdb='
     return res
 
 
-def ana_visits(obs, field,Nvisits,
+def ana_visits(obs, field, Nvisits,
                nightCol='night', fieldCol='field',
                filterCol='band', mjdCol='mjd',
                list_moon=['moonAz', 'moonRA', 'moonDec', 'moonDistance', 'season']):
