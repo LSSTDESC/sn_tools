@@ -1128,11 +1128,15 @@ class DataToPixels:
       type of projection (gnomonic or hp_query)
     VRO_FP: str
        type of VRO Focal Plane (circular or realistic)
+    telrot: int, opt
+      factor to apply to the telescope rotation angle (default:0)
     FoV: float, opt
       Field-of-View (deg2) (default: 9.62)
+    nproc: int, opt
+     number of procs for multiprocessing
     """
 
-    def __init__(self, nside, RACol, DecCol, outDir, dbName, fieldType, project_FP, VRO_FP, FoV=9.62, nproc=8):
+    def __init__(self, nside, RACol, DecCol, outDir, dbName, fieldType, project_FP, VRO_FP, telrot=0,FoV=9.62, nproc=8):
 
         # load parameters
         self.nside = nside
@@ -1140,6 +1144,7 @@ class DataToPixels:
         self.DecCol = DecCol
         self.project_FP = project_FP
         self.VRO_FP = VRO_FP
+        self.telrot = telrot
         self.fieldType = fieldType
         self.FoV = FoV
         self.nproc = nproc
@@ -1384,8 +1389,8 @@ class DataToPixels:
         # print('hello', grp.columns)
         pixRA_rad = np.deg2rad(pixRA)
         pixDec_rad = np.deg2rad(pixDec)
-        rotTelPos = -np.mean(grp['rotTelPos'])
-        #rotTelPos = 0.0
+        rotTelPos = self.telrot*np.mean(grp['rotTelPos'])
+
         # convert data position in rad
         pRA = np.median(grp[self.RACol])
         pDec = np.median(grp[self.DecCol])
@@ -1491,8 +1496,7 @@ class DataToPixels:
         """
         theta = np.mean(grp['fieldRA'])
         phi = np.mean(grp['fieldDec'])
-        rotTelPos = -np.mean(grp['rotTelPos'])
-        #rotTelPos = 0.
+        rotTelPos = self.telrot*np.mean(grp['rotTelPos'])
 
         healpixIDs = []
         if self.VRO_FP == 'circular':
