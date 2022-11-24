@@ -13,13 +13,11 @@ from matplotlib.patches import Polygon
 from shapely.geometry import Point
 import pandas as pd
 import time
-import h5py
 from astropy.table import Table
 import multiprocessing
 import glob
 import os
 from sn_tools.sn_clusters import ClusterObs
-import copy
 from sn_tools.sn_utils import multiproc
 
 
@@ -189,7 +187,65 @@ def patchObs(observations, fieldType, fieldName,
 
     return observations, patches
 
+def patchObs_new(observations, fieldType, fieldName,
+             dbName, nside, RAmin, RAmax, Decmin, Decmax,
+             RACol, DecCol,
+             display=False):
+    """
+    Function to grab informations and patches in the sky
 
+    Parameters
+    --------------
+    observations: numpy array
+      array of observations
+    fieldType: str
+      type of field to consider: DD, WFD or Fake
+    dbName: str
+      name of observing strategy
+    nside: int
+       nside parameter for healpix
+    RAmin: float
+      min RA of the sky area to consider (WFD only)
+    RAmax: float
+      max RA of the sky area to consider (WFD only)
+   Decmin: float
+      min Dec of the sky area to consider (WFD only)
+    Decmax: float
+      max Dec of the sky area to consider (WFD only)
+    RACol: str
+      RA column name in obs
+    DecCol: str
+      Dec column name in obs
+    display: bool
+      to plot patches (WFD only)
+
+    Returns
+    ----------
+    observations: numpy array
+      numpy array with observations
+    patches: pandas df
+      patches coordinates on the sky
+
+    """
+
+    # radius = 5.
+
+    if fieldType == 'DD':
+        # go faster with observations here
+        fieldName = fieldName.split(',')
+        if 'note' in observations.dtype.names:
+            observations = getDD_from_note(
+                observations, nside, RACol, DecCol, fieldName)
+     
+    
+    if fieldType == 'WFD':
+        # print('getting observations')
+        observations = getFields(observations, 'WFD')
+
+       
+
+
+    return observations
 def getPix(nside, fieldRA, fieldDec):
     """
     Function returning pixRA, pixDec and healpixId
@@ -1136,7 +1192,7 @@ class DataToPixels:
      number of procs for multiprocessing
     """
 
-    def __init__(self, nside, RACol, DecCol, outDir, dbName, fieldType, project_FP, VRO_FP, telrot=0,FoV=9.62, nproc=8):
+    def __init__(self, nside, RACol, DecCol, outDir, dbName, fieldType, project_FP, VRO_FP, telrot=0, FoV=9.62, nproc=8):
 
         # load parameters
         self.nside = nside
@@ -1555,7 +1611,386 @@ class DataToPixels:
             ax.plot(pixels[idf]['pixRA'], pixels[idf]['pixDec'], 'r*')
             plt.show()
 
+class DataToPixels_new:
+    """
+    class to match observations to sky pixels
 
+    Parameters
+    ---------------
+    nside: int
+      nside parameter for healpix tessalation
+    project_FP: str
+      type of projection (gnomonic or hp_query)
+    VRO_FP: str
+       type of VRO Focal Plane (circular or realistic)
+    telrot: int, opt
+      factor to apply to the telescope rotation angle (default:0)
+    FoV: float, opt
+      Field-of-View (deg2) (default: 9.62)
+    nproc: int, opt
+     number of procs for multiprocessing
+    """
+
+    def __init__(self, nside, project_FP, VRO_FP, RACol='RA',DecCol='Dec',telrot=0, FoV=9.62, nproc=8):
+
+        # load parameters
+        self.nside = nside
+        self.project_FP = project_FP
+        self.VRO_FP = VRO_FP
+        self.RACol = RACol
+        self.DecCol = DecCol
+        self.telrot = telrot
+        self.FoV = FoV
+        self.nproc = nproc
+
+
+        # get the LSST focal plane scale factor
+        # corresponding to a sphere radius equal to one
+        # (which is the default for gnomonic projections here)
+
+        fov_str = FoV*(np.pi/180.)**2  # LSST fov in sr
+        theta = 2.*np.arcsin(np.sqrt(fov_str/(4.*np.pi)))
+
+        self.fpscale = np.tan(theta)
+        self.fpradius = np.sqrt(self.FoV/np.pi)
+
+        self.obsCol = ['observationStartMJD', 'fieldRA', 'fieldDec',
+                       'visitExposureTime', 'fiveSigmaDepth', 'numExposures', 'seeingFwhmEff']
+
+        self.VRO_vertices = [[[-7.5, 4.5], [7.5, 4.5], [7.5, -4.5], [-7.5, -4.5]],  # main part
+                             [[-4.5, 7.5], [4.5, 7.5], [4.5, -7.5], [-4.5, -7.5]]]
+        """
+        [[-4.5, 7.5], [4.5, 7.5], [4.5, 4.5],
+        [-4.5, 4.5]],  # upper
+        [[-4.5, -4.5], [4.5, -4.5], [4.5, -7.5], [-4.5, -7.5]]]  # lower
+        self.area_part = [135/(135+54)*self.FoV, 27 /
+                          (135+54)*self.FoV, 27/(135+54)*self.FoV]
+        """
+        rat = 135./189.
+        self.area_part = [rat*self.FoV, rat*self.FoV]
+
+    def __call__(self, data, display=False, inclusive=False):
+        """
+        call method: this is where the processing is.
+
+        Parameters
+        --------------
+        data: numpy array
+          data to process
+        display: bool, opt
+          to display matching FP/observations in "real time" (default: False)
+
+        Returns:
+        -----------
+        matched_pixels: pandas df
+          array with matched healpix infos and obs infos
+
+        """
+
+        # display: (RA,Dec) distribution of the data
+
+        if display:
+            import matplotlib.pyplot as plt
+            fig, ax = plt.subplots()
+            fig.suptitle('Observations')
+            ax.plot(data[self.RACol], data[self.DecCol], 'ko')
+            plt.show()
+
+        # display: (RA,Dec) distribution of the selected data (ie inside the area)
+        # if display:
+        #    dataSel.plot()
+
+
+        if display:
+            import matplotlib.pyplot as plt
+            fig, ax = plt.subplots()
+            fig.suptitle('Selected data')
+            ax.plot(data[self.RACol], data[self.DecCol], 'ko')
+            plt.show()
+
+        self.observations = data
+
+        # get central pixel ID
+        print('hello',len(data),self.RACol)
+        print('hhh',data[self.RACol])
+        RA = np.mean(data[self.RACol])
+        Dec = np.mean(data[self.DecCol])
+        healpixID = hp.ang2pix(self.nside, RA,
+                               Dec, nest=True, lonlat=True)
+
+        # get nearby pixels
+        vec = hp.pix2vec(self.nside, healpixID, nest=True)
+        self.healpixIDs = hp.query_disc(
+            self.nside, vec, 3.*np.deg2rad(self.fpradius), inclusive=inclusive, nest=True)
+
+        # get pixel coordinates
+        coords = hp.pix2ang(self.nside, self.healpixIDs,
+                            nest=True, lonlat=True)
+        self.pixRA, self.pixDec = coords[0], coords[1]
+
+        # display (RA,Dec) of pixels
+        if display:
+            print('number of pixels here', len(self.pixRA))
+            import matplotlib.pyplot as plt
+            fig, ax = plt.subplots()
+            fig.suptitle('Selected data and pixels')
+            ax.plot(self.pixRA, self.pixDec, 'r*')
+            ax.plot(data['fieldRA'], data['fieldDec'], 'bs')
+            plt.show()
+
+        
+        # match pixels to data
+        time_ref = time.time()
+        params = {}
+        params['data'] = data
+        params['grpCol'] = ['observationId', 'night', 'filter']
+        if self.project_FP == 'gnomonic':
+
+            params['healpixIDs'] = self.healpixIDs
+            params['pixRA'] = self.pixRA
+            params['pixDec'] = self.pixDec
+            params['display'] = display
+            if self.nproc == 1:
+                matched_pixels = self.match_multiproc_gnomonic(
+                    data['observationId'].to_list(), params)
+            else:
+                matched_pixels = multiproc(data['observationId'].to_list(
+                ), params, self.match_multiproc_gnomonic, self.nproc)
+
+
+        if self.project_FP == 'hp_query':
+            matched_pixels = multiproc(data['observationId'].to_list(
+            ), params, self.match_multiproc_hp_query, self.nproc)
+
+        if display:
+            print('after matching', time.time()-time_ref,
+                  len(matched_pixels['healpixID'].unique()), matched_pixels.columns)
+            print('number of pixels here', len(self.pixRA))
+            import matplotlib.pyplot as plt
+            fig, ax = plt.subplots()
+            fig.suptitle('Selected data and pixels and selected pixels')
+            ax.plot(self.pixRA, self.pixDec, 'r*')
+            ax.plot(data['fieldRA'], data['fieldDec'], 'bs')
+            ax.plot(matched_pixels['pixRA'],
+                    matched_pixels['pixDec'], 'ob', mfc='None')
+            pixRA, pixDec = hp.pix2ang(
+                self.nside, 109400, nest=True, lonlat=True)
+            print('aaaaa', self.nside, pixRA, pixDec)
+            ax.plot(pixRA, pixDec, 'k*', mfc='None')
+            plt.show()
+        return matched_pixels
+
+    def match_multiproc_gnomonic(self, obsid, params, j=0, output_q=None):
+
+        data = params['data']
+        healpixIDs = params['healpixIDs']
+        pixRA = params['pixRA']
+        pixDec = params['pixDec']
+        grpCol = params['grpCol']
+        display = params['display']
+
+        idx = data['observationId'].isin(obsid)
+        seldata = data[idx]
+        matched_pixels = seldata.groupby(grpCol).apply(
+            lambda x: self.match_gnomonic(x, healpixIDs, pixRA, pixDec, display)).reset_index()
+
+        if output_q is not None:
+            return output_q.put({j: matched_pixels})
+        else:
+            return matched_pixels
+
+    def match_multiproc_hp_query(self, obsid, params, j=0, output_q=None):
+
+        data = params['data']
+        grpCol = params['grpCol']
+        idx = data['observationId'].isin(obsid)
+        seldata = data[idx]
+        matched_pixels = seldata.groupby(grpCol).apply(
+            lambda x: self.match_hp_query(x)).reset_index()
+
+        if output_q is not None:
+            return output_q.put({j: matched_pixels})
+        else:
+            return matched_pixels
+
+    def match_gnomonic(self, grp, healpixIDs, pixRA, pixDec, display=False):
+        """
+        Method to match a set of pixels to a grp of observations
+        using gnomonic projection
+
+        Parameters
+        ---------------
+        grp: pandas grp
+           observations
+        healpixIDs: list(int)
+          pixels IDs
+        pixRA: list(float)
+          pixel RAs
+        pixDec: list(float)
+          pixel Decs
+
+        Returns:
+        ----------
+        pandas df with the following cols:
+        fieldRA, fieldDec: RA and Dec of observations (FP center)
+        healpixID,pixRA,pixDec: pixels lying inside LSST FP centered in (fieldRA, fieldDec)
+
+        """
+
+        pixRA_rad = np.deg2rad(pixRA)
+        pixDec_rad = np.deg2rad(pixDec)
+        rotTelPos = self.telrot*np.mean(grp['rotTelPos'])
+
+        # convert data position in rad
+        pRA = np.median(grp[self.RACol])
+        pDec = np.median(grp[self.DecCol])
+        pRA_rad = np.deg2rad(pRA)
+        pDec_rad = np.deg2rad(pDec)
+
+        # gnomonic projection of pixels on the focal plane
+        x, y = proj_gnomonic_plane(pRA_rad, pDec_rad, pixRA_rad, pixDec_rad)
+        # x, y = proj_gnomonic_plane(np.deg2rad(self.LSST_RA-pRA),np.deg2rad(self.LSST_Dec-pDec), pixRA_rad, pixDec_rad)
+
+        # get LSST FP with the good scale
+        if self.VRO_FP == 'realistic':
+            fpnew = LSSTPointing(
+                0., 0., angle_rot=rotTelPos, maxbound=self.fpscale)
+
+        if self.VRO_FP == 'circular':
+            fpnew = LSSTPointing_circular(0., 0., maxbound=self.fpscale)
+
+        # draw here
+        if display:
+            import matplotlib.pyplot as plt
+            fig, ax = plt.subplots()
+            xx, yy = fpnew.exterior.coords.xy
+            ax.plot(xx, yy)
+            ax.plot(x, y, 'b+')
+            pixRA, pixDec = hp.pix2ang(
+                self.nside, 109400, nest=True, lonlat=True)
+            xb, yb = proj_gnomonic_plane(
+                pRA_rad, pDec_rad, np.deg2rad(pixRA), np.deg2rad(pixDec))
+            ax.plot(xb, yb, 'ro', mfc='None')
+            plt.show()
+
+        # fpnew = LSSTPointing(np.deg2rad(self.LSST_RA-pRA),np.deg2rad(self.LSST_Dec-pDec),area=np.pi*self.fpscale**2)
+        # maxbound=self.fpscale)
+
+        """
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
+        ax.plot(x, y, 'ko')
+        pf = PolygonPatch(fpnew, facecolor=(0, 0, 0, 0), edgecolor='red')
+        ax.add_patch(pf)
+        plt.show()
+        """
+
+        # print(shapely.vectorized.contains(
+        #    fpnew, x, y), self.fpscale, fpnew.area)
+
+        idf = shapely.vectorized.contains(fpnew, x, y)
+
+        pixID_matched = list(healpixIDs[idf])
+        pixRA_matched = list(pixRA[idf])
+        pixDec_matched = list(pixDec[idf])
+
+        # names = [grp.name]*len(pixID_matched)
+        df_pix = pd.DataFrame({'healpixID': pixID_matched,
+                               'pixRA': pixRA_matched,
+                              'pixDec': pixDec_matched,
+                               })
+
+        # listcols = ['observationStartMJD', 'fieldRA', 'fieldDec', 'visitExposureTime',
+        #            'fiveSigmaDepth', 'numExposures', 'seeingFwhmEff']
+        df_pix[self.obsCol] = grp[self.obsCol].mean().tolist()
+        """
+        for ll in listcols:
+            print(ll,grp[ll].mean())
+            df_pix[ll]= grp[ll].mean()
+        """
+        # 'groupName': names})
+
+        return df_pix
+       
+
+    def match_hp_query(self, grp):
+        """
+        Method to match a set of pixels to a grp of observations
+        using gnomonic projection
+
+        Parameters
+        ---------------
+        grp: pandas grp
+           observations
+
+        Returns:
+        ----------
+        pandas df with the following cols:
+        fieldRA, fieldDec: RA and Dec of observations (FP center)
+        healpixID,pixRA,pixDec: pixels lying inside LSST FP centered in (fieldRA, fieldDec)
+
+        """
+        theta = np.mean(grp['fieldRA'])
+        phi = np.mean(grp['fieldDec'])
+        rotTelPos = self.telrot*np.mean(grp['rotTelPos'])
+
+        healpixIDs = []
+        if self.VRO_FP == 'circular':
+            vec = hp.ang2vec(theta, phi, lonlat=True)
+            healpixIDs = hp.query_disc(self.nside, vec, np.deg2rad(
+                self.fpradius), inclusive=False, nest=True)
+        if self.VRO_FP == 'realistic':
+            #import matplotlib.pyplot as plt
+            #fig, ax = plt.subplots()
+            for io, vv in enumerate(self.VRO_vertices):
+                pointing = LSSTPointing_part(
+                    theta, phi, angle_rot=rotTelPos, vertices=vv, area=self.area_part[io])
+                xx, yy = pointing.exterior.coords.xy
+                vecb = hp.ang2vec(xx[:-1], yy[:-1], lonlat=True)
+                healpixIDs += list(hp.query_polygon(self.nside,
+                                   vecb, nest=True))
+                #print('aaa', vecb.shape)
+                #ax.plot(xx, yy)
+                # ax.grid()
+            # plt.show()
+
+            healpixIDs = list(set(healpixIDs))
+
+        pixRA, pixDec = hp.pix2ang(
+            self.nside, healpixIDs, nest=True, lonlat=True)
+        grp_rec = grp[self.obsCol].to_records(index=False)
+        res = np.repeat(grp_rec, len(healpixIDs))
+        res = rf.append_fields(res, 'healpixID', healpixIDs)
+        res = rf.append_fields(res, 'pixRA', pixRA)
+        res = rf.append_fields(res, 'pixDec', pixDec)
+
+        return pd.DataFrame.from_records(res)
+
+    def plot(self, pixels, plt):
+        """
+         Method to plot matching results
+         For each observation, the LSST FP is drawn as well as the center of matched pixels
+
+         """
+
+        print(np.unique(pixels[[self.RACol, self.DecCol]], axis=0))
+        for vv in np.unique(pixels[[self.RACol, self.DecCol]], axis=0):
+            fig, ax = plt.subplots()
+            # plot all the pixels candidate for matching
+            ax.plot(self.pixRA, self.pixDec, 'ko', mfc='None')
+            fpnew = LSSTPointing(vv[0], vv[1], area=9.6)
+            pf = PolygonPatch(fpnew, facecolor=(0, 0, 0, 0), edgecolor='red')
+            ax.add_patch(pf)
+            # compare with a circular FP
+            fpnew_c = LSSTPointing_circular(vv[0], vv[1], area=9.6)
+            pfc = PolygonPatch(fpnew_c, facecolor=(
+                0, 0, 0, 0), edgecolor='red')
+            ax.add_patch(pfc)
+            idf = np.abs(pixels[self.RACol]-vv[0]) < 1.e-5
+            idf &= np.abs(pixels[self.DecCol]-vv[1]) < 1.e-5
+            ax.plot(pixels[idf]['pixRA'], pixels[idf]['pixDec'], 'r*')
+            plt.show()
+            
 class ProcessPixels:
     def __init__(self, metricList, ipoint, outDir='', dbName='', RACol='fieldRA', DecCol='fieldDec', saveData=False):
         """
@@ -3010,6 +3445,43 @@ def getDD_from_note(observations, nside, RACol, DecCol, fieldName=''):
         return pixelate(obser, nside, RACol=RACol, DecCol=DecCol)
     return None
 
+def renameDDF(obser, RACol, DecCol,  
+              torep = dict(zip(['ECDFS', 'EDFS, a', 'EDFS, b', 'EDFS_a', 'EDFS_b', 'XMM_LSS'], [
+            'CDFS', 'EDFSa', 'EDFSb', 'EDFSa', 'EDFSb', 'XMM-LSS']))):
+   """
+    Method to rename DDF name (note col)
+
+    Parameters
+    ----------
+    obser : numpy array
+        observations - data to process
+    RACol : str
+        RA colname
+    DecCol : str
+        Dec col name
+    torep : dict, optional
+        Names to replace. 
+        The default is dict(zip(['ECDFS', 'EDFS, a', 'EDFS, b', 'EDFS_a', 'EDFS_b', 'XMM_LSS'], 
+                                ['CDFS', 'EDFSa', 'EDFSb', 'EDFSa', 'EDFSb', 'XMM-LSS'])).
+
+    Returns
+    -------
+    obser : numpy array
+        data with 'note' column replaced
+
+   """
+
+    
+   obser['note'] = np.char.replace(obser['note'], 'DD:', '')
+   bb = obser['note']
+
+   for key, vals in torep.items():
+       idx = np.in1d(bb, [key])
+       bb[idx] = vals
+
+   obser['note'] = bb
+
+   return obser
 
 def cluster_from_obs(obs, dbName, radius):
 
