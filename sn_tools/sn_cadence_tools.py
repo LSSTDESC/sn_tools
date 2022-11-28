@@ -1375,12 +1375,15 @@ def time_budget(obs, obs_DD):
 
     dictout = {}
 
-    dictout['time_budget'] = len(obs_DD)/len(obs)
+    DD_time = np.sum(obs_DD['numExposures']*obs_DD['exptime'])
+    obs_time = np.sum(obs['numExposures']*obs['exptime'])
+    dictout['time_budget'] = DD_time/obs_time
 
     for fi in fields:
         idx = obs_DD['note'] == fi
         sel = obs_DD[idx]
-        dictout['time_budget_{}'.format(fi)] = len(sel)/len(obs)
+        fi_time = np.sum(sel['numExposures']*sel['exptime'])
+        dictout['time_budget_{}'.format(fi)] = fi_time/obs_time
 
     return dictout
 
