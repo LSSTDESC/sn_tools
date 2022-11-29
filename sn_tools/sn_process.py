@@ -120,7 +120,7 @@ class Process:
                                                                     self.Decmin, self.Decmax)
             if self.fieldType == 'DD':
                 search_path += '_{}'.format(self.fieldName)
-            #else:
+            # else:
             #    search_path += '_WFD'
             search_path += '.npy'
             pixelmap_files = glob.glob(search_path)

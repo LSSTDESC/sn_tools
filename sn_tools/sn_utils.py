@@ -2509,3 +2509,30 @@ class x1_color_dist:
         df['zrange'] = zrange
 
         return df
+
+
+def get_colName(obs, what=['fieldRA', 'RA']):
+    """
+    function to get a column name containing what
+
+    Parameters
+    ---------------
+    obs: record array
+      data to process
+    what: list(str), opt
+      str to search in colnames (default: fieldRA,RA)
+
+    Returns
+    ----------
+    the list of col name if it exists (empty list otherwise)
+
+    """
+    llist = obs.dtype.names
+    matches = set(llist).intersection(set(what))
+
+    return list(matches)
+    """
+    filter_object = filter(lambda a: what in a, llist)
+
+    return list(filter_object)
+    """

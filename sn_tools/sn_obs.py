@@ -187,10 +187,11 @@ def patchObs(observations, fieldType, fieldName,
 
     return observations, patches
 
+
 def patchObs_new(observations, fieldType, fieldName,
-             dbName, nside, RAmin, RAmax, Decmin, Decmax,
-             RACol, DecCol,
-             display=False):
+                 dbName, nside, RAmin, RAmax, Decmin, Decmax,
+                 RACol, DecCol,
+                 display=False):
     """
     Function to grab informations and patches in the sky
 
@@ -236,16 +237,14 @@ def patchObs_new(observations, fieldType, fieldName,
         if 'note' in observations.dtype.names:
             observations = getDD_from_note(
                 observations, nside, RACol, DecCol, fieldName)
-     
-    
+
     if fieldType == 'WFD':
         # print('getting observations')
         observations = getFields(observations, 'WFD')
 
-       
-
-
     return observations
+
+
 def getPix(nside, fieldRA, fieldDec):
     """
     Function returning pixRA, pixDec and healpixId
@@ -1611,6 +1610,7 @@ class DataToPixels:
             ax.plot(pixels[idf]['pixRA'], pixels[idf]['pixDec'], 'r*')
             plt.show()
 
+
 class DataToPixels_new:
     """
     class to match observations to sky pixels
@@ -1631,7 +1631,7 @@ class DataToPixels_new:
      number of procs for multiprocessing
     """
 
-    def __init__(self, nside, project_FP, VRO_FP, RACol='RA',DecCol='Dec',telrot=0, FoV=9.62, nproc=8):
+    def __init__(self, nside, project_FP, VRO_FP, RACol='RA', DecCol='Dec', telrot=0, FoV=9.62, nproc=8):
 
         # load parameters
         self.nside = nside
@@ -1642,8 +1642,7 @@ class DataToPixels_new:
         self.telrot = telrot
         self.FoV = FoV
         self.nproc = nproc
-
-
+        print('there man', RACol, DecCol)
         # get the LSST focal plane scale factor
         # corresponding to a sphere radius equal to one
         # (which is the default for gnomonic projections here)
@@ -1700,7 +1699,6 @@ class DataToPixels_new:
         # if display:
         #    dataSel.plot()
 
-
         if display:
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots()
@@ -1711,8 +1709,8 @@ class DataToPixels_new:
         self.observations = data
 
         # get central pixel ID
-        print('hello',len(data),self.RACol)
-        print('hhh',data[self.RACol])
+        print('hello', len(data), self.RACol, data.dtype)
+        print('hhh', data[self.RACol])
         RA = np.mean(data[self.RACol])
         Dec = np.mean(data[self.DecCol])
         healpixID = hp.ang2pix(self.nside, RA,
@@ -1738,7 +1736,6 @@ class DataToPixels_new:
             ax.plot(data['fieldRA'], data['fieldDec'], 'bs')
             plt.show()
 
-        
         # match pixels to data
         time_ref = time.time()
         params = {}
@@ -1750,17 +1747,16 @@ class DataToPixels_new:
             params['pixRA'] = self.pixRA
             params['pixDec'] = self.pixDec
             params['display'] = display
+            ll = data['observationId'].tolist()
             if self.nproc == 1:
-                matched_pixels = self.match_multiproc_gnomonic(
-                    data['observationId'].to_list(), params)
+                matched_pixels = self.match_multiproc_gnomonic(ll, params)
             else:
-                matched_pixels = multiproc(data['observationId'].to_list(
-                ), params, self.match_multiproc_gnomonic, self.nproc)
-
+                matched_pixels = multiproc(
+                    ll, params, self.match_multiproc_gnomonic, self.nproc)
 
         if self.project_FP == 'hp_query':
-            matched_pixels = multiproc(data['observationId'].to_list(
-            ), params, self.match_multiproc_hp_query, self.nproc)
+            matched_pixels = multiproc(
+                ll, params, self.match_multiproc_hp_query, self.nproc)
 
         if display:
             print('after matching', time.time()-time_ref,
@@ -1789,8 +1785,9 @@ class DataToPixels_new:
         grpCol = params['grpCol']
         display = params['display']
 
-        idx = data['observationId'].isin(obsid)
-        seldata = data[idx]
+        #idx = data['observationId'].isin(obsid)
+        idx = np.in1d(data['observationId'], obsid)
+        seldata = pd.DataFrame(data[idx])
         matched_pixels = seldata.groupby(grpCol).apply(
             lambda x: self.match_gnomonic(x, healpixIDs, pixRA, pixDec, display)).reset_index()
 
@@ -1911,7 +1908,6 @@ class DataToPixels_new:
         # 'groupName': names})
 
         return df_pix
-       
 
     def match_hp_query(self, grp):
         """
@@ -1990,7 +1986,8 @@ class DataToPixels_new:
             idf &= np.abs(pixels[self.DecCol]-vv[1]) < 1.e-5
             ax.plot(pixels[idf]['pixRA'], pixels[idf]['pixDec'], 'r*')
             plt.show()
-            
+
+
 class ProcessPixels:
     def __init__(self, metricList, ipoint, outDir='', dbName='', RACol='fieldRA', DecCol='fieldDec', saveData=False):
         """
@@ -3445,43 +3442,40 @@ def getDD_from_note(observations, nside, RACol, DecCol, fieldName=''):
         return pixelate(obser, nside, RACol=RACol, DecCol=DecCol)
     return None
 
-def renameDDF(obser, RACol, DecCol,  
-              torep = dict(zip(['ECDFS', 'EDFS, a', 'EDFS, b', 'EDFS_a', 'EDFS_b', 'XMM_LSS'], [
-            'CDFS', 'EDFSa', 'EDFSb', 'EDFSa', 'EDFSb', 'XMM-LSS']))):
-   """
-    Method to rename DDF name (note col)
 
-    Parameters
-    ----------
-    obser : numpy array
-        observations - data to process
-    RACol : str
-        RA colname
-    DecCol : str
-        Dec col name
-    torep : dict, optional
-        Names to replace. 
-        The default is dict(zip(['ECDFS', 'EDFS, a', 'EDFS, b', 'EDFS_a', 'EDFS_b', 'XMM_LSS'], 
-                                ['CDFS', 'EDFSa', 'EDFSb', 'EDFSa', 'EDFSb', 'XMM-LSS'])).
+def renameDDF(obser,
+              torep=dict(zip(['ECDFS', 'EDFS, a', 'EDFS, b', 'EDFS_a', 'EDFS_b', 'XMM_LSS'], [
+                  'CDFS', 'EDFSa', 'EDFSb', 'EDFSa', 'EDFSb', 'XMM-LSS']))):
+    """
+     Method to rename DDF name (note col)
 
-    Returns
-    -------
-    obser : numpy array
-        data with 'note' column replaced
+     Parameters
+     ----------
+     obser : numpy array
+         observations - data to process
+     torep : dict, optional
+         Names to replace. 
+         The default is dict(zip(['ECDFS', 'EDFS, a', 'EDFS, b', 'EDFS_a', 'EDFS_b', 'XMM_LSS'], 
+                                 ['CDFS', 'EDFSa', 'EDFSb', 'EDFSa', 'EDFSb', 'XMM-LSS'])).
 
-   """
+     Returns
+     -------
+     obser : numpy array
+         data with 'note' column replaced
 
-    
-   obser['note'] = np.char.replace(obser['note'], 'DD:', '')
-   bb = obser['note']
+    """
 
-   for key, vals in torep.items():
-       idx = np.in1d(bb, [key])
-       bb[idx] = vals
+    obser['note'] = np.char.replace(obser['note'], 'DD:', '')
+    bb = obser['note']
 
-   obser['note'] = bb
+    for key, vals in torep.items():
+        idx = np.in1d(bb, [key])
+        bb[idx] = vals
 
-   return obser
+    obser['note'] = bb
+
+    return obser
+
 
 def cluster_from_obs(obs, dbName, radius):
 
