@@ -1249,8 +1249,9 @@ class Stat_DD_night:
         self.obs = self.load()
         self.obs_DD = self.get_DD()
         budget = time_budget(self.obs, self.obs_DD)
+        nDD_night = nvisits_DD_night(self.obs_DD)
 
-        print('DD budget', budget, len(self.obs))
+        print('DD budget', budget, len(self.obs), nDD_night)
 
         # print(test)
         params = {}
@@ -1271,7 +1272,7 @@ class Stat_DD_night:
         tab = Table.from_pandas(res)
         tab.meta = dict(zip(['dbName'], [dbName]))
         tab.meta = {**tab.meta, **budget}
-
+        tab.meta['nDD_night'] = nDD_night
         self.summary = tab
 
     def load(self):
@@ -1388,6 +1389,27 @@ def time_budget(obs, obs_DD):
     return dictout
 
 
+def nvisits_DD_night(obs):
+    """
+    Method to estimate the number of DD visits/obs. night
+
+    Parameters
+    ---------------
+    obs: numpy array
+     data to process (DD obs)
+
+    Returns
+    ----------
+    mean number of visits per obs. night
+
+    """
+
+    tt = pd.DataFrame(obs)
+    rr = tt.groupby(['night']).size()
+
+    return np.mean(rr)
+
+
 def ana_DDF(list_DD, params, j, output_q):
     """
     Method to analyze DDFs
@@ -1423,8 +1445,7 @@ def ana_DDF(list_DD, params, j, output_q):
         return res_DD
 
 
-def ana_field(obs, dbName, Nvisits, mjdCol='mjd', nightCol='night', fieldColdb='note', fieldCol='field', filterCol='band',
-              list_moon=['moonAz', 'moonRA', 'moonDec', 'moonDistance', 'season']):
+def ana_field(obs, dbName, Nvisits, mjdCol='mjd', nightCol='night', fieldColdb='note', fieldCol='field', filterCol='band', list_moon=['moonAz', 'moonRA', 'moonDec', 'moonDistance', 'season']):
     """
     Method to analyze a single DD field
 
@@ -1487,6 +1508,7 @@ def ana_visits(obs, field, Nvisits,
         dd[nightCol] = night
         dd['Nfc'] = len(diff[idx])
         dd['time_budget_night'] = len(obs_night)/Nvisits
+        dd['nvisits_DD'] = len(obs_night)
         if list_moon:
             for ll in list_moon:
                 dd[ll] = np.median(obs_night[ll])
@@ -1594,6 +1616,7 @@ def Stat_DD_season(data_tab, cols=['field', 'season']):
 
     res['dbName'] = data_tab.meta['dbName']
     res['time_budget'] = np.round(data_tab.meta['time_budget'], 3)
+    res['nDD_night'] = data_tab.meta['nDD_night']
     return res
 
 
