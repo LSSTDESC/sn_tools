@@ -611,58 +611,6 @@ class Read_Sqlite:
         return d
 
 
-def getObservations(dbDir, dbName, dbExtens):
-    """
-    Function to extract observations: 
-    from an initial db from the scheduler, get a numpy array of observations
-
-    Parameters
-    ----------------
-    dbDir: str
-       location directory of the db
-    dbName: str
-       name of the database
-    dbExtens: str
-      extension of the db: .db or .npy
-
-    Returns
-    -----------
-    numpy array of observations
-
-    """
-
-    dbFullName = '{}/{}.{}'.format(dbDir, dbName, dbExtens)
-    # if extension is npy -> load
-    if dbExtens == 'npy':
-        observations = np.load(dbFullName, allow_pickle=True)
-    else:
-        # db as input-> need to transform as npy
-        # print('looking for',dbFullName)
-        keymap = {'observationStartMJD': 'mjd',
-                  'filter': 'band',
-                  'visitExposureTime': 'exptime',
-                  'skyBrightness': 'sky',
-                  'fieldRA': 'RA',
-                  'fieldDec': 'Dec', }
-
-        reader = Read_Sqlite(dbFullName)
-        # sql = reader.sql_selection(None)
-        observations = reader.get_data(cols=None, sql='',
-                                       to_degrees=False,
-                                       new_col_names=keymap)
-
-        # save this file on disk if it does not exist
-        outDir = dbDir.replace('/db', '/npy')
-        if not os.path.isdir(outDir):
-            os.mkdir(outDir)
-
-        path = '{}/{}.npy'.format(outDir, dbName)
-        if not os.path.isfile(path):
-            np.save(path, observations)
-
-    return observations
-
-
 def check_get_file(web_server, fDir, fName):
     """
     Function checking if a file is available

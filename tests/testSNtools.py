@@ -17,7 +17,8 @@ from sn_tools.sn_process import Process
 from sn_tools.sn_clusters import ClusterObs
 from sn_tools.sn_telescope import Telescope
 from sn_tools.sn_visu import fieldType, SnapNight, CadenceMovie
-from sn_tools.sn_io import Read_Sqlite, getObservations
+from sn_tools.sn_io import Read_Sqlite
+from sn_tools.sn_obs import getObservations
 import os
 from numpy.testing import assert_almost_equal, assert_equal
 import pandas as pd

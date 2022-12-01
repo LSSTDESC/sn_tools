@@ -9,7 +9,7 @@ from scipy.interpolate import griddata, interpn, CloughTocher2DInterpolator, Lin
 from sn_tools.sn_telescope import Telescope
 from sn_tools.sn_io import Read_Sqlite
 from sn_tools.sn_obs import renameFields, getFields
-from sn_tools.sn_io import getObservations
+from sn_tools.sn_obs import getObservations
 import pandas as pd
 from sn_tools.sn_obs import DataInside, season
 from sn_tools.sn_clusters import ClusterObs
