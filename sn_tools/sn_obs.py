@@ -1559,8 +1559,8 @@ class DataToPixels:
             healpixIDs = hp.query_disc(self.nside, vec, np.deg2rad(
                 self.fpradius), inclusive=False, nest=True)
         if self.VRO_FP == 'realistic':
-            #import matplotlib.pyplot as plt
-            #fig, ax = plt.subplots()
+            # import matplotlib.pyplot as plt
+            # fig, ax = plt.subplots()
             for io, vv in enumerate(self.VRO_vertices):
                 pointing = LSSTPointing_part(
                     theta, phi, angle_rot=rotTelPos, vertices=vv, area=self.area_part[io])
@@ -1568,8 +1568,8 @@ class DataToPixels:
                 vecb = hp.ang2vec(xx[:-1], yy[:-1], lonlat=True)
                 healpixIDs += list(hp.query_polygon(self.nside,
                                    vecb, nest=True))
-                #print('aaa', vecb.shape)
-                #ax.plot(xx, yy)
+                # print('aaa', vecb.shape)
+                # ax.plot(xx, yy)
                 # ax.grid()
             # plt.show()
 
@@ -2190,6 +2190,7 @@ class ProcessPixels:
         for key, vals in self.resfi.items():
             outName = '{}/{}_{}_{}.hdf5'.format(self.outDir,
                                                 self.dbName, key, self.num)
+            print('dumping',outName)
             if vals is not None:
                 # transform to astropy table to dump in hdf5 file
                 tab = Table.from_pandas(vals)

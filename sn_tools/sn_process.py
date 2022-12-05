@@ -1,6 +1,7 @@
 from sn_tools.sn_obs import DataToPixels, ProcessPixels, renameFields, patchObs
 from sn_tools.sn_io import colName
 from sn_tools.sn_obs import getObservations, get_obs
+from sn_tools.sn_utils import multiproc
 import time
 import numpy as np
 import pandas as pd
@@ -542,6 +543,11 @@ class Process_new:
         pixel_Ids = self.pixelList(npixels, pixels, healpixIDs)
 
         print(pixel_Ids)
+
+        params = {}
+        params['observations'] = observations
+        params['pixelmap'] = pixels
+        multiproc(pixel_Ids, params, self.process_metric, 1)
         print(test)
 
         # loading observations
@@ -662,7 +668,14 @@ class Process_new:
         return pixels
 
     def file_pixels(self):
+        """
+        Method to search for and load an ObsTopixel file
 
+        Returns
+        ----------
+        obsTopixel file (pandas df)
+
+        """
         search_path = self.path_to_pixels()
         pixelmap_file = glob.glob(search_path)[0]
         print('searching in', search_path, pixelmap_file)
@@ -672,7 +685,19 @@ class Process_new:
         return pd.DataFrame(res)
 
     def build_pixels(self, obs):
+        """
+        Method to grab pixels matching VRO FP
 
+        Parameters
+        ---------------
+        obs: array
+           data to process (VRO FP centers)
+
+        Returns
+        -----------
+        obstopixel file with a list of pixels and matched obs (pandas df)
+
+        """
         from sn_tools.sn_obs import DataToPixels_new
         from sn_tools.sn_utils import get_colName
         RACol = get_colName(obs, ['fieldRA', 'RA'])[0]
@@ -810,6 +835,50 @@ class Process_new:
         for key, vals in resultdict.items():
             restot = pd.concat((restot, vals), sort=False)
         return restot
+
+    def process_metric(self, pixels, params, j=0, output_q=None):
+        """
+        Method to process a set of pixels
+
+        Parameters
+        --------------
+        pointings: numpy array
+          array with a set of area on the sky
+        observations: numpy array
+           array of observations
+        j: int, opt
+          index number of multiprocessing (default: 0)
+        output_q: multiprocessing.Queue(), opt
+          queue of the multiprocessing (default: None)
+        """
+        time_ref = time.time()
+        # print('there we go instance procpix')
+        observations = params['observations']
+        pixelmap = params['pixelmap']
+        print('processing pixel', pixels, len(observations))
+        procpix = ProcessPixels(
+            self.metricList, j, outDir=self.outDir, dbName=self.dbName, saveData=self.saveData)
+
+        print('outputdir', self.outDir, self.dbName)
+        # print('continuing')
+        valsdf = pd.DataFrame(pixelmap)
+        print('alors', valsdf.columns, valsdf)
+        print('kkk', pixels)
+        ido = valsdf['healpixID'].isin(pixels)
+        ppix = valsdf[ido]
+
+        if len(ppix) > 0:
+            print('processing pixels', len(ppix))
+            procpix(ppix, np.copy(observations), self.npixels)
+        else:
+            print('pb here no data in ', pixels)
+
+        print('end of processing for', j, time.time()-time_ref)
+
+        if output_q is not None:
+            return output_q.put({j: 1})
+        else:
+            return 1
 
     def multiprocess(self, patches, observations, func):
         """
