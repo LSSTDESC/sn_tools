@@ -325,6 +325,7 @@ class Process:
         datapixels = DataToPixels(
             self.nside, self.RACol, self.DecCol, self.outDir, self.dbName)
 
+        print('there man', self.outDir, self.dbName)
         procpix = ProcessPixels(
             self.metricList, j, outDir=self.outDir, dbName=self.dbName, saveData=self.saveData)
 
@@ -404,7 +405,8 @@ class Process:
         time_ref = time.time()
         # print('there we go instance procpix')
 
-        print('processing pixel', pixels, len(observations))
+        print('processing pixel', pixels, len(
+            observations), self.outDir, self.dbName)
         procpix = ProcessPixels(
             self.metricList, j, outDir=self.outDir, dbName=self.dbName, saveData=self.saveData)
 
@@ -497,7 +499,7 @@ class Process_new:
                  outDir='', nproc=1, metricList=[],
                  pixelmap_dir='', npixels=0,
                  VRO_FP='circular', project_FP='gnomonic', telrot=0.,
-                 nclusters=5, radius=4., healpixIDs=[], **kwargs):
+                 radius=4., healpixIDs=[], **kwargs):
 
         self.dbDir = dbDir
         self.dbName = dbName
@@ -516,7 +518,6 @@ class Process_new:
         self.metricList = metricList
         self.pixelmap_dir = pixelmap_dir
         self.npixels = npixels
-        self.nclusters = nclusters
         self.radius = radius
         self.healpixIDs = healpixIDs
         self.VRO_FP = VRO_FP
@@ -525,7 +526,7 @@ class Process_new:
 
         assert(self.RAmin <= self.RAmax)
 
-        print('hello', nclusters, fieldType, dbDir,
+        print('hello', fieldType, dbDir,
               dbName, dbExtens, nproc)
 
         observations = get_obs(fieldType, dbDir,
@@ -547,64 +548,27 @@ class Process_new:
         params = {}
         params['observations'] = observations
         params['pixelmap'] = pixels
-        multiproc(pixel_Ids, params, self.process_metric, 1)
-        print(test)
-
-        # loading observations
-
-        obs, patches = self.load()
-
-        if 'DD' in self.fieldType:
-            print('DD clusters', patches[[
-                  'fieldName', 'RA', 'Dec', 'radius_RA', 'radius_Dec']])
-
-        # print('in Process - observations loaded')
-        """
-        import matplotlib.pyplot as plt
-        plt.plot(observations[self.RACol],observations[self.DecCol],'ko')
-        plt.show()
-        """
-
-        if self.pixelmap_dir == '':
-            nnproc = self.nprocs
-            if 'DD' in self.fieldType:
-                nnproc = len(patches)
-
-            self.pixelmap = self.multiprocess_getpixels(
-                patches, obs, func=self.processPatch, nnproc=nnproc).to_records(index=False)
-        else:
-            # load the pixel maps
-            print('pixel map loading', self.pixelmap_dir, self.fieldType,
-                  self.nside, self.dbName, self.npixels)
-            search_path = '{}/{}/{}_{}_nside_{}_{}_{}_{}_{}'.format(self.pixelmap_dir,
-                                                                    self.dbName, self.dbName,
-                                                                    self.fieldType, self.nside,
-                                                                    self.RAmin, self.RAmax,
-                                                                    self.Decmin, self.Decmax)
-            if self.fieldType == 'DD':
-                search_path += '_{}'.format(self.fieldName)
-            # else:
-            #    search_path += '_WFD'
-            search_path += '.npy'
-            pixelmap_files = glob.glob(search_path)
-            if not pixelmap_files:
-                print('Severe problem: pixel map does not exist!!!!', search_path)
-            else:
-                self.pixelmap = np.load(pixelmap_files[0], allow_pickle=True)
-
-        if self.npixels == -1:
-            self.npixels = len(
-                np.unique(self.pixelmap['healpixID']))
-        random_pixels = self.healpixIDs
-        if not self.healpixIDs:
-            random_pixels = self.randomPixels(self.pixelmap, self.npixels)
-        print('number of pixels to process', len(random_pixels))
-
-        self.multiprocess(random_pixels, obs,
-                          func=self.procix)
+        nprocb = min(nproc, len(pixel_Ids))
+        multiproc(pixel_Ids, params, self.process_metric, nprocb)
 
     def pixelList(self, npixels, pixels, healpixIDs=[]):
+        """
+        Method to get the list of pixels to process
 
+        Parameters
+        --------------
+        npixels: int
+          number of pixels to grab
+        pixels: array
+          list of "available" pixels
+        healpixIDs: list, opt
+          list of healpixIDs to process (default: [])
+
+        Returns
+        ----------
+        list of healpixIDs to process
+
+        """
         pixList = list(np.unique(pixels['healpixID']))
 
         if healpixIDs:
@@ -721,7 +685,7 @@ class Process_new:
 
         return pixels
 
-    def load(self):
+    def load_deprecated(self):
         """
         Method to load observations and patches dims on the sky
 
@@ -781,64 +745,9 @@ class Process_new:
 
         return observations, patches
 
-    def multiprocess_getpixels(self, patches, observations, func, nnproc):
-        """
-        Method to grab (healpix) pixels matching observations
-
-        Parameters
-        ---------------
-        patches: pandas df
-          patches coordinates on the sky
-        observations: numpy array
-         numpy array with observations
-        func: the function to apply for multiprocessing
-        nnproc: int
-          number of procs to use
-
-        Returns
-        ----------
-        numpy array with a list of pixels and a link to observations
-
-        """
-
-        timeref = time.time()
-
-        healpixels = patches
-        npixels = int(len(healpixels))
-
-        tabpix = np.linspace(0, npixels, nnproc+1, dtype='int')
-        result_queue = multiprocessing.Queue()
-        nmulti = len(tabpix)-1
-
-        # multiprocessing
-        for j in range(nmulti):
-            ida = tabpix[j]
-            idb = tabpix[j+1]
-
-            print('go for multiprocessing in getpixels',
-                  j, func, len(healpixels[ida:idb]))
-            p = multiprocessing.Process(name='Subprocess-'+str(j), target=func, args=(
-                healpixels[ida:idb], observations, j, result_queue))
-
-            p.start()
-
-        # get the results
-        resultdict = {}
-        for i in range(nmulti):
-            resultdict.update(result_queue.get())
-
-        for p in multiprocessing.active_children():
-            p.join()
-
-        restot = pd.DataFrame()
-        # gather the results
-        for key, vals in resultdict.items():
-            restot = pd.concat((restot, vals), sort=False)
-        return restot
-
     def process_metric(self, pixels, params, j=0, output_q=None):
         """
-        Method to process a set of pixels
+        Method to process metric on a set of pixels
 
         Parameters
         --------------
@@ -880,51 +789,7 @@ class Process_new:
         else:
             return 1
 
-    def multiprocess(self, patches, observations, func):
-        """
-        Method to perform multiprocessing of metrics
-
-        Parameters
-        ---------------
-        patches: pandas df
-          patches coordinates on the sky
-        observations: numpy array
-         numpy array with observations
-
-        """
-
-        timeref = time.time()
-
-        healpixels = patches
-        npixels = int(len(healpixels))
-
-        tabpix = np.linspace(0, npixels, self.nprocs+1, dtype='int')
-        # print(tabpix, len(tabpix))
-        result_queue = multiprocessing.Queue()
-
-        # print('in multi process', npixels, self.nprocs)
-        # multiprocessing
-        for j in range(len(tabpix)-1):
-
-            ida = tabpix[j]
-            idb = tabpix[j+1]
-
-            # print('Field', j, len(healpixels[ida:idb]),len(observations))
-
-            # field = healpixels[ida:idb]
-
-            """
-            idx = field['fieldName'] == 'SPT'
-            if len(field[idx]) > 0:
-            """
-            print('go for multiprocessing', j, func, len(healpixels[ida:idb]))
-            p = multiprocessing.Process(name='Subprocess-'+str(j), target=func, args=(
-                healpixels[ida:idb], observations, j, result_queue))
-            print('starting')
-            # p.daemon = True
-            p.start()
-
-    def processPatch(self, pointings, observations, j=0, output_q=None):
+    def processPatch_deprecated(self, pointings, observations, j=0, output_q=None):
         """
         Method to process a patch
 

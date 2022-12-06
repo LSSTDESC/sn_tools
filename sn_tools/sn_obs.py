@@ -2190,7 +2190,7 @@ class ProcessPixels:
         for key, vals in self.resfi.items():
             outName = '{}/{}_{}_{}.hdf5'.format(self.outDir,
                                                 self.dbName, key, self.num)
-            print('dumping',outName)
+            print('dumping', outName)
             if vals is not None:
                 # transform to astropy table to dump in hdf5 file
                 tab = Table.from_pandas(vals)
