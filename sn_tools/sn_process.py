@@ -486,8 +486,8 @@ class Process_new:
        number of clusters to make (DD only)(default: 5)
     radius: float, opt
       radius to get pixels arounf clusters (DD only) (default: 4 deg)
-    healpixIDs: list, opt
-      list of healpixels to process (default: [])
+    pixelList: str, opt
+      cvs file of pixels to process
 
     """
 
@@ -499,7 +499,7 @@ class Process_new:
                  outDir='', nproc=1, metricList=[],
                  pixelmap_dir='', npixels=0,
                  VRO_FP='circular', project_FP='gnomonic', telrot=0.,
-                 radius=4., healpixIDs=[], **kwargs):
+                 radius=4., pixelList='None', **kwargs):
 
         self.dbDir = dbDir
         self.dbName = dbName
@@ -519,36 +519,98 @@ class Process_new:
         self.pixelmap_dir = pixelmap_dir
         self.npixels = npixels
         self.radius = radius
-        self.healpixIDs = healpixIDs
         self.VRO_FP = VRO_FP
         self.project_FP = project_FP
         self.telrot = telrot
 
         assert(self.RAmin <= self.RAmax)
 
-        print('hello', fieldType, dbDir,
-              dbName, dbExtens, nproc)
-
         observations = get_obs(fieldType, dbDir,
                                dbName, dbExtens)
 
-        idx = np.in1d(observations['note'], self.fieldName)
-        observations = observations[idx]
+        # select observations
+        obs = self.select_obs(observations, [fieldName])
+
+        # load healpixIDs if not None
+        healpixIDs = []
+        print('hello', pixelList)
+        if pixelList != 'None':
+            hh = pd.read_csv(pixelList)
+            healpixIDs = hh['healpixID'].to_list()
+
+        # process
+        self.processIt(obs, npixels, healpixIDs)
+
+    def select_obs(self, observations, fieldName):
+        """
+        Method to select observations
+
+        Parameters
+        ---------------
+        observations: array
+          data to process
+        fieldName: str
+          fieldName to select
+
+        """
+        if self.fieldType == 'DD':
+
+            idx = np.in1d(observations['note'], fieldName)
+            observations = observations[idx]
+            return observations
+
+        if self.fieldType == 'WFD':
+            names = observations.dtype.names
+            self.RACol = colName(names, ['fieldRA', 'RA', 'Ra'])
+            self.DecCol = colName(names, ['fieldDec', 'Dec'])
+
+            # print('dtype',observations.dtype.names)
+            # select observation in this area
+            delta_coord = 5.
+            idx = observations[self.RACol] >= self.RAmin-delta_coord
+            idx &= observations[self.RACol] < self.RAmax+delta_coord
+            # idx &= observations[self.DecCol] >= Decmin-delta_coord
+            # idx &= observations[self.DecCol] < Decmax+delta_coord
+
+            obs = observations[idx]
+
+            if self.RAmin < delta_coord:
+                idk = observations[self.RACol] >= 360.-delta_coord
+                obs = np.concatenate((obs, observations[idk]))
+
+            if self.RAmax >= 360.-delta_coord:
+                idk = observations[self.RACol] <= delta_coord
+                obs = np.concatenate((obs, observations[idk]))
+            return obs
+
+        if self.fieldType == 'Fake':
+            return observations
+
+    def processIt(self, observations, npixels=-1, healpixIDs=[]):
+        """
+        Method to process a field
+
+        Parameters
+        --------------
+        fieldName: list(str)
+          list of fields to process
+        npixels: int, opt
+          number of pixels to process (default: -1=all)
+        healpixIDs: list(int), opt
+          list of hpixId to process (default: [])
+
+        """
 
         # get pixels corresponding to observations
         pixels = self.gime_pixels(observations)
 
         # get the list of pixels Id to process
-
-        print('here', npixels, pixels, healpixIDs)
         pixel_Ids = self.pixelList(npixels, pixels, healpixIDs)
-
-        print(pixel_Ids)
 
         params = {}
         params['observations'] = observations
         params['pixelmap'] = pixels
-        nprocb = min(nproc, len(pixel_Ids))
+        nprocb = min(self.nproc, len(pixel_Ids))
         multiproc(pixel_Ids, params, self.process_metric, nprocb)
 
     def pixelList(self, npixels, pixels, healpixIDs=[]):
@@ -685,66 +747,6 @@ class Process_new:
 
         return pixels
 
-    def load_deprecated(self):
-        """
-        Method to load observations and patches dims on the sky
-
-        Returns
-        ------------
-       observations: numpy array
-         numpy array with observations
-       patches: pandas df
-        patches coordinates on the sky
-        """
-        observations = getObservations(self.dbDir, self.dbName, self.dbExtens)
-
-        names = observations.dtype.names
-        self.RACol = colName(names, ['fieldRA', 'RA', 'Ra'])
-        self.DecCol = colName(names, ['fieldDec', 'Dec'])
-
-        # print('dtype',observations.dtype.names)
-        # select observation in this area
-        delta_coord = 5.
-        idx = observations[self.RACol] >= self.RAmin-delta_coord
-        idx &= observations[self.RACol] < self.RAmax+delta_coord
-        # idx &= observations[self.DecCol] >= Decmin-delta_coord
-        # idx &= observations[self.DecCol] < Decmax+delta_coord
-
-        obs = observations[idx]
-
-        if self.RAmin < delta_coord:
-            idk = observations[self.RACol] >= 360.-delta_coord
-            obs = np.concatenate((obs, observations[idk]))
-
-        if self.RAmax >= 360.-delta_coord:
-            idk = observations[self.RACol] <= delta_coord
-            obs = np.concatenate((obs, observations[idk]))
-
-        # rename fields
-        observations = renameFields(obs)
-        names = observations.dtype.names
-        self.RACol = colName(names, ['fieldRA', 'RA', 'Ra'])
-        self.DecCol = colName(names, ['fieldDec', 'Dec'])
-
-        """
-        self.RACol = 'fieldRA'
-        self.DecCol = 'fieldDec'
-        
-        if 'RA' in observations.dtype.names:
-            self.RACol = 'RA'
-            self.DecCol = 'Dec'
-        """
-        observations, patches = patchObs(observations, self.fieldType, self.fieldName,
-                                         self.dbName,
-                                         self.nside,
-                                         self.RAmin, self.RAmax,
-                                         self.Decmin, self.Decmax,
-                                         self.RACol, self.DecCol,
-                                         display=False,
-                                         nclusters=self.nclusters, radius=self.radius)
-
-        return observations, patches
-
     def process_metric(self, pixels, params, j=0, output_q=None):
         """
         Method to process metric on a set of pixels
@@ -761,18 +763,14 @@ class Process_new:
           queue of the multiprocessing (default: None)
         """
         time_ref = time.time()
-        # print('there we go instance procpix')
+
         observations = params['observations']
         pixelmap = params['pixelmap']
         print('processing pixel', pixels, len(observations))
         procpix = ProcessPixels(
             self.metricList, j, outDir=self.outDir, dbName=self.dbName, saveData=self.saveData)
 
-        print('outputdir', self.outDir, self.dbName)
-        # print('continuing')
         valsdf = pd.DataFrame(pixelmap)
-        print('alors', valsdf.columns, valsdf)
-        print('kkk', pixels)
         ido = valsdf['healpixID'].isin(pixels)
         ppix = valsdf[ido]
 
@@ -788,91 +786,6 @@ class Process_new:
             return output_q.put({j: 1})
         else:
             return 1
-
-    def processPatch_deprecated(self, pointings, observations, j=0, output_q=None):
-        """
-        Method to process a patch
-
-        Parameters
-        --------------
-        pointings: numpy array
-          array with a set of area on the sky
-        observations: numpy array
-           array of observations
-        j: int, opt
-          index number of multiprocessing (default: 0)
-        output_q: multiprocessing.Queue(), opt
-          queue of the multiprocessing (default: None)
-        """
-
-        # print('processing area', j, pointings)
-
-        time_ref = time.time()
-        ipoint = 1
-
-        datapixels = DataToPixels(
-            self.nside, self.RACol, self.DecCol, self.outDir, self.dbName)
-
-        procpix = ProcessPixels(
-            self.metricList, j, outDir=self.outDir, dbName=self.dbName, saveData=self.saveData)
-
-        # print('pointings', len(pointings))
-
-        for index, pointing in pointings.iterrows():
-            ipoint += 1
-            # print('pointing', ipoint)
-
-            # print('there man', np.unique(observations[[self.RACol, self.DecCol]]), pointing[[
-            #      'RA', 'Dec', 'radius_RA', 'radius_Dec']])
-            # get the pixels
-            pixels = datapixels(observations, pointing['RA'], pointing['Dec'],
-                                pointing['radius_RA'], pointing['radius_Dec'], self.remove_dithering, display=False)
-
-            if pixels is None:
-                if output_q is not None:
-                    output_q.put({j: pixels})
-                    return pixels
-                else:
-                    return pixels
-
-            # select pixels that are inside the original area
-            pixels_run = pixels
-            """
-            print('number of pixels', len(pixels_run), pixels)
-            import matplotlib.pyplot as plt
-            plt.plot(pixels['pixRA'], pixels['pixDec'], 'ko')
-            zonex = [pointing['minRA'], pointing['maxRA'],
-                     pointing['maxRA'], pointing['minRA'], pointing['minRA']]
-            zoney = [pointing['minDec'], pointing['minDec'],
-                     pointing['maxDec'], pointing['maxDec'], pointing['minDec']]
-            plt.plot(zonex, zoney)
-            plt.show()
-            """
-
-            if self.fieldType != 'Fake' and self.fieldType != 'DD':
-                """
-                idx = (pixels['pixRA']-pointing['RA']
-                       ) >= pointing['radius_RA']/2.
-                idx &= (pixels['pixRA']-pointing['RA']
-                        ) < pointing['radius_RA']/2.
-                idx &= (pixels['pixDec']-pointing['Dec']
-                        ) >= pointing['radius_Dec']/2.
-                idx &= (pixels['pixDec']-pointing['Dec']
-                        ) < pointing['radius_Dec']/2.
-                """
-                idx = pixels['pixRA'] > pointing['minRA']
-                idx &= pixels['pixRA'] < pointing['maxRA']
-                idx &= pixels['pixDec'] > pointing['minDec']
-                idx &= pixels['pixDec'] < pointing['maxDec']
-
-                pixels_run = pixels[idx]
-
-        print('Grabing pixels - end of processing for', j, time.time()-time_ref)
-
-        if output_q is not None:
-            output_q.put({j: pixels_run})
-        else:
-            return pixels_run
 
     def procix(self, pixels, observations, j=0, output_q=None):
         """
@@ -924,7 +837,6 @@ class Process_new:
 
         """
 
-        print('alors', hIDs, npixels)
         healpixIDs = random.sample(hIDs, npixels)
 
         return healpixIDs
