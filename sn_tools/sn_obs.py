@@ -156,7 +156,7 @@ def patchObs(observations, fieldType, fieldName,
             obsid = dataclusters[ido]['observationId'].tolist()
             myobs = pd.DataFrame(np.copy(observations))
             ib = myobs['observationId'].isin(obsid)
-            print('jjjj', len(patches), len(myobs[ib]))
+            #print('jjjj', len(patches), len(myobs[ib]))
             observations = myobs[ib].to_records(index=False)
     else:
         if fieldType == 'WFD':
@@ -3475,7 +3475,7 @@ def renameDDF(obser,
 
     obser['note'] = bb
 
-    print('jjjj', len(obser))
+    #print('jjjj', len(obser))
     return obser
 
 

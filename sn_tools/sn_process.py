@@ -1,3 +1,4 @@
+
 from sn_tools.sn_obs import DataToPixels, ProcessPixels, renameFields, patchObs
 from sn_tools.sn_io import colName
 from sn_tools.sn_obs import getObservations, get_obs
@@ -533,7 +534,6 @@ class Process_new:
 
         # load healpixIDs if not None
         healpixIDs = []
-        print('hello', pixelList)
         if pixelList != 'None':
             hh = pd.read_csv(pixelList)
             healpixIDs = hh['healpixID'].to_list()
@@ -686,7 +686,7 @@ class Process_new:
         """
 
         pixels = pd.DataFrame()
-        if self.pixelmap_dir == '':
+        if self.pixelmap_dir == 'None':
             pixels = self.build_pixels(obs)
         else:
             pixels = self.file_pixels()
