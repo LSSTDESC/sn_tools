@@ -1642,7 +1642,7 @@ class DataToPixels_new:
         self.telrot = telrot
         self.FoV = FoV
         self.nproc = nproc
-        print('there man', RACol, DecCol)
+        print('there man', RACol, DecCol, self.VRO_FP)
         # get the LSST focal plane scale factor
         # corresponding to a sphere radius equal to one
         # (which is the default for gnomonic projections here)
