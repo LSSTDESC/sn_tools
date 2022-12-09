@@ -445,7 +445,7 @@ class Process:
         return healpixIDs
 
 
-class Process_new:
+class Process_last:
     """
     Class to process data ie run metrics on a set of pixels
 
@@ -690,6 +690,441 @@ class Process_new:
             pixels = self.build_pixels(obs)
         else:
             pixels = self.file_pixels()
+
+        return pixels
+
+    def file_pixels(self):
+        """
+        Method to search for and load an ObsTopixel file
+
+        Returns
+        ----------
+        obsTopixel file (pandas df)
+
+        """
+        search_path = self.path_to_pixels()
+        pixelmap_file = glob.glob(search_path)[0]
+        print('searching in', search_path, pixelmap_file)
+
+        res = np.load(pixelmap_file, allow_pickle=True)
+
+        return pd.DataFrame(res)
+
+    def build_pixels(self, obs):
+        """
+        Method to grab pixels matching VRO FP
+
+        Parameters
+        ---------------
+        obs: array
+           data to process (VRO FP centers)
+
+        Returns
+        -----------
+        obstopixel file with a list of pixels and matched obs (pandas df)
+
+        """
+        from sn_tools.sn_obs import DataToPixels_new
+        from sn_tools.sn_utils import get_colName
+        RACol = get_colName(obs, ['fieldRA', 'RA'])[0]
+        DecCol = get_colName(obs, ['fieldDec', 'Dec'])[0]
+        print('params', self.nside, self.project_FP, self.VRO_FP,
+              RACol, DecCol, self.telrot, self.nproc)
+        datapixels = DataToPixels_new(
+            self.nside, self.project_FP, self.VRO_FP, RACol=RACol, DecCol=DecCol, telrot=self.telrot, nproc=self.nproc)
+
+        pixels = pd.DataFrame()
+        if self.fieldType == 'WFD':
+            pixels = datapixels(obs, display=False)
+            pixels['fieldName'] = 'WFD'
+
+        if self.fieldType == 'DD':
+            for i, field in enumerate(self.fieldName.split(',')):
+                idx = obs['note'] == field
+                pp = datapixels(np.copy(obs[idx]), display=False)
+                pp['fieldName'] = field
+                pixels = pd.concat((pixels, pp))
+
+        return pixels
+
+    def process_metric(self, pixels, params, j=0, output_q=None):
+        """
+        Method to process metric on a set of pixels
+
+        Parameters
+        --------------
+        pointings: numpy array
+          array with a set of area on the sky
+        observations: numpy array
+           array of observations
+        j: int, opt
+          index number of multiprocessing (default: 0)
+        output_q: multiprocessing.Queue(), opt
+          queue of the multiprocessing (default: None)
+        """
+        time_ref = time.time()
+
+        observations = params['observations']
+        pixelmap = params['pixelmap']
+        print('processing pixel', pixels, len(observations))
+        procpix = ProcessPixels(
+            self.metricList, j, outDir=self.outDir, dbName=self.dbName, saveData=self.saveData)
+
+        valsdf = pd.DataFrame(pixelmap)
+        ido = valsdf['healpixID'].isin(pixels)
+        ppix = valsdf[ido]
+
+        if len(ppix) > 0:
+            print('processing pixels', len(ppix))
+            procpix(ppix, np.copy(observations), self.npixels)
+        else:
+            print('pb here no data in ', pixels)
+
+        print('end of processing for', j, time.time()-time_ref)
+
+        if output_q is not None:
+            return output_q.put({j: 1})
+        else:
+            return 1
+
+    def procix(self, pixels, observations, j=0, output_q=None):
+        """
+        Method to process a pixel
+
+        Parameters
+        --------------
+        pointings: numpy array
+          array with a set of area on the sky
+        observations: numpy array
+           array of observations
+        j: int, opt
+          index number of multiprocessing (default: 0)
+        output_q: multiprocessing.Queue(), opt
+          queue of the multiprocessing (default: None)
+        """
+        time_ref = time.time()
+        # print('there we go instance procpix')
+
+        print('processing pixel', pixels, len(observations))
+        procpix = ProcessPixels(
+            self.metricList, j, outDir=self.outDir, dbName=self.dbName, saveData=self.saveData)
+
+        # print('continuing')
+        valsdf = pd.DataFrame(self.pixelmap)
+        ido = valsdf['healpixID'].isin(pixels)
+        ppix = valsdf[ido]
+        if len(ppix) > 0:
+            minDec = np.min(ppix['pixDec'])
+            maxDec = np.max(ppix['pixDec'])
+            minDecobs = np.min(observations[self.DecCol])
+            maxDecobs = np.max(observations[self.DecCol])
+            print('processing pixels', len(ppix),
+                  minDec, maxDec, minDecobs, maxDecobs)
+            procpix(ppix, np.copy(observations), self.npixels)
+        else:
+            print('pb here no data in ', pixels)
+
+        print('end of processing for', j, time.time()-time_ref)
+
+    def randomPixels(self, hIDs, npixels):
+        """
+        Method to choose a random set of pixels
+
+
+        Returns
+        ---------
+       healpixIDs: list of randomly chosen healpix IDs
+
+        """
+
+        healpixIDs = random.sample(hIDs, npixels)
+
+        return healpixIDs
+
+
+class Process_new:
+    """
+    Class to process data ie run metrics on a set of pixels
+
+    Parameters
+    --------------
+    dbDir: str
+      dir location of observing strategy file
+    dbName: str
+      observing strategy name
+    dbExtens: str
+      database extension (npy, db, ...)
+    fieldType: str
+      type of field: DD, WFD, Fake
+    nside: int
+      healpix nside parameter
+    RAmin: float
+      min RA of the area to process
+    RAmax: float
+      max RA of the area to process
+    Decmin: float
+      min Dec of the area to process
+    Decmax: float
+      max Dec of the area to process
+    saveData: bool
+      to save ouput data or not
+    remove_dithering: bool
+      to remove dithering (to use for DD studies)
+    outDir: str
+      output directory location
+    nprocs: int,
+      number of cores to run
+    metricList: list(metrics)
+      list of metrics to process
+    pixelmap_dir: str, opt
+      location directory where maps pixels<->observations are (default: '')
+    npixels: int, opt
+      number of pixels to run on (default: 0)
+    nclusters: int, opt
+       number of clusters to make (DD only)(default: 5)
+    radius: float, opt
+      radius to get pixels arounf clusters (DD only) (default: 4 deg)
+    pixelList: str, opt
+      cvs file of pixels to process
+
+    """
+
+    def __init__(self, dbDir='', dbName='', dbExtens='',
+                 fieldType='', fieldName='', nside=128,
+                 RAmin=0., RAmax=360.,
+                 Decmin=-80., Decmax=80,
+                 saveData=False, remove_dithering=False,
+                 outDir='', nproc=1, metricList=[],
+                 pixelmap_dir='', npixels=0,
+                 VRO_FP='circular', project_FP='gnomonic', telrot=0.,
+                 radius=4., pixelList='None', **kwargs):
+
+        self.dbDir = dbDir
+        self.dbName = dbName
+        self.dbExtens = dbExtens
+        self.fieldType = fieldType
+        self.fieldName = fieldName
+        self.nside = nside
+        self.RAmin = RAmin
+        self.RAmax = RAmax
+        self.Decmin = Decmin
+        self.Decmax = Decmax
+        self.saveData = saveData
+        self.remove_dithering = remove_dithering
+        self.outDir = outDir
+        self.nproc = nproc
+        self.metricList = metricList
+        self.pixelmap_dir = pixelmap_dir
+        self.npixels = npixels
+        self.radius = radius
+        self.VRO_FP = VRO_FP
+        self.project_FP = project_FP
+        self.telrot = telrot
+
+        assert(self.RAmin <= self.RAmax)
+
+        observations = get_obs(fieldType, dbDir,
+                               dbName, dbExtens)
+
+        # select observations
+        obs = self.select_obs(observations, [fieldName])
+
+        # load healpixIDs if not None
+        healpixIDs = []
+        if pixelList != 'None':
+            hh = pd.read_csv(pixelList)
+            healpixIDs = hh['healpixID'].to_list()
+
+        # process
+        self.processIt(obs, npixels, healpixIDs)
+
+    def select_obs(self, observations, fieldName):
+        """
+        Method to select observations
+
+        Parameters
+        ---------------
+        observations: array
+          data to process
+        fieldName: str
+          fieldName to select
+
+        """
+        if self.fieldType == 'DD':
+
+            idx = np.in1d(observations['note'], fieldName)
+            observations = observations[idx]
+            return observations
+
+        if self.fieldType == 'WFD':
+            names = observations.dtype.names
+            self.RACol = colName(names, ['fieldRA', 'RA', 'Ra'])
+            self.DecCol = colName(names, ['fieldDec', 'Dec'])
+
+            # print('dtype',observations.dtype.names)
+            # select observation in this area
+            delta_coord = 5.
+            idx = observations[self.RACol] >= self.RAmin-delta_coord
+            idx &= observations[self.RACol] < self.RAmax+delta_coord
+            # idx &= observations[self.DecCol] >= Decmin-delta_coord
+            # idx &= observations[self.DecCol] < Decmax+delta_coord
+
+            obs = observations[idx]
+
+            if self.RAmin < delta_coord:
+                idk = observations[self.RACol] >= 360.-delta_coord
+                obs = np.concatenate((obs, observations[idk]))
+
+            if self.RAmax >= 360.-delta_coord:
+                idk = observations[self.RACol] <= delta_coord
+                obs = np.concatenate((obs, observations[idk]))
+            return obs
+
+        if self.fieldType == 'Fake':
+            return observations
+
+    def processIt(self, observations, npixels=-1, healpixIDs=[]):
+        """
+        Method to process a field
+
+        Parameters
+        --------------
+        fieldName: list(str)
+          list of fields to process
+        npixels: int, opt
+          number of pixels to process (default: -1=all)
+        healpixIDs: list(int), opt
+          list of hpixId to process (default: [])
+
+        """
+
+        # get pixels corresponding to observations
+        names = observations.dtype.names
+        RACol = colName(names, ['fieldRA', 'RA', 'Ra'])
+        DecCol = colName(names, ['fieldDec', 'Dec'])
+
+        mean_RA = np.mean(observations[RACol])
+        mean_Dec = np.mean(observations[DecCol])
+        width_RA = np.max(observations[RACol]) - \
+            np.min(observations[RACol])
+        width_Dec = np.max(observations[DecCol]) - \
+            np.min(observations[DecCol])
+
+        pixels = self.gime_pixels(
+            mean_RA, mean_Dec, np.max([width_RA, width_Dec]))
+
+        print('oo', len(pixels))
+
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
+        ax.plot(pixels['pixRA'], pixels['pixDec'], 'r*')
+        ax.plot(observations[RACol], observations[DecCol], 'ko', mfc='None')
+        plt.show()
+
+        # get the list of pixels Id to process
+        pixel_Ids = self.pixelList(npixels, pixels, healpixIDs)
+
+        params = {}
+        params['observations'] = observations
+        params['pixelmap'] = pixels
+        nprocb = min(self.nproc, len(pixel_Ids))
+        multiproc(pixel_Ids, params, self.process_metric, nprocb)
+
+    def pixelList(self, npixels, pixels, healpixIDs=[]):
+        """
+        Method to get the list of pixels to process
+
+        Parameters
+        --------------
+        npixels: int
+          number of pixels to grab
+        pixels: array
+          list of "available" pixels
+        healpixIDs: list, opt
+          list of healpixIDs to process (default: [])
+
+        Returns
+        ----------
+        list of healpixIDs to process
+
+        """
+        pixList = list(np.unique(pixels['healpixID']))
+
+        if healpixIDs:
+            # check wether required healpixID are in pixList
+            ll = list(set(pixList).intersection(healpixIDs))
+            if not ll:
+                print('Big problem here: healpixIDs are not in pixel list!!')
+                return None
+            else:
+                return healpixIDs
+
+        if npixels == -1:
+            return pixList
+
+        random_pixels = self.randomPixels(pixList, npixels)
+
+        return random_pixels
+
+    def path_to_pixels(self):
+        """
+        method to grab pixel files
+
+        Returns
+        -----------
+        full search path
+
+        """
+
+        search_path = '{}/{}/{}_{}_nside_{}_{}_{}_{}_{}'.format(self.pixelmap_dir,
+                                                                self.dbName, self.dbName,
+                                                                self.fieldType, self.nside,
+                                                                self.RAmin, self.RAmax,
+                                                                self.Decmin, self.Decmax)
+        if self.fieldType == 'DD':
+            search_path += '_{}'.format(self.fieldName)
+        search_path += '.npy'
+
+        return search_path
+
+    def gime_pixels(self, RA, Dec, width, inclusive=True):
+        """
+        method to get pixels from obs
+
+        Parameters
+        --------------
+        RA: float
+          mean RA position
+        Dec: float
+           mean Dec position
+        width: float
+           width of the window around (RA,Dec)
+        inclusive: bool, opt
+          inclusive bool for healpix (default: True)
+
+        Returns
+        -----------
+        list of pixels corresponding to (RA, Dec) central position
+
+        """
+        import healpy as hp
+        # get central pixel ID
+        healpixID = hp.ang2pix(self.nside, RA,
+                               Dec, nest=True, lonlat=True)
+
+        # get nearby pixels
+        vec = hp.pix2vec(self.nside, healpixID, nest=True)
+        healpixIDs = hp.query_disc(
+            self.nside, vec, 2.*np.deg2rad(width)+np.deg2rad(9.6), inclusive=inclusive, nest=True)
+
+        # get pixel coordinates
+        coords = hp.pix2ang(self.nside, healpixIDs,
+                            nest=True, lonlat=True)
+        pixRA, pixDec = coords[0], coords[1]
+
+        pixels = pd.DataFrame(healpixIDs, columns=['healpixID'])
+        pixels['pixRA'] = pixRA
+        pixels['pixDec'] = pixDec
 
         return pixels
 
