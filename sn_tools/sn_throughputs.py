@@ -226,10 +226,10 @@ class Throughputs(object):
                          linestyle='-', color=self.filtercolors[band],
                          label='%s - syst+atm+aero' % (band))
 
-        plt.plot(self.atmos.wavelen, self.atmos.sb, 'k:',
+        plt.plot(self.atmos.wavelen, self.atmos.sb, color='k',
                  label='X =%.1f atmos' % (self.airmass), linestyle='-')
         if len(self.lsst_atmos_aerosol) > 0:
-            plt.plot(self.atmos_aerosol.wavelen, self.atmos_aerosol.sb, 'k:',
+            plt.plot(self.atmos_aerosol.wavelen, self.atmos_aerosol.sb, color='k',
                      label='X =%.1f atm+aero' % (self.airmass), linestyle='--')
         # plt.legend(loc=(0.85, 0.1), fontsize='smaller',
             # fancybox=True, numpoints=1)
@@ -239,7 +239,7 @@ class Throughputs(object):
         plt.xlabel('Wavelength (nm)')
         plt.ylabel('Sb (0-1)')
         plt.title('System throughput')
-        # plt.show()
+        plt.show()
 
     def Plot_DarkSky(self):
         """ Plot darksky
