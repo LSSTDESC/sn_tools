@@ -1777,7 +1777,21 @@ class DataToPixels_new:
         return matched_pixels
 
     def match_multiproc_gnomonic(self, obsid, params, j=0, output_q=None):
+        """
+        Method to grab matched pixels for the gnomonic proj using multiprocessing
 
+        Parameters
+        ---------------
+        obsid: array
+          data to process
+        params: dict
+          parameters
+        j: int, opt
+          tag for multiprocessing (default: 0)
+       output_q: multiprocessing queue, opt
+          default: None
+
+        """
         data = params['data']
         healpixIDs = params['healpixIDs']
         pixRA = params['pixRA']
@@ -1797,7 +1811,21 @@ class DataToPixels_new:
             return matched_pixels
 
     def match_multiproc_hp_query(self, obsid, params, j=0, output_q=None):
+        """
+        Method to grabed matched pixels for the hp_query proj using multiprocessing
 
+        Parameters
+        ---------------
+        obsid: array
+          data to process
+        params: dict
+          parameters
+        j: int, opt
+          tag for multiprocessing (default: 0)
+       output_q: multiprocessing queue, opt
+          default: None
+
+        """
         data = params['data']
         grpCol = params['grpCol']
         idx = data['observationId'].isin(obsid)
@@ -1859,7 +1887,7 @@ class DataToPixels_new:
         # draw here
         if display:
             import matplotlib.pyplot as plt
-            fig, ax = plt.subplots()
+            fig, ax = plt.subplots(figsize=(10, 10))
             xx, yy = fpnew.exterior.coords.xy
             ax.plot(xx, yy)
             ax.plot(x, y, 'b+')
@@ -1868,6 +1896,8 @@ class DataToPixels_new:
             xb, yb = proj_gnomonic_plane(
                 pRA_rad, pDec_rad, np.deg2rad(pixRA), np.deg2rad(pixDec))
             ax.plot(xb, yb, 'ro', mfc='None')
+            ax.set_xlabel('RA [deg]')
+            ax.set_ylabel('Dec [deg]')
             plt.show()
 
         # fpnew = LSSTPointing(np.deg2rad(self.LSST_RA-pRA),np.deg2rad(self.LSST_Dec-pDec),area=np.pi*self.fpscale**2)
