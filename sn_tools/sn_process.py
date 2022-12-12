@@ -1,5 +1,6 @@
 
 from sn_tools.sn_obs import DataToPixels, ProcessPixels, renameFields, patchObs
+from sn_tools.sn_obs import ProcessPixels_new
 from sn_tools.sn_io import colName
 from sn_tools.sn_obs import getObservations, get_obs
 from sn_tools.sn_utils import multiproc
@@ -897,7 +898,7 @@ class Process_new:
                  outDir='', nproc=1, metricList=[],
                  pixelmap_dir='', npixels=0,
                  VRO_FP='circular', project_FP='gnomonic', telrot=0.,
-                 radius=4., pixelList='None', **kwargs):
+                 radius=4., pixelList='None', display=False, **kwargs):
 
         self.dbDir = dbDir
         self.dbName = dbName
@@ -920,6 +921,7 @@ class Process_new:
         self.VRO_FP = VRO_FP
         self.project_FP = project_FP
         self.telrot = telrot
+        self.display = display
 
         assert(self.RAmin <= self.RAmax)
 
@@ -1013,22 +1015,26 @@ class Process_new:
         pixels = self.gime_pixels(
             mean_RA, mean_Dec, np.max([width_RA, width_Dec]))
 
-        print('oo', len(pixels))
-
-        import matplotlib.pyplot as plt
-        fig, ax = plt.subplots()
-        ax.plot(pixels['pixRA'], pixels['pixDec'], 'r*')
-        ax.plot(observations[RACol], observations[DecCol], 'ko', mfc='None')
-        plt.show()
+        if self.display:
+            import matplotlib.pyplot as plt
+            fig, ax = plt.subplots()
+            ax.plot(pixels['pixRA'], pixels['pixDec'], 'r*')
+            ax.plot(observations[RACol],
+                    observations[DecCol], 'ko', mfc='None')
+            plt.show()
 
         # get the list of pixels Id to process
         pixel_Ids = self.pixelList(npixels, pixels, healpixIDs)
 
+        print('running on', pixel_Ids)
         params = {}
         params['observations'] = observations
         params['pixelmap'] = pixels
         nprocb = min(self.nproc, len(pixel_Ids))
-        multiproc(pixel_Ids, params, self.process_metric, nprocb)
+        if nprocb > 1:
+            multiproc(pixel_Ids, params, self.process_metric, nprocb)
+        else:
+            self.process_metric(pixel_Ids, params)
 
     def pixelList(self, npixels, pixels, healpixIDs=[]):
         """
@@ -1202,8 +1208,8 @@ class Process_new:
         observations = params['observations']
         pixelmap = params['pixelmap']
         print('processing pixel', pixels, len(observations))
-        procpix = ProcessPixels(
-            self.metricList, j, outDir=self.outDir, dbName=self.dbName, saveData=self.saveData)
+        procpix = ProcessPixels_new(
+            self.metricList, j, outDir=self.outDir, dbName=self.dbName, project_FP=self.project_FP, VRO_FP=self.VRO_FP, telrot=self.telrot, saveData=self.saveData, display=self.display)
 
         valsdf = pd.DataFrame(pixelmap)
         ido = valsdf['healpixID'].isin(pixels)
@@ -1222,7 +1228,7 @@ class Process_new:
         else:
             return 1
 
-    def procix(self, pixels, observations, j=0, output_q=None):
+    def procix_deprecated(self, pixels, observations, j=0, output_q=None):
         """
         Method to process a pixel
 
