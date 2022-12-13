@@ -928,8 +928,12 @@ class Process_new:
         observations = get_obs(fieldType, dbDir,
                                dbName, dbExtens)
 
+        names = observations.dtype.names
+        self.RACol = colName(names, ['fieldRA', 'RA', 'Ra'])
+        self.DecCol = colName(names, ['fieldDec', 'Dec'])
+
         # select observations
-        obs = self.select_obs(observations, [fieldName])
+        obs = self.select_obs(observations, [fieldName], RAmin, RAmax)
 
         # load healpixIDs if not None
         healpixIDs = []
@@ -940,7 +944,7 @@ class Process_new:
         # process
         self.processIt(obs, npixels, healpixIDs)
 
-    def select_obs(self, observations, fieldName):
+    def select_obs(self, observations, fieldName, RAmin, RAmax):
         """
         Method to select observations
 
@@ -956,34 +960,50 @@ class Process_new:
 
             idx = np.in1d(observations['note'], fieldName)
             observations = observations[idx]
-            return observations
+            return self.select_zone(observations, RAmin, RAmax, self.RACol)
 
         if self.fieldType == 'WFD':
-            names = observations.dtype.names
-            self.RACol = colName(names, ['fieldRA', 'RA', 'Ra'])
-            self.DecCol = colName(names, ['fieldDec', 'Dec'])
-
-            # print('dtype',observations.dtype.names)
-            # select observation in this area
-            delta_coord = 5.
-            idx = observations[self.RACol] >= self.RAmin-delta_coord
-            idx &= observations[self.RACol] < self.RAmax+delta_coord
-            # idx &= observations[self.DecCol] >= Decmin-delta_coord
-            # idx &= observations[self.DecCol] < Decmax+delta_coord
-
-            obs = observations[idx]
-
-            if self.RAmin < delta_coord:
-                idk = observations[self.RACol] >= 360.-delta_coord
-                obs = np.concatenate((obs, observations[idk]))
-
-            if self.RAmax >= 360.-delta_coord:
-                idk = observations[self.RACol] <= delta_coord
-                obs = np.concatenate((obs, observations[idk]))
-            return obs
+            return self.select_zone(observations, RAmin, RAmax, self.RACol)
 
         if self.fieldType == 'Fake':
             return observations
+
+    def select_zone(self, data, RAmin, RAmax, RACol, delta_coord=5.):
+        """
+        Method to select data in a given area defined by (RA_min, RA_max)
+
+        Parameters
+        --------------
+        data: array
+          data to process
+        RA_min: float
+          min RA value
+        RA_max: float
+          max RA value
+        RACol: str
+           RA colname
+        delta_coord: float, opt
+          deltaRA to extend the (RA_min, RA_max) window (default: 5)
+
+        """
+        print('select_zone', RACol, RAmin, RAmax)
+
+        idx = data[RACol] >= RAmin-delta_coord
+        idx &= data[RACol] < RAmax+delta_coord
+        # idx &= data[self.DecCol] >= Decmin-delta_coord
+        # idx &= data[self.DecCol] < Decmax+delta_coord
+
+        obs = data[idx]
+
+        if RAmin < delta_coord:
+            idk = data[RACol] >= 360.-delta_coord
+            obs = np.concatenate((obs, data[idk]))
+
+        if RAmax >= 360.-delta_coord:
+            idk = data[RACol] <= delta_coord
+            obs = np.concatenate((obs, data[idk]))
+
+        return obs
 
     def processIt(self, observations, npixels=-1, healpixIDs=[]):
         """
@@ -1023,18 +1043,17 @@ class Process_new:
                     observations[DecCol], 'ko', mfc='None')
             plt.show()
 
-        # get the list of pixels Id to process
-        pixel_Ids = self.pixelList(npixels, pixels, healpixIDs)
+        pixRAmin = pixels['pixRA'].min()
+        pixRAmax = pixels['pixRA'].max()
+        deltaRA = (pixRAmax-pixRAmin)/self.nproc
 
-        print('running on', pixel_Ids)
+        RArange = np.arange(pixRAmin, pixRAmax, deltaRA).tolist()
+
         params = {}
         params['observations'] = observations
         params['pixelmap'] = pixels
-        nprocb = min(self.nproc, len(pixel_Ids))
-        if nprocb > 1:
-            multiproc(pixel_Ids, params, self.process_metric, nprocb)
-        else:
-            self.process_metric(pixel_Ids, params)
+        params['deltaRA'] = deltaRA
+        multiproc(RArange, params, self.process_metric, self.nproc)
 
     def pixelList(self, npixels, pixels, healpixIDs=[]):
         """
@@ -1095,7 +1114,7 @@ class Process_new:
 
     def gime_pixels(self, RA, Dec, width, inclusive=True):
         """
-        method to get pixels from obs
+        method to get pixels corresponding to obs area
 
         Parameters
         --------------
@@ -1151,7 +1170,7 @@ class Process_new:
 
         return pd.DataFrame(res)
 
-    def build_pixels(self, obs):
+    def build_pixels(self, obs, pixels):
         """
         Method to grab pixels matching VRO FP
 
@@ -1166,35 +1185,23 @@ class Process_new:
 
         """
         from sn_tools.sn_obs import DataToPixels_new
-        from sn_tools.sn_utils import get_colName
-        RACol = get_colName(obs, ['fieldRA', 'RA'])[0]
-        DecCol = get_colName(obs, ['fieldDec', 'Dec'])[0]
         print('params', self.nside, self.project_FP, self.VRO_FP,
-              RACol, DecCol, self.telrot, self.nproc)
+              self.RACol, self.DecCol, self.telrot, self.nproc)
         datapixels = DataToPixels_new(
-            self.nside, self.project_FP, self.VRO_FP, RACol=RACol, DecCol=DecCol, telrot=self.telrot, nproc=self.nproc)
+            self.nside, self.project_FP, self.VRO_FP, RACol=self.RACol, DecCol=self.DecCol, telrot=self.telrot, nproc=1)
 
-        pixels = pd.DataFrame()
-        if self.fieldType == 'WFD':
-            pixels = datapixels(obs, display=False)
-            pixels['fieldName'] = 'WFD'
-
-        if self.fieldType == 'DD':
-            for i, field in enumerate(self.fieldName.split(',')):
-                idx = obs['note'] == field
-                pp = datapixels(np.copy(obs[idx]), display=False)
-                pp['fieldName'] = field
-                pixels = pd.concat((pixels, pp))
+        print('hello build', pixels)
+        pixels = datapixels(obs, pixels, display=False)
 
         return pixels
 
-    def process_metric(self, pixels, params, j=0, output_q=None):
+    def process_metric(self, RArange, params, j=0, output_q=None):
         """
         Method to process metric on a set of pixels
 
         Parameters
         --------------
-        pointings: numpy array
+      Rarange: numpy array
           array with a set of area on the sky
         observations: numpy array
            array of observations
@@ -1207,13 +1214,30 @@ class Process_new:
 
         observations = params['observations']
         pixelmap = params['pixelmap']
-        print('processing pixel', pixels, len(observations))
-        procpix = ProcessPixels_new(
-            self.metricList, j, outDir=self.outDir, dbName=self.dbName, project_FP=self.project_FP, VRO_FP=self.VRO_FP, telrot=self.telrot, saveData=self.saveData, display=self.display)
+        deltaRA = params['deltaRA']
+        print('processing pixel', RArange, len(observations))
 
+        procpix = ProcessPixels(
+            self.metricList, j, outDir=self.outDir, dbName=self.dbName, saveData=self.saveData)
+
+        """
         valsdf = pd.DataFrame(pixelmap)
         ido = valsdf['healpixID'].isin(pixels)
         ppix = valsdf[ido]
+        """
+        RAmin = RArange[0]
+        RAmax = RAmin+deltaRA
+
+        pixels = self.select_zone(
+            pixelmap, RAmin, RAmax, 'pixRA', 0.)
+
+        obs = self.select_zone(
+            observations, RAmin, RAmax, self.RACol)
+
+        ppix = self.build_pixels(obs, pixels)
+
+        print('hhh', ppix['pixRA'].min(), ppix['pixRA'].max())
+        print('there man', ppix)
 
         if len(ppix) > 0:
             print('processing pixels', len(ppix))

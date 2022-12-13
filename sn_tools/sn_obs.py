@@ -1631,7 +1631,7 @@ class DataToPixels_new:
      number of procs for multiprocessing
     """
 
-    def __init__(self, nside, project_FP, VRO_FP, RACol='RA', DecCol='Dec', telrot=0, FoV=9.62, nproc=8):
+    def __init__(self, nside, project_FP, VRO_FP, RACol='RA', DecCol='Dec', telrot=0, FoV=9.62, nproc=1):
 
         # load parameters
         self.nside = nside
@@ -1642,6 +1642,7 @@ class DataToPixels_new:
         self.telrot = telrot
         self.FoV = FoV
         self.nproc = nproc
+
         print('there man', RACol, DecCol, self.VRO_FP)
         # get the LSST focal plane scale factor
         # corresponding to a sphere radius equal to one
@@ -1653,7 +1654,7 @@ class DataToPixels_new:
         self.fpscale = np.tan(theta)
         self.fpradius = np.sqrt(self.FoV/np.pi)
 
-        self.obsCol = ['observationStartMJD', 'fieldRA', 'fieldDec',
+        self.obsCol = ['observationStartMJD', RACol, DecCol,
                        'visitExposureTime', 'fiveSigmaDepth', 'numExposures', 'seeingFwhmEff']
 
         self.VRO_vertices = [[[-7.5, 4.5], [7.5, 4.5], [7.5, -4.5], [-7.5, -4.5]],  # main part
@@ -1668,7 +1669,7 @@ class DataToPixels_new:
         rat = 135./189.
         self.area_part = [rat*self.FoV, rat*self.FoV]
 
-    def __call__(self, data, display=False, inclusive=False):
+    def __call__(self, data, pixels, display=False, inclusive=False):
         """
         call method: this is where the processing is.
 
@@ -1708,6 +1709,7 @@ class DataToPixels_new:
 
         self.observations = data
 
+        """
         # get central pixel ID
         print('hello', len(data), self.RACol, data.dtype)
         print('hhh', data[self.RACol])
@@ -1727,13 +1729,14 @@ class DataToPixels_new:
         self.pixRA, self.pixDec = coords[0], coords[1]
 
         # display (RA,Dec) of pixels
+        """
         if display:
-            print('number of pixels here', len(self.pixRA))
+            print('number of pixels here', len(pixels))
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots()
             fig.suptitle('Selected data and pixels')
-            ax.plot(self.pixRA, self.pixDec, 'r*')
-            ax.plot(data['fieldRA'], data['fieldDec'], 'bs')
+            ax.plot(pixels['pixRA'], pixels['pixDec'], 'r*')
+            ax.plot(data[self.RACol], data[self.DecCol], 'bs')
             plt.show()
 
         # match pixels to data
@@ -1743,9 +1746,9 @@ class DataToPixels_new:
         params['grpCol'] = ['observationId', 'night', 'filter']
         if self.project_FP == 'gnomonic':
 
-            params['healpixIDs'] = self.healpixIDs
-            params['pixRA'] = self.pixRA
-            params['pixDec'] = self.pixDec
+            params['healpixIDs'] = pixels['healpixID']
+            params['pixRA'] = pixels['pixRA']
+            params['pixDec'] = pixels['pixDec']
             params['display'] = display
             ll = data['observationId'].tolist()
             if self.nproc == 1:
@@ -1801,10 +1804,12 @@ class DataToPixels_new:
 
         # idx = data['observationId'].isin(obsid)
         idx = np.in1d(data['observationId'], obsid)
-        seldata = pd.DataFrame(data[idx])
+        print('alors?', len(data[idx]))
+        time_ref = time.time()
+        seldata = pd.DataFrame(np.copy(data[idx]))
         matched_pixels = seldata.groupby(grpCol).apply(
             lambda x: self.match_gnomonic(x, healpixIDs, pixRA, pixDec, display)).reset_index()
-
+        print('matched pixels', time.time()-time_ref)
         if output_q is not None:
             return output_q.put({j: matched_pixels})
         else:
@@ -2420,6 +2425,7 @@ class ProcessPixels_new:
         # res = observ.groupby([self.RACol, self.DecCol, self.rotTelCol]).apply(
         #    lambda x: self.projectIt(x, pixRA_rad, pixDec_rad))
 
+        """
         pRA_rad = np.deg2rad(observ[self.RACol])
         pDec_rad = np.deg2rad(observ[self.DecCol])
 
@@ -2429,7 +2435,7 @@ class ProcessPixels_new:
         print('ahh', x, y)
 
         print(test)
-        
+        """
         return res
 
     def projectIt(self, grp, pixRA_rad, pixDec_rad):
