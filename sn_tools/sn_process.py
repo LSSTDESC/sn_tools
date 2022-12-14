@@ -1041,6 +1041,8 @@ class Process_new:
             ax.plot(pixels['pixRA'], pixels['pixDec'], 'r*')
             ax.plot(observations[RACol],
                     observations[DecCol], 'ko', mfc='None')
+            ax.set_xlabel('RA [deg]')
+            ax.set_ylabel('Dec [deg]')
             plt.show()
 
         pixRAmin = pixels['pixRA'].min()
@@ -1053,7 +1055,12 @@ class Process_new:
         params['observations'] = observations
         params['pixelmap'] = pixels
         params['deltaRA'] = deltaRA
-        multiproc(RArange, params, self.process_metric, self.nproc)
+
+        # multiproc(RArange, params, self.process_metric, self.nproc)
+        # for i in range(self.nproc):
+        for i in [3]:
+            RA = RArange[i]
+            self.process_metric([RA], params, i)
 
     def pixelList(self, npixels, pixels, healpixIDs=[]):
         """
@@ -1140,7 +1147,7 @@ class Process_new:
         # get nearby pixels
         vec = hp.pix2vec(self.nside, healpixID, nest=True)
         healpixIDs = hp.query_disc(
-            self.nside, vec, 2.*np.deg2rad(width)+np.deg2rad(9.6), inclusive=inclusive, nest=True)
+            self.nside, vec, np.deg2rad(width)+np.deg2rad(3.5), inclusive=inclusive, nest=True)
 
         # get pixel coordinates
         coords = hp.pix2ang(self.nside, healpixIDs,
@@ -1191,7 +1198,7 @@ class Process_new:
             self.nside, self.project_FP, self.VRO_FP, RACol=self.RACol, DecCol=self.DecCol, telrot=self.telrot, nproc=1)
 
         print('hello build', pixels)
-        pixels = datapixels(obs, pixels, display=False)
+        pixels = datapixels(obs, pixels, display=True)
 
         return pixels
 
@@ -1228,22 +1235,33 @@ class Process_new:
         RAmin = RArange[0]
         RAmax = RAmin+deltaRA
 
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
+        ax.plot(observations[self.RACol],
+                observations[self.DecCol], 'ko', mfc='None')
+        ax.plot(pixelmap['pixRA'], pixelmap['pixDec'], 'r*')
+        Decmin = pixelmap['pixDec'].min()
+        Decmax = pixelmap['pixDec'].max()
+        ax.plot([RAmin, RAmin], [Decmin, Decmax], color='r')
+        ax.plot([RAmax, RAmax], [Decmin, Decmax], color='r')
+        plt.show()
+
         pixels = self.select_zone(
             pixelmap, RAmin, RAmax, 'pixRA', 0.)
 
+        RAmin_pix = pixels['pixRA'].min()
+        RAmax_pix = pixels['pixRA'].max()
+        print('alors?????', RAmin_pix, RAmax_pix)
         obs = self.select_zone(
-            observations, RAmin, RAmax, self.RACol)
+            observations, RAmin_pix, RAmax_pix, self.RACol, 3.3)
 
         ppix = self.build_pixels(obs, pixels)
 
-        print('hhh', ppix['pixRA'].min(), ppix['pixRA'].max())
-        print('there man', ppix)
-
         if len(ppix) > 0:
             print('processing pixels', len(ppix))
-            procpix(ppix, np.copy(observations), self.npixels)
+            procpix(ppix, obs, self.npixels)
         else:
-            print('pb here no data in ', pixels)
+            print('No matching obs found!')
 
         print('end of processing for', j, time.time()-time_ref)
 

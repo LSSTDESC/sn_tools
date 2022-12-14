@@ -1631,7 +1631,7 @@ class DataToPixels_new:
      number of procs for multiprocessing
     """
 
-    def __init__(self, nside, project_FP, VRO_FP, RACol='RA', DecCol='Dec', telrot=0, FoV=9.62, nproc=1):
+    def __init__(self, nside, project_FP, VRO_FP, RACol='RA', DecCol='Dec', rotTelCol='rotTelPos', telrot=0, FoV=9.62, nproc=1):
 
         # load parameters
         self.nside = nside
@@ -1639,7 +1639,12 @@ class DataToPixels_new:
         self.VRO_FP = VRO_FP
         self.RACol = RACol
         self.DecCol = DecCol
+        self.rotTelCol = rotTelCol
         self.telrot = telrot
+        self.RACol_round = '{}_r'.format(RACol)
+        self.DecCol_round = '{}_r'.format(DecCol)
+        self.telrot_round = '{}_r'.format(telrot)
+        self.rotTelCol_round = '{}_r'.format(rotTelCol)
         self.FoV = FoV
         self.nproc = nproc
 
@@ -1654,7 +1659,7 @@ class DataToPixels_new:
         self.fpscale = np.tan(theta)
         self.fpradius = np.sqrt(self.FoV/np.pi)
 
-        self.obsCol = ['observationStartMJD', RACol, DecCol,
+        self.obsCol = ['observationStartMJD', 'observationId', 'night', 'filter', self.RACol, self.DecCol,
                        'visitExposureTime', 'fiveSigmaDepth', 'numExposures', 'seeingFwhmEff']
 
         self.VRO_vertices = [[[-7.5, 4.5], [7.5, 4.5], [7.5, -4.5], [-7.5, -4.5]],  # main part
@@ -1699,13 +1704,14 @@ class DataToPixels_new:
         # display: (RA,Dec) distribution of the selected data (ie inside the area)
         # if display:
         #    dataSel.plot()
-
+        """
         if display:
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots()
             fig.suptitle('Selected data')
             ax.plot(data[self.RACol], data[self.DecCol], 'ko')
             plt.show()
+        """
 
         self.observations = data
 
@@ -1743,7 +1749,11 @@ class DataToPixels_new:
         time_ref = time.time()
         params = {}
         params['data'] = data
-        params['grpCol'] = ['observationId', 'night', 'filter']
+        #params['grpCol'] = ['observationId', 'night', 'filter']
+        # params['grpCol'] = [self.RACol_round,
+        #                    self.DecCol_round, self.rotTelCol_round]
+        params['grpCol'] = [self.RACol,
+                            self.DecCol, self.rotTelCol]
         if self.project_FP == 'gnomonic':
 
             params['healpixIDs'] = pixels['healpixID']
@@ -1772,9 +1782,11 @@ class DataToPixels_new:
             ax.plot(data['fieldRA'], data['fieldDec'], 'bs')
             ax.plot(matched_pixels['pixRA'],
                     matched_pixels['pixDec'], 'ob', mfc='None')
+            """
             pixRA, pixDec = hp.pix2ang(
                 self.nside, 109400, nest=True, lonlat=True)
             print('aaaaa', self.nside, pixRA, pixDec)
+            """
             ax.plot(pixRA, pixDec, 'k*', mfc='None')
             plt.show()
         return matched_pixels
@@ -1807,9 +1819,16 @@ class DataToPixels_new:
         print('alors?', len(data[idx]))
         time_ref = time.time()
         seldata = pd.DataFrame(np.copy(data[idx]))
+        seldata[self.rotTelCol_round] = self.telrot*seldata[self.rotTelCol]
+        seldata[self.RACol_round] = self.telrot*seldata[self.RACol]
+        seldata[self.DecCol_round] = self.telrot*seldata[self.DecCol]
+        seldata = seldata.round(
+            {self.RACol_round: 1, self.DecCol_round: 1, self.rotTelCol_round: 1})
         matched_pixels = seldata.groupby(grpCol).apply(
             lambda x: self.match_gnomonic(x, healpixIDs, pixRA, pixDec, display)).reset_index()
-        print('matched pixels', time.time()-time_ref)
+
+        print('matched pixels', time.time()-time_ref, len(matched_pixels))
+
         if output_q is not None:
             return output_q.put({j: matched_pixels})
         else:
@@ -1869,11 +1888,16 @@ class DataToPixels_new:
 
         pixRA_rad = np.deg2rad(pixRA)
         pixDec_rad = np.deg2rad(pixDec)
-        rotTelPos = self.telrot*np.mean(grp['rotTelPos'])
 
         # convert data position in rad
-        pRA = np.median(grp[self.RACol])
-        pDec = np.median(grp[self.DecCol])
+        pRA = grp.name[0]
+        pDec = grp.name[1]
+        #rotTelPos = self.telrot*grp.name[2]
+        rotTelPos = grp.name[2]
+
+        print('obs', grp.name, len(grp))
+        print('jjj', grp['flush_by_mjd'].to_list())
+
         pRA_rad = np.deg2rad(pRA)
         pDec_rad = np.deg2rad(pDec)
 
@@ -1892,15 +1916,19 @@ class DataToPixels_new:
         # draw here
         if display:
             import matplotlib.pyplot as plt
-            fig, ax = plt.subplots(figsize=(10, 10))
+            fig, ax = plt.subplots(figsize=(4, 10))
+            fig.suptitle('gnomonic projection - {} FP'.format(self.VRO_FP))
             xx, yy = fpnew.exterior.coords.xy
             ax.plot(xx, yy)
             ax.plot(x, y, 'b+')
+            """
             pixRA, pixDec = hp.pix2ang(
                 self.nside, 109400, nest=True, lonlat=True)
             xb, yb = proj_gnomonic_plane(
                 pRA_rad, pDec_rad, np.deg2rad(pixRA), np.deg2rad(pixDec))
             ax.plot(xb, yb, 'ro', mfc='None')
+            """
+            ax.plot([0.], [0.], 'k*')
             ax.set_xlabel('RA [deg]')
             ax.set_ylabel('Dec [deg]')
             plt.show()
@@ -1926,6 +1954,10 @@ class DataToPixels_new:
         pixRA_matched = list(pixRA[idf])
         pixDec_matched = list(pixDec[idf])
 
+        print('matched', len(pixID_matched), grp['observationId'].to_list())
+        if len(pixID_matched) == 0:
+            return pd.DataFrame()
+
         # names = [grp.name]*len(pixID_matched)
         df_pix = pd.DataFrame({'healpixID': pixID_matched,
                                'pixRA': pixRA_matched,
@@ -1934,7 +1966,14 @@ class DataToPixels_new:
 
         # listcols = ['observationStartMJD', 'fieldRA', 'fieldDec', 'visitExposureTime',
         #            'fiveSigmaDepth', 'numExposures', 'seeingFwhmEff']
-        df_pix[self.obsCol] = grp[self.obsCol].mean().tolist()
+        print('alors?')
+        obsIds = ','.join(map(str, grp['observationId'].to_list()))
+        print('ici', df_pix, obsIds)
+        #df_pix[self.obsCol] = grp[self.obsCol]
+
+        df_pix['observationIds'] = obsIds
+
+        print('hhhh', df_pix)
         """
         for ll in listcols:
             print(ll,grp[ll].mean())
@@ -1942,6 +1981,7 @@ class DataToPixels_new:
         """
         # 'groupName': names})
 
+        print('matching pixels/obs', df_pix)
         return df_pix
 
     def match_hp_query(self, grp):
