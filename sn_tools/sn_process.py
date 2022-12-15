@@ -986,7 +986,6 @@ class Process_new:
           deltaRA to extend the (RA_min, RA_max) window (default: 5)
 
         """
-        print('select_zone', RACol, RAmin, RAmax)
 
         idx = data[RACol] >= RAmin-delta_coord
         idx &= data[RACol] < RAmax+delta_coord
@@ -1049,18 +1048,34 @@ class Process_new:
         pixRAmax = pixels['pixRA'].max()
         deltaRA = (pixRAmax-pixRAmin)/self.nproc
 
-        RArange = np.arange(pixRAmin, pixRAmax, deltaRA).tolist()
+        params_multi = np.arange(pixRAmin, pixRAmax, deltaRA).tolist()
 
         params = {}
         params['observations'] = observations
         params['pixelmap'] = pixels
         params['deltaRA'] = deltaRA
 
-        # multiproc(RArange, params, self.process_metric, self.nproc)
-        # for i in range(self.nproc):
-        for i in [3]:
-            RA = RArange[i]
-            self.process_metric([RA], params, i)
+        if self.fieldType == 'DD':
+            paramsb = dict(zip(['obs', 'pixels'], [observations, pixels]))
+            print('getting pixels')
+            time_ref = time.time()
+            from sn_tools.sn_obs import DataToPixels_new
+            datapixels = DataToPixels_new(
+                self.nside, self.project_FP, self.VRO_FP, RACol=self.RACol, DecCol=self.DecCol, telrot=self.telrot, nproc=self.nproc)
+            pixels = datapixels(observations, pixels)
+            params_multi = np.unique(pixels['healpixID'])
+            print('after pixels', time.time()-time_ref, len(pixels))
+            params['pixelmap'] = pixels
+            pixels.to_hdf('allpixels.hdf5', key='pixels')
+
+        # get the list of pixels Id to process
+        pixel_Ids = self.pixelList(npixels, pixels, healpixIDs)
+
+        params_multi = pixel_Ids
+        nprocb = min(self.nproc, len(pixel_Ids))
+
+        eval('multiproc(params_multi, params, self.process_metric_{}, nprocb)'.format(
+            self.fieldType))
 
     def pixelList(self, npixels, pixels, healpixIDs=[]):
         """
@@ -1177,7 +1192,7 @@ class Process_new:
 
         return pd.DataFrame(res)
 
-    def build_pixels(self, obs, pixels):
+    def build_pixels(self, pixelIds, params, j=0, output_q=None):
         """
         Method to grab pixels matching VRO FP
 
@@ -1191,18 +1206,30 @@ class Process_new:
         obstopixel file with a list of pixels and matched obs (pandas df)
 
         """
+
+        time_ref = time.time()
+        obs = params['obs']
+        pixels = params['pixels']
+
+        idx = pixels['healpixID'].isin(pixelIds)
+        pixels = pixels[idx]
+
+        idx = pixels['healpixID'].isin(pixelIds)
+        pixels = pixels[idx]
+
         from sn_tools.sn_obs import DataToPixels_new
-        print('params', self.nside, self.project_FP, self.VRO_FP,
-              self.RACol, self.DecCol, self.telrot, self.nproc)
         datapixels = DataToPixels_new(
-            self.nside, self.project_FP, self.VRO_FP, RACol=self.RACol, DecCol=self.DecCol, telrot=self.telrot, nproc=1)
+            self.nside, self.project_FP, self.VRO_FP, RACol=self.RACol, DecCol=self.DecCol, telrot=self.telrot, nproc=self.nproc)
+        pixels = datapixels(obs, pixels, display=False)
 
-        print('hello build', pixels)
-        pixels = datapixels(obs, pixels, display=True)
+        print('after pixel/obs matching', time.time()-time_ref)
 
-        return pixels
+        if output_q is not None:
+            return output_q.put({j: pixels})
+        else:
+            return pixels
 
-    def process_metric(self, RArange, params, j=0, output_q=None):
+    def process_metric_WFD(self, RArange, params, j=0, output_q=None):
         """
         Method to process metric on a set of pixels
 
@@ -1227,39 +1254,93 @@ class Process_new:
         procpix = ProcessPixels(
             self.metricList, j, outDir=self.outDir, dbName=self.dbName, saveData=self.saveData)
 
-        """
-        valsdf = pd.DataFrame(pixelmap)
-        ido = valsdf['healpixID'].isin(pixels)
-        ppix = valsdf[ido]
-        """
         RAmin = RArange[0]
         RAmax = RAmin+deltaRA
 
-        import matplotlib.pyplot as plt
-        fig, ax = plt.subplots()
-        ax.plot(observations[self.RACol],
-                observations[self.DecCol], 'ko', mfc='None')
-        ax.plot(pixelmap['pixRA'], pixelmap['pixDec'], 'r*')
-        Decmin = pixelmap['pixDec'].min()
-        Decmax = pixelmap['pixDec'].max()
-        ax.plot([RAmin, RAmin], [Decmin, Decmax], color='r')
-        ax.plot([RAmax, RAmax], [Decmin, Decmax], color='r')
-        plt.show()
+        if self.display:
+            import matplotlib.pyplot as plt
+            fig, ax = plt.subplots()
+            ax.plot(observations[self.RACol],
+                    observations[self.DecCol], 'ko', mfc='None')
+            ax.plot(pixelmap['pixRA'], pixelmap['pixDec'], 'r*')
+            Decmin = pixelmap['pixDec'].min()
+            Decmax = pixelmap['pixDec'].max()
+            ax.plot([RAmin, RAmin], [Decmin, Decmax], color='r')
+            ax.plot([RAmax, RAmax], [Decmin, Decmax], color='r')
+            plt.show()
 
         pixels = self.select_zone(
             pixelmap, RAmin, RAmax, 'pixRA', 0.)
 
         RAmin_pix = pixels['pixRA'].min()
         RAmax_pix = pixels['pixRA'].max()
-        print('alors?????', RAmin_pix, RAmax_pix)
+
         obs = self.select_zone(
             observations, RAmin_pix, RAmax_pix, self.RACol, 3.3)
 
-        ppix = self.build_pixels(obs, pixels)
+        params = {}
+        params['obs'] = obs
+        params['pixels'] = pixels
+
+        ppix = self.build_pixels(pixels['healpixID'], params)
+
+        #ppix.to_hdf('allpixels_test.hdf5', key='pixels')
 
         if len(ppix) > 0:
             print('processing pixels', len(ppix))
             procpix(ppix, obs, self.npixels)
+        else:
+            print('No matching obs found!')
+
+        print('end of processing for', j, time.time()-time_ref)
+
+        if output_q is not None:
+            return output_q.put({j: 1})
+        else:
+            return 1
+
+    def process_metric_DD(self, pixels, params, j=0, output_q=None):
+        """
+        Method to process metric on a set of pixels
+
+        Parameters
+        --------------
+      Rarange: numpy array
+          array with a set of area on the sky
+        observations: numpy array
+           array of observations
+        j: int, opt
+          index number of multiprocessing (default: 0)
+        output_q: multiprocessing.Queue(), opt
+          queue of the multiprocessing (default: None)
+        """
+        time_ref = time.time()
+
+        observations = params['observations']
+        pixelmap = params['pixelmap']
+
+        procpix = ProcessPixels(
+            self.metricList, j, outDir=self.outDir, dbName=self.dbName, saveData=self.saveData)
+
+        valsdf = pd.DataFrame(pixelmap)
+        ido = valsdf['healpixID'].isin(pixels)
+        ppix = valsdf[ido]
+
+        if self.display:
+            import matplotlib.pyplot as plt
+            fig, ax = plt.subplots()
+            ax.plot(observations[self.RACol],
+                    observations[self.DecCol], 'ko', mfc='None')
+            ax.plot(pixelmap['pixRA'], pixelmap['pixDec'], 'r*')
+            Decmin = pixelmap['pixDec'].min()
+            Decmax = pixelmap['pixDec'].max()
+            ax.plot([RAmin, RAmin], [Decmin, Decmax], color='r')
+            ax.plot([RAmax, RAmax], [Decmin, Decmax], color='r')
+            plt.show()
+
+        if len(ppix) > 0:
+            print('processing pixels', len(ppix))
+            procpix(ppix, observations, self.npixels)
         else:
             print('No matching obs found!')
 
