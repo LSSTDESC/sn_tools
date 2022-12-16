@@ -544,7 +544,6 @@ class Process:
             hh = pd.read_csv(pixelList)
             healpixIDs = hh['healpixID'].to_list()
 
-        print('hello', nside)
         # process
         self.processIt(obs, npixels, healpixIDs)
 
@@ -696,14 +695,12 @@ class Process:
 
         """
         if self.fieldType == 'DD':
-            # get pixels corresponding to observations
-
-            mean_RA = np.mean(observations[RACol])
-            mean_Dec = np.mean(observations[DecCol])
-            width_RA = np.max(observations[RACol]) - \
-                np.min(observations[RACol])
-            width_Dec = np.max(observations[DecCol]) - \
-                np.min(observations[DecCol])
+            mean_RA = np.mean(observations[self.RACol])
+            mean_Dec = np.mean(observations[self.DecCol])
+            width_RA = np.max(observations[self.RACol]) - \
+                np.min(observations[self.RACol])
+            width_Dec = np.max(observations[self.DecCol]) - \
+                np.min(observations[self.DecCol])
 
         if self.fieldType == 'WFD':
             width_RA = self.RAmax-self.RAmin
@@ -711,13 +708,13 @@ class Process:
             mean_RA = np.mean([self.RAmin, self.RAmax])
             mean_Dec = np.mean([self.Decmin, self.Decmax])
 
+        # get pixels
         pixels = self.gime_pixels(
             mean_RA, mean_Dec, np.max([width_RA, width_Dec]))
 
         if self.fieldType == 'WFD':
             pixels = self.select_zone(
                 pixels, self.RAmin, self.RAmax, 'pixRA', self.Decmin, self.Decmax, 'pixDec', 0.)
-            print('pixels', len(pixels))
 
         return pixels
 
