@@ -1159,7 +1159,7 @@ def LSSTPointing_part(xc, yc, angle_rot=0., vertices=[[-7.5, 4.5], [7.5, 4.5], [
                               yoff=yc-rotated_poly.centroid.y)
 
 
-class DataToPixels:
+class DataToPixels_deprecated:
     """
     class to match observations to sky pixels
 
@@ -1612,7 +1612,7 @@ class DataToPixels:
             plt.show()
 
 
-class DataToPixels_new:
+class DataToPixels:
     """
     class to match observations to sky pixels
 
@@ -1630,6 +1630,8 @@ class DataToPixels_new:
       Field-of-View (deg2) (default: 9.62)
     nproc: int, opt
      number of procs for multiprocessing
+    fast_pixel_map: int, opt
+     to speed matching pixels/obs by using approximate (RA,Dec,telrot) (default: 0)
     """
 
     def __init__(self, nside, project_FP, VRO_FP, RACol='RA', DecCol='Dec', rotTelCol='rotTelPos', telrot=0, FoV=9.62, nproc=1, fast_pixel_map=0):
@@ -1721,7 +1723,8 @@ class DataToPixels_new:
             fig.suptitle('Selected data and pixels')
             ax.plot(pixels['pixRA'], pixels['pixDec'], 'r*')
             ax.plot(data[self.RACol], data[self.DecCol], 'bs', mfc='None')
-            ax.plot(data[self.RACol_round], data[self.DecCol_round], 'k*')
+            if self.fast_pixel_map:
+                ax.plot(data[self.RACol_round], data[self.DecCol_round], 'k*')
             plt.show()
 
         # match pixels to data
@@ -1729,11 +1732,10 @@ class DataToPixels_new:
         params = {}
         params['data'] = data
         #params['grpCol'] = ['observationId', 'night', 'filter']
-        params['grpCol'] = [self.RACol,self.DecCol, self.rotTelCol]
+        params['grpCol'] = [self.RACol, self.DecCol, self.rotTelCol]
         if self.fast_pixel_map:
             params['grpCol'] = [self.RACol_round,
-                            self.DecCol_round, self.rotTelCol_round]
-            
+                                self.DecCol_round, self.rotTelCol_round]
 
         params['healpixIDs'] = pixels['healpixID']
         params['pixRA'] = pixels['pixRA']
@@ -1762,11 +1764,11 @@ class DataToPixels_new:
             ax.plot(matched_pixels['pixRA'],
                     matched_pixels['pixDec'], 'ob', mfc='None')
             """
+            # add a specific pixel
             pixRA, pixDec = hp.pix2ang(
                 self.nside, 109400, nest=True, lonlat=True)
-            print('aaaaa', self.nside, pixRA, pixDec)
-            """
             ax.plot(pixRA, pixDec, 'k*', mfc='None')
+            """
             plt.show()
         return matched_pixels
 
@@ -1861,23 +1863,17 @@ class DataToPixels_new:
         pixRA_rad = np.deg2rad(pixRA)
         pixDec_rad = np.deg2rad(pixDec)
 
-        # convert data position in rad
         pRA = grp.name[0]
         pDec = grp.name[1]
-        #rotTelPos = self.telrot*grp.name[2]
         rotTelPos = grp.name[2]
-
-        #print('obs', grp.name, len(grp))
-        #print('jjj', grp['flush_by_mjd'].to_list())
 
         pRA_rad = np.deg2rad(pRA)
         pDec_rad = np.deg2rad(pDec)
 
         # gnomonic projection of pixels on the focal plane
         x, y = proj_gnomonic_plane(pRA_rad, pDec_rad, pixRA_rad, pixDec_rad)
-        # x, y = proj_gnomonic_plane(np.deg2rad(self.LSST_RA-pRA),np.deg2rad(self.LSST_Dec-pDec), pixRA_rad, pixDec_rad)
 
-        # get LSST FP with the good scale
+        # get LSST FP with the good scale and model
 
         if self.VRO_FP == 'realistic':
             fpnew = LSSTPointing(
@@ -1906,32 +1902,15 @@ class DataToPixels_new:
             ax.set_ylabel('Dec [deg]')
             plt.show()
 
-        # fpnew = LSSTPointing(np.deg2rad(self.LSST_RA-pRA),np.deg2rad(self.LSST_Dec-pDec),area=np.pi*self.fpscale**2)
-        # maxbound=self.fpscale)
-
-        """
-        import matplotlib.pyplot as plt
-        fig, ax = plt.subplots()
-        ax.plot(x, y, 'ko')
-        pf = PolygonPatch(fpnew, facecolor=(0, 0, 0, 0), edgecolor='red')
-        ax.add_patch(pf)
-        plt.show()
-        """
-
-        # print(shapely.vectorized.contains(
-        #    fpnew, x, y), self.fpscale, fpnew.area)
-
         idf = shapely.vectorized.contains(fpnew, x, y)
 
         pixID_matched = list(healpixIDs[idf])
         pixRA_matched = list(pixRA[idf])
         pixDec_matched = list(pixDec[idf])
 
-        #print('matched', len(pixID_matched), grp['observationId'].to_list())
         if len(pixID_matched) == 0:
             return pd.DataFrame()
 
-        # names = [grp.name]*len(pixID_matched)
         df_pix = pd.DataFrame({'healpixID': pixID_matched,
                                'pixRA': pixRA_matched,
                               'pixDec': pixDec_matched,
@@ -1939,22 +1918,9 @@ class DataToPixels_new:
 
         # listcols = ['observationStartMJD', 'fieldRA', 'fieldDec', 'visitExposureTime',
         #            'fiveSigmaDepth', 'numExposures', 'seeingFwhmEff']
-        # print('alors?')
         obsIds = ','.join(map(str, grp['observationId'].to_list()))
-        #print('ici', df_pix, obsIds)
-        #df_pix[self.obsCol] = grp[self.obsCol]
-
         df_pix['observationIds'] = obsIds
 
-        #print('hhhh', df_pix)
-        """
-        for ll in listcols:
-            print(ll,grp[ll].mean())
-            df_pix[ll]= grp[ll].mean()
-        """
-        # 'groupName': names})
-
-        #print('matching pixels/obs', df_pix)
         return df_pix
 
     def match_hp_query(self, grp):
@@ -3894,9 +3860,17 @@ def load_obs(dbDir, dbName, dbExtens):
 
     # rename fields
 
-    observations = renameFields(observations)
+    import numpy.lib.recfunctions as rfn
 
-    return observations
+    lla = ['band', 'exptime', 'Dec', 'mjd', 'RA']
+    llb = ['filter', 'visitExposureTime',
+           'fieldDec', 'observationStartMJD', 'fieldRA']
+    dict_rep = dict(zip(lla, llb))
+    rec = rfn.rename_fields(observations, dict_rep)
+
+    #observations = renameFields(observations)
+
+    return rec
 
 
 def get_obs(fieldType, dbDir, dbName, dbExtens):
@@ -3956,7 +3930,9 @@ def getObservations(dbDir, dbName, dbExtens):
     numpy array of observations
 
     """
-
+    import time
+    print('getting data')
+    time_ref = time.time()
     dbFullName = '{}/{}.{}'.format(dbDir, dbName, dbExtens)
     # if extension is npy -> load
     if dbExtens == 'npy':
@@ -3964,6 +3940,7 @@ def getObservations(dbDir, dbName, dbExtens):
     else:
         # db as input-> need to transform as npy
         # print('looking for',dbFullName)
+        from sn_tools.sn_io import Read_Sqlite
         keymap = {'observationStartMJD': 'mjd',
                   'filter': 'band',
                   'visitExposureTime': 'exptime',
@@ -3978,6 +3955,7 @@ def getObservations(dbDir, dbName, dbExtens):
                                        new_col_names=keymap)
 
         # save this file on disk if it does not exist
+        """
         outDir = dbDir.replace('/db', '/npy')
         if not os.path.isdir(outDir):
             os.mkdir(outDir)
@@ -3985,5 +3963,6 @@ def getObservations(dbDir, dbName, dbExtens):
         path = '{}/{}.npy'.format(outDir, dbName)
         if not os.path.isfile(path):
             np.save(path, observations)
+        """
 
     return observations

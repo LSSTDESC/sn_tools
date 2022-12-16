@@ -353,7 +353,7 @@ def convert_to_npy(namelist, objtype='pandasDataFrame'):
 
     Returns
     ----------
-    numpy array 
+    numpy array
 
     """
     res = loopStack(namelist, objtype=objtype)
@@ -497,8 +497,8 @@ class Read_Sqlite:
         """
         """
         self.dbfile = dbfile
-        conn = sqlite3.connect(dbfile)
-        self.cur = conn.cursor()
+        self.conn = sqlite3.connect(dbfile)
+        self.cur = self.conn.cursor()
         # get the table list
         self.cur.execute("SELECT name FROM sqlite_master WHERE type='table';")
         self.tables = self.cur.fetchall()
@@ -574,7 +574,6 @@ class Read_Sqlite:
         self.cur.execute(sql_request)
         rows = self.cur.fetchall()
         logging.info('done. %d entries' % len(rows))
-
         logging.info('converting dump into numpy array')
         colnames = [str(c) for c in cols]
         d = np.rec.fromrecords(rows, names=colnames)
@@ -588,6 +587,38 @@ class Read_Sqlite:
             self.update_col_names(d, new_col_names)
 
         return d
+
+    def get_data_df(self, cols=None, sql=None, to_degrees=False, new_col_names=None, table='observations'):
+        """
+        Method to get the contents of the SQL database dumped into a numpy rec array
+
+        Parameters
+        ---------------
+        cols: list (str), opt
+          list of cols to consider (default: None = all cols are considered)
+        sql: str, opt
+          selection for sql (default: None)
+        to_degrees: bool, opt
+          to convert rad to degrees (default: False)
+        new_col_names: bool, opt
+          to rename the columns (default: None)
+        table: str, opt
+          sql table to read (default: observations - used to be SummaryAllProp for fbs < v2.0
+
+        """
+        sql_request = 'SELECT '
+        if cols is None:
+            sql_request += ' * '
+        else:
+            sql_request += ','.join(cols)
+
+        sql_request += 'FROM {}'.format(table)
+        if sql is not None and len(sql) > 0:
+            sql_request += ' WHERE ' + sql
+        sql_request += ';'
+
+        df = pd.read_sql_query(sql_request, self.conn)
+        return df
 
     def update_col_names(self, d, new_col_names):
         """
