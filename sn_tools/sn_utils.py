@@ -1,13 +1,9 @@
 import numpy as np
-from sn_tools.sn_rate import SN_Rate
-from sn_tools.sn_throughputs import Throughputs
-#from sn_tools.sn_telescope import Telescope
 from sn_tools.sn_io import check_get_file
 import os
 import numpy.lib.recfunctions as rf
 from astropy.table import Table, vstack, Column
 from scipy import interpolate, integrate
-from rubin_sim.photUtils import Sed, PhotometricParameters, Bandpass
 import sncosmo
 import h5py
 from scipy.interpolate import InterpolatedUnivariateSpline as Spline1d
@@ -278,6 +274,7 @@ class GenerateSample:
         self.max_rf_phase_qual = self.params['maxRFphaseQual']
         self.web_path = web_path
 
+        from sn_tools.sn_rate import SN_Rate
         self.sn_rate = SN_Rate(rate=self.params['z']['rate'],
                                H0=cosmo_parameters['H0'],
                                Om0=cosmo_parameters['Om'],
@@ -634,6 +631,7 @@ class SimuParameters:
         self.max_rf_phase = self.params['maxRFphase']
         self.min_rf_phase_qual = self.params['minRFphaseQual']
         self.max_rf_phase_qual = self.params['maxRFphaseQual']
+        from sn_tools.sn_rate import SN_Rate
         self.sn_rate = SN_Rate(rate=self.params['z']['rate'],
                                H0=cosmo_parameters['H0'],
                                Om0=cosmo_parameters['Om'],
@@ -1220,6 +1218,7 @@ class X0_norm:
 
         os.environ[name] = thedir+'/Instruments/Landolt'
 
+        from sn_tools.sn_throughputs import Throughputs
         self.trans_standard = Throughputs(through_dir='STANDARD',
                                           telescope_files=[],
                                           filter_files=['sb_-41A.dat'],
@@ -1239,6 +1238,7 @@ class X0_norm:
         CLIGHT_A_s = 2.99792458e18         # [A/s]
         HPLANCK = 6.62606896e-27
 
+        from rubin_sim.photUtils import Sed
         sedb = Sed(wavelen=sourcewavelen, flambda=sourcewavelen *
                    sourcefnu/(CLIGHT_A_s * HPLANCK))
 
@@ -1278,6 +1278,7 @@ class X0_norm:
         fluxes = 10.*self.SN.flux(0., self.wave)
 
         wavelength = self.wave/10.
+        from rubin_sim.photUtils import Sed, PhotometricParameters, Bandpass
         SED_time = Sed(wavelen=wavelength, flambda=fluxes)
 
         expTime = 30.
