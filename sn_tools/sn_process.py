@@ -138,7 +138,7 @@ class Process_deprecated:
                 np.unique(self.pixelmap['healpixID']))
         random_pixels = self.healpixIDs
         if not self.healpixIDs:
-            random_pixels = self.randomPixels(self.pixelmap, self.npixels)
+            random_pixels = randomPixels(self.pixelmap, self.npixels)
         print('number of pixels to process', len(random_pixels))
 
         self.multiprocess(random_pixels, obs,
@@ -445,7 +445,347 @@ class Process_deprecated:
 
         return healpixIDs
 
+class FP2pixels:
+    
+    def __init__(self, dbDir='', dbName='', dbExtens='',
+                 fieldType='', fieldName='', nside=128,
+                 RAmin=0., RAmax=360.,
+                 Decmin=-80., Decmax=80,
+                 pixelmap_dir='', npixels=0,nproc=1,
+                 VRO_FP='circular', project_FP='gnomonic', telrot=0.,
+                 radius=4., pixelList='None', display=False, **kwargs):
 
+        self.dbDir = dbDir
+        self.dbName = dbName
+        self.dbExtens = dbExtens
+        self.fieldType = fieldType
+        self.fieldName = fieldName
+        self.nside = nside
+        self.RAmin = RAmin
+        self.RAmax = RAmax
+        self.Decmin = Decmin
+        self.Decmax = Decmax
+        self.nproc = nproc
+        self.pixelmap_dir = pixelmap_dir
+        self.npixels = npixels
+        self.radius = radius
+        self.VRO_FP = VRO_FP
+        self.project_FP = project_FP
+        self.telrot = telrot
+        self.display = display
+        
+        assert(self.RAmin <= self.RAmax)
+
+        observations = get_obs(fieldType, dbDir,
+                               dbName, dbExtens)
+
+        names = observations.dtype.names
+        self.RACol = colName(names, ['fieldRA', 'RA', 'Ra'])
+        self.DecCol = colName(names, ['fieldDec', 'Dec'])
+
+        # select observations
+        self.obs = self.select_obs(observations, [fieldName], RAmin, RAmax)
+
+        # load healpixIDs if not None
+        self.healpixIDs = []
+        if pixelList != 'None':
+            hh = pd.read_csv(pixelList)
+            self.healpixIDs = hh['healpixID'].to_list()
+
+    def __call__(self):
+
+        pixels = self.get_pixels_field(self.obs)
+
+        if self.display:
+            import matplotlib.pyplot as plt
+            fig, ax = plt.subplots()
+            ax.plot(pixels['pixRA'], pixels['pixDec'], 'r*')
+            ax.plot(self.obs[self.RACol],
+                    self.obs[self.DecCol], 'ko', mfc='None')
+            ax.set_xlabel('RA [deg]')
+            ax.set_ylabel('Dec [deg]')
+            plt.show()
+
+
+        print('getting pixels',self.nside, self.project_FP, self.VRO_FP,self.RACol, self.DecCol, self.telrot,self.nproc)
+        time_ref = time.time()
+        from sn_tools.sn_obs import DataToPixels
+        datapixels = DataToPixels(
+            self.nside, self.project_FP, self.VRO_FP, RACol=self.RACol, DecCol=self.DecCol, telrot=self.telrot, nproc=self.nproc)
+        
+        pixels = datapixels(self.obs, pixels,display=self.display)
+
+        print('FP2pixels done',time.time()-time_ref)
+
+        # get the list of pixels Id to process
+        pixel_Ids = self.pixelList(self.npixels, pixels, self.healpixIDs)
+
+
+        idx = pixels['healpixID'].isin(pixel_Ids)
+        
+        return pixels[idx]
+        
+        
+    def select_obs(self, observations, fieldName, RAmin, RAmax):
+        """
+        Method to select observations
+
+        Parameters
+        ---------------
+        observations: array
+          data to process
+        fieldName: str
+          fieldName to select
+
+        """
+        if self.fieldType == 'DD':
+            idx = np.in1d(observations['note'], fieldName)
+            observations = observations[idx]
+            return self.select_zone(observations, RAmin, RAmax, self.RACol)
+
+        if self.fieldType == 'WFD':
+            return self.select_zone(observations, RAmin, RAmax, self.RACol)
+
+        if self.fieldType == 'Fake':
+            return observations
+
+    def select_zone(self, data, RAmin, RAmax, RACol, Decmin=None, Decmax=None, DecCol='Dec', delta_coord=5.):
+        """
+        Method to select data in a given area defined by (RA_min, RA_max)
+
+        Parameters
+        --------------
+        data: array
+          data to process
+        RA_min: float
+          min RA value
+        RA_max: float
+          max RA value
+        RACol: str
+           RA colname
+        Dec_min: float
+          min Dec value
+        Dec_max: float
+          max Dec value
+        DecCol: str
+           Dec colname
+        delta_coord: float, opt
+          deltaRA to extend the (RA_min, RA_max) window (default: 5)
+
+        """
+
+        idx = data[RACol] >= RAmin-delta_coord
+        idx &= data[RACol] < RAmax+delta_coord
+        if Decmin is not None:
+            idx &= data[DecCol] >= Decmin-delta_coord
+            idx &= data[DecCol] < Decmax+delta_coord
+
+        obs = data[idx]
+
+        if RAmin < delta_coord:
+            idk = data[RACol] >= 360.-delta_coord
+            obs = np.concatenate((obs, data[idk]))
+
+        if RAmax >= 360.-delta_coord:
+            idk = data[RACol] <= delta_coord
+            obs = np.concatenate((obs, data[idk]))
+
+        return obs
+
+    def get_pixels_field(self, observations):
+        """
+        Method to get pixels corresponding to a given area
+
+        Parameters
+        --------------
+        observations: array
+          data to process
+
+        Returns
+        -----------
+        list of pixels
+
+        """
+        if self.fieldType == 'DD':
+            mean_RA = np.mean(observations[self.RACol])
+            mean_Dec = np.mean(observations[self.DecCol])
+            width_RA = np.max(observations[self.RACol]) - \
+                np.min(observations[self.RACol])
+            width_Dec = np.max(observations[self.DecCol]) - \
+                np.min(observations[self.DecCol])
+
+        if self.fieldType == 'WFD':
+            width_RA = self.RAmax-self.RAmin
+            width_Dec = self.Decmax-self.Decmin
+            mean_RA = np.mean([self.RAmin, self.RAmax])
+            mean_Dec = np.mean([self.Decmin, self.Decmax])
+
+        # get pixels
+        pixels = self.gime_pixels(
+            mean_RA, mean_Dec, np.max([width_RA, width_Dec]))
+
+        if self.fieldType == 'WFD':
+            pixels = self.select_zone(
+                pixels, self.RAmin, self.RAmax, 'pixRA', self.Decmin, self.Decmax, 'pixDec', 0.)
+
+        return pixels
+
+    def pixelList(self, npixels, pixels, healpixIDs=[]):
+        """
+        Method to get the list of pixels to process
+
+        Parameters
+        --------------
+        npixels: int
+          number of pixels to grab
+        pixels: array
+          list of "available" pixels
+        healpixIDs: list, opt
+          list of healpixIDs to process (default: [])
+
+        Returns
+        ----------
+        list of healpixIDs to process
+
+        """
+        pixList = list(np.unique(pixels['healpixID']))
+
+        if healpixIDs:
+            # check wether required healpixID are in pixList
+            ll = list(set(pixList).intersection(healpixIDs))
+            if not ll:
+                print('Big problem here: healpixIDs are not in pixel list!!')
+                return None
+            else:
+                return healpixIDs
+
+        if npixels == -1:
+            return pixList
+
+        random_pixels = randomPixels(pixList, npixels)
+
+        return random_pixels
+
+    def path_to_pixels(self):
+        """
+        method to grab pixel files
+
+        Returns
+        -----------
+        full search path
+
+        """
+
+        search_path = '{}/{}/{}_{}_nside_{}_{}_{}_{}_{}'.format(self.pixelmap_dir,
+                                                                self.dbName, self.dbName,
+                                                                self.fieldType, self.nside,
+                                                                self.RAmin, self.RAmax,
+                                                                self.Decmin, self.Decmax)
+        if self.fieldType == 'DD':
+            search_path += '_{}'.format(self.fieldName)
+        search_path += '.npy'
+
+        return search_path
+
+    def gime_pixels(self, RA, Dec, width, inclusive=True):
+        """
+        method to get pixels corresponding to obs area
+
+        Parameters
+        --------------
+        RA: float
+          mean RA position
+        Dec: float
+           mean Dec position
+        width: float
+           width of the window around (RA,Dec)
+        inclusive: bool, opt
+          inclusive bool for healpix (default: True)
+
+        Returns
+        -----------
+        list of pixels corresponding to (RA, Dec) central position
+
+        """
+        import healpy as hp
+        import numpy.lib.recfunctions as rf
+        # get central pixel ID
+        healpixID = hp.ang2pix(self.nside, RA,
+                               Dec, nest=True, lonlat=True)
+
+        # get nearby pixels
+        vec = hp.pix2vec(self.nside, healpixID, nest=True)
+        healpixIDs = hp.query_disc(
+            self.nside, vec, np.deg2rad(width)+np.deg2rad(3.5), inclusive=inclusive, nest=True)
+
+        # get pixel coordinates
+        coords = hp.pix2ang(self.nside, healpixIDs,
+                            nest=True, lonlat=True)
+        pixRA, pixDec = coords[0], coords[1]
+
+        pixels = pd.DataFrame(healpixIDs, columns=['healpixID'])
+        pixels['pixRA'] = pixRA
+        pixels['pixDec'] = pixDec
+
+        return pixels
+
+    def file_pixels(self):
+        """
+        Method to search for and load an ObsTopixel file
+
+        Returns
+        ----------
+        obsTopixel file (pandas df)
+
+        """
+        search_path = self.path_to_pixels()
+        pixelmap_file = glob.glob(search_path)[0]
+        print('searching in', search_path, pixelmap_file)
+
+        res = np.load(pixelmap_file, allow_pickle=True)
+
+        return pd.DataFrame(res)
+
+    def build_pixels(self, pixelIds, params, j=0, output_q=None):
+
+        """
+        Method to grab pixels matching VRO FP
+
+        Parameters
+        ---------------
+        obs: array
+           data to process (VRO FP centers)
+
+        Returns
+        -----------
+        obstopixel file with a list of pixels and matched obs (pandas df)
+
+        """
+
+        time_ref = time.time()
+        obs = params['obs']
+        pixels = params['pixels']
+        display = params['display']
+
+        idx = pixels['healpixID'].isin(pixelIds)
+        pixels = pixels[idx]
+
+        idx = pixels['healpixID'].isin(pixelIds)
+        pixels = pixels[idx]
+
+        from sn_tools.sn_obs import DataToPixels
+        datapixels = DataToPixels(
+            self.nside, self.project_FP, self.VRO_FP, RACol=self.RACol, DecCol=self.DecCol, telrot=self.telrot, nproc=self.nproc)
+        pixels = datapixels(obs, pixels, display=display)
+
+        print('after pixel/obs matching', time.time()-time_ref)
+
+        if output_q is not None:
+            return output_q.put({j: pixels})
+        else:
+            return pixels
+    
+    
 class Process:
     """
     Class to process data ie run metrics on a set of pixels
@@ -750,7 +1090,7 @@ class Process:
         if npixels == -1:
             return pixList
 
-        random_pixels = self.randomPixels(pixList, npixels)
+        random_pixels = randomPixels(pixList, npixels)
 
         return random_pixels
 
@@ -1045,17 +1385,21 @@ class Process:
 
         print('end of processing for', j, time.time()-time_ref)
 
-    def randomPixels(self, hIDs, npixels):
-        """
-        Method to choose a random set of pixels
 
 
-        Returns
-        ---------
-       healpixIDs: list of randomly chosen healpix IDs
 
-        """
 
-        healpixIDs = random.sample(hIDs, npixels)
+def randomPixels(hIDs, npixels):
+    """
+    Function to choose a random set of pixels
 
-        return healpixIDs
+
+    Returns
+    ---------
+    healpixIDs: list of randomly chosen healpix IDs
+
+    """
+
+    healpixIDs = random.sample(hIDs, npixels)
+
+    return healpixIDs
