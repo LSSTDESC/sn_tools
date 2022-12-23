@@ -2034,23 +2034,29 @@ class ProcessPixels:
         self.dbName = dbName
         self.num = ipoint
 
-        # data will be save so clean the output directory first
-        if self.saveData:
-            self.clean()
+       
 
     def clean(self):
         """
         Method to clean potential existing output files
 
         """
+        for key, vals in self.resfi.items():
+            outName = '{}/{}_{}_{}.hdf5'.format(self.outDir,
+                                                self.dbName, key, self.num)
+            if os.path.exist(outName):
+                print('removing', outName)
+                os.system('rm {}'.format(val))
 
+        """
         for metric in self.metricList:
-            listf = glob.glob(
-                '{}/*_{}_{}*'.format(self.outDir, metric.name, self.num))
+            search_path = '{}/*_{}_{}*'.format(self.outDir, metric.name, self.num)
+            print('cleaning',search_path)
+            listf = glob.glob(search_path)
             if len(listf) > 0:
                 for val in listf:
                     os.system('rm {}'.format(val))
-
+        """
     def __call__(self, pixels, observations, ip):
         """
         Main processing here
@@ -2071,6 +2077,10 @@ class ProcessPixels:
         for metric in self.metricList:
             self.resfi[metric.name] = pd.DataFrame()
 
+        # data will be save so clean the output directory first
+        if self.saveData:
+            self.clean()
+            
         data = pd.DataFrame(np.copy(observations))
 
         # run the metrics on those pixels
