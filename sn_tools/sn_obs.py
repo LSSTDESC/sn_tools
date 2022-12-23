@@ -2161,7 +2161,7 @@ class ProcessPixels:
         ido &= dataset[self.DecCol].isin(selpix[self.DecCol])
         """
 
-        obsIds = self.getList(selpix)
+        obsIds = getList(selpix)
         #ido = dataset['observationId'].isin(selpix['observationId'])
         ido = dataset['observationId'].isin(obsIds)
 
@@ -2169,7 +2169,8 @@ class ProcessPixels:
 
         return datasel
 
-    def getList(self, selpix, colName='observationIds'):
+    @staticmethod
+    def getList(selpix, colName='observationIds'):
         """
         Transform columns of strs to list(int)
 
