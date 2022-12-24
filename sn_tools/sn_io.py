@@ -967,3 +967,11 @@ def checkDir(outDir):
     """
     if not os.path.isdir(outDir):
         os.makedirs(outDir)
+        
+def add_parser(parser, confDict):
+    for key, vals in confDict.items():
+        vv = vals[1]
+        if vals[0] != 'str':
+            vv = eval('{}({})'.format(vals[0], vals[1]))
+        parser.add_option('--{}'.format(key), help='{} [%default]'.format(
+            vals[2]), default=vv, type=vals[0], metavar='')
