@@ -2044,9 +2044,9 @@ class ProcessPixels:
         for key, vals in self.resfi.items():
             outName = '{}/{}_{}_{}.hdf5'.format(self.outDir,
                                                 self.dbName, key, self.num)
-            if os.path.exist(outName):
+            if os.path.exists(outName):
                 print('removing', outName)
-                os.system('rm {}'.format(val))
+                os.system('rm {}'.format(outName))
 
         """
         for metric in self.metricList:
@@ -2161,7 +2161,7 @@ class ProcessPixels:
         ido &= dataset[self.DecCol].isin(selpix[self.DecCol])
         """
 
-        obsIds = getList(selpix)
+        obsIds = self.getList(selpix)
         #ido = dataset['observationId'].isin(selpix['observationId'])
         ido = dataset['observationId'].isin(obsIds)
 

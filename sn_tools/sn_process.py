@@ -785,8 +785,183 @@ class FP2pixels:
         else:
             return pixels
     
-    
-class Process:
+class Process(FP2pixels):
+    """
+    Class to process data ie run metrics on a set of pixels
+
+    Parameters
+    --------------
+    dbDir: str
+      dir location of observing strategy file
+    dbName: str
+      observing strategy name
+    dbExtens: str
+      database extension (npy, db, ...)
+    fieldType: str
+      type of field: DD, WFD, Fake
+    nside: int
+      healpix nside parameter
+    RAmin: float
+      min RA of the area to process
+    RAmax: float
+      max RA of the area to process
+    Decmin: float
+      min Dec of the area to process
+    Decmax: float
+      max Dec of the area to process
+    saveData: bool
+      to save ouput data or not
+    remove_dithering: bool
+      to remove dithering (to use for DD studies)
+    outDir: str
+      output directory location
+    nprocs: int,
+      number of cores to run
+    metricList: list(metrics)
+      list of metrics to process
+    pixelmap_dir: str, opt
+      location directory where maps pixels<->observations are (default: '')
+    npixels: int, opt
+      number of pixels to run on (default: 0)
+    nclusters: int, opt
+       number of clusters to make (DD only)(default: 5)
+    radius: float, opt
+      radius to get pixels arounf clusters (DD only) (default: 4 deg)
+    pixelList: str, opt
+      cvs file of pixels to process
+
+    """
+
+    def __init__(self, dbDir='', dbName='', dbExtens='',
+                 fieldType='', fieldName='', nside=128,
+                 RAmin=0., RAmax=360.,
+                 Decmin=-80., Decmax=80,
+                 saveData=False, remove_dithering=False,
+                 outDir='', nproc=1, metricList=[],
+                 pixelmap_dir='', npixels=0,
+                 VRO_FP='circular', project_FP='gnomonic', telrot=0.,
+                 radius=4., pixelList='None', display=False, **kwargs):
+        super().__init__(dbDir, dbName, dbExtens,
+                 fieldType, fieldName, nside,
+                 RAmin, RAmax,
+                 Decmin, Decmax,
+                 pixelmap_dir, npixels,nproc,
+                 VRO_FP, project_FP, telrot,
+                 radius, pixelList, display)
+
+      
+        self.saveData = saveData
+        self.remove_dithering = remove_dithering
+        self.outDir = outDir
+        self.metricList = metricList
+
+        self.processIt(self.obs)
+
+    def processIt(self, observations):
+        """
+        Method to process a field
+
+        Parameters
+        --------------
+        observations: array
+            data to process
+
+        """
+
+        #pixels = self.get_pixels_field(observations)
+        #getting the pixels
+        print('getting pixels call')
+        pixels = super(Process,self).__call__()
+
+        print('finished with pixels')
+        
+        if self.display:
+            import matplotlib.pyplot as plt
+            fig, ax = plt.subplots()
+            ax.plot(pixels['pixRA'], pixels['pixDec'], 'r*')
+            ax.plot(observations[self.RACol],
+                    observations[self.DecCol], 'ko', mfc='None')
+            ax.set_xlabel('RA [deg]')
+            ax.set_ylabel('Dec [deg]')
+            plt.show()
+
+        pixRAmin = pixels['pixRA'].min()
+        pixRAmax = pixels['pixRA'].max()
+        deltaRA = (pixRAmax-pixRAmin)/self.nproc
+
+        params_multi = np.arange(pixRAmin, pixRAmax, deltaRA).tolist()
+
+        params = {}
+        params['observations'] = observations
+        params['pixelmap'] = pixels
+        params_multi = np.unique(pixels['healpixID'])
+        nprocb = min(self.nproc, len(params_multi))
+        multiproc(params_multi, params, self.process_metric, nprocb)
+        
+        """
+        eval('multiproc(params_multi, params, self.process_metric_{}, nprocb)'.format(
+            self.fieldType))
+        """
+        """
+        self.nproc = 1
+        params_multi = [0.]
+        eval('self.process_metric_{}(params_multi, params)'.format(self.fieldType))
+        """
+        
+
+    def process_metric(self, pixels, params, j=0, output_q=None):
+        """
+        Method to process metric on a set of pixels
+
+        Parameters
+        --------------
+      Rarange: numpy array
+          array with a set of area on the sky
+        observations: numpy array
+           array of observations
+        j: int, opt
+          index number of multiprocessing (default: 0)
+        output_q: multiprocessing.Queue(), opt
+          queue of the multiprocessing (default: None)
+        """
+        time_ref = time.time()
+
+        observations = params['observations']
+        pixelmap = params['pixelmap']
+
+        procpix = ProcessPixels(
+            self.metricList, j, outDir=self.outDir, dbName=self.dbName, saveData=self.saveData)
+
+        valsdf = pd.DataFrame(pixelmap)
+        ido = valsdf['healpixID'].isin(pixels)
+        ppix = valsdf[ido]
+
+        if self.display:
+            import matplotlib.pyplot as plt
+            fig, ax = plt.subplots()
+            ax.plot(observations[self.RACol],
+                    observations[self.DecCol], 'ko', mfc='None')
+            ax.plot(pixelmap['pixRA'], pixelmap['pixDec'], 'r*')
+            Decmin = pixelmap['pixDec'].min()
+            Decmax = pixelmap['pixDec'].max()
+            ax.plot([RAmin, RAmin], [Decmin, Decmax], color='r')
+            ax.plot([RAmax, RAmax], [Decmin, Decmax], color='r')
+            plt.show()
+
+        if len(ppix) > 0:
+            print('processing pixels', len(ppix))
+            procpix(ppix, observations, self.npixels)
+        else:
+            print('No matching obs found!')
+
+        print('end of processing for', j, time.time()-time_ref)
+
+        if output_q is not None:
+            return output_q.put({j: 1})
+        else:
+            return 1
+        
+class Process_old:
     """
     Class to process data ie run metrics on a set of pixels
 

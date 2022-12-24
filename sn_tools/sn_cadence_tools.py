@@ -6,7 +6,6 @@ import numpy.lib.recfunctions as rf
 import h5py
 from astropy.table import Table, Column, vstack
 from scipy.interpolate import griddata, interpn, CloughTocher2DInterpolator, LinearNDInterpolator
-from sn_tools.sn_telescope import Telescope
 from sn_tools.sn_io import Read_Sqlite
 from sn_tools.sn_obs import renameFields, getFields
 from sn_tools.sn_obs import getObservations
@@ -486,6 +485,7 @@ class TemplateData(object):
     def __init__(self, filename, band):
         self.fi = filename
         self.refdata = self.Stack()
+        from sn_tools.sn_telescope import Telescope
         self.telescope = Telescope(airmass=1.1)
         self.blue_cutoff = 300.
         self.red_cutoff = 800.
