@@ -1308,7 +1308,7 @@ class Stat_DD_night:
         return np.copy(self.obs[id_ddf])
 
 
-def stat_DD_night_pixel(obsPixelDir, dbName, nproc=8):
+def stat_DD_night_pixel_deprecated(obsPixelDir, dbName, nproc=8):
     """
     Function to perform cadence stat per pixel
 
@@ -1337,6 +1337,35 @@ def stat_DD_night_pixel(obsPixelDir, dbName, nproc=8):
             rr = process_night_pixel(pixels.to_records(), dbName, nproc=nproc)
             print(rr, rr.columns)
             rtot = pd.concat((rtot, rr))
+
+    return rtot
+
+def stat_DD_night_pixel(pixels, nproc=8):
+    """
+    Function to perform cadence stat per pixel
+
+    Parameters
+    ---------------
+    obsPixelDir: str
+      directory where the data are to be found
+    dbName: str
+      OS name
+    nproc: int, opt
+      number of procs for multiprocessing (default: 8)
+
+    Returns
+    -----------
+    pandas df with stat values per pixel/season
+
+    """
+    
+
+    rtot = pd.DataFrame()
+   
+    if len(pixels) > 0:
+        rr = process_night_pixel(pixels.to_records(), dbName, nproc=nproc)
+        print(rr, rr.columns)
+        rtot = pd.concat((rtot, rr))
 
     return rtot
 
