@@ -1340,7 +1340,7 @@ def stat_DD_night_pixel_deprecated(obsPixelDir, dbName, nproc=8):
 
     return rtot
 
-def stat_DD_night_pixel(pixels, nproc=8):
+def stat_DD_night_pixel(pixels, dbName, nproc=8):
     """
     Function to perform cadence stat per pixel
 
