@@ -541,10 +541,10 @@ class FP2pixels:
         if self.fieldType == 'DD':
             idx = np.in1d(observations['note'], fieldName)
             observations = observations[idx]
-            return self.select_zone(observations, RAmin, RAmax, self.RACol)
+            return self.select_zone(observations, RAmin, RAmax, self.RACol,DEcCol=self.DecCol)
 
         if self.fieldType == 'WFD':
-            return self.select_zone(observations, RAmin, RAmax, self.RACol)
+            return self.select_zone(observations, RAmin, RAmax, self.RACol,DecCol=self.DecCol)
 
         if self.fieldType == 'Fake':
             return observations
@@ -580,16 +580,23 @@ class FP2pixels:
             idx &= data[DecCol] >= Decmin-delta_coord
             idx &= data[DecCol] < Decmax+delta_coord
 
-        obs = data[idx]
-
+        obs = np.copy(data[idx])
+    
+        if self.display:
+            import matplotlib.pyplot as plt
+            fig, ax = plt.subplots()
+            self.plotPixels(obs,RACol,DecCol,ax=ax,show=False)
         if RAmin < delta_coord:
-            idk = data[RACol] >= 360.-delta_coord
+            idk = data[RACol] > 360.-delta_coord
             obs = np.concatenate((obs, data[idk]))
 
         if RAmax >= 360.-delta_coord:
-            idk = data[RACol] <= delta_coord
+            idk = data[RACol] < delta_coord
             obs = np.concatenate((obs, data[idk]))
 
+        if self.display:
+            self.plotPixels(obs,RACol,DecCol,ax=ax,show=False)
+            plt.show()
         return obs
 
     def get_pixels_field(self, observations):
@@ -625,11 +632,42 @@ class FP2pixels:
             mean_RA, mean_Dec, np.max([width_RA, width_Dec]))
 
         if self.fieldType == 'WFD':
-            pixels = self.select_zone(
-                pixels, self.RAmin, self.RAmax, 'pixRA', self.Decmin, self.Decmax, 'pixDec', 0.)
-
+            pixelsb = self.select_zone(
+                pixels.to_records(index=False), self.RAmin, self.RAmax, 'pixRA', None,None, 'pixDec', 0.)
+            pixels = pd.DataFrame.from_records(pixelsb)
+            
         return pixels
 
+    def plotPixels(self,pixels,RACol,DecCol,ax=None,show=True):
+        """
+        Method to plot (RA,Dec) of data
+
+        Parameters
+        ----------
+        pixels : array
+            data to plot
+        RACol : str
+            x-axis column
+        DecCol : str
+            y-axis column
+        ax : TYPE, optional
+            DESCRIPTION. The default is None.
+        show : TYPE, optional
+            DESCRIPTION. The default is True.
+
+        Returns
+        -------
+        None.
+
+        """
+        import matplotlib.pyplot as plt
+        if ax is None:
+            fig, ax = plt.subplots()
+        ax.plot(pixels[RACol],pixels[DecCol],'ko')
+        if show:
+            plt.show()
+        
+        
     def pixelList(self, npixels, pixels, healpixIDs=[]):
         """
         Method to get the list of pixels to process
@@ -1077,10 +1115,10 @@ class Process_old:
         if self.fieldType == 'DD':
             idx = np.in1d(observations['note'], fieldName)
             observations = observations[idx]
-            return self.select_zone(observations, RAmin, RAmax, self.RACol)
+            return self.select_zone(observations, RAmin, RAmax, self.RACol,DecCol=self.DecCol)
 
         if self.fieldType == 'WFD':
-            return self.select_zone(observations, RAmin, RAmax, self.RACol)
+            return self.select_zone(observations, RAmin, RAmax, self.RACol,DecCol=self.DecCol)
 
         if self.fieldType == 'Fake':
             return observations
@@ -1226,6 +1264,8 @@ class Process_old:
         # get pixels
         pixels = self.gime_pixels(
             mean_RA, mean_Dec, np.max([width_RA, width_Dec]))
+
+
 
         if self.fieldType == 'WFD':
             pixels = self.select_zone(
