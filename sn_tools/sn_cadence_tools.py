@@ -5,8 +5,7 @@ from matplotlib.patches import Ellipse
 import numpy.lib.recfunctions as rf
 import h5py
 from astropy.table import Table, Column, vstack
-from scipy.interpolate import griddata, interpn, CloughTocher2DInterpolator, LinearNDInterpolator
-from sn_tools.sn_io import Read_Sqlite
+from scipy.interpolate import CloughTocher2DInterpolator
 from sn_tools.sn_obs import renameFields, getFields
 from sn_tools.sn_obs import getObservations
 import pandas as pd
@@ -1386,7 +1385,7 @@ def process_night_pixel(pixels, dbName, nproc=8):
     res = multiproc(
         np.unique(pixels['healpixID']), params, ana_DDF, nproc)
 
-    print('allo', np.unique(pixels['fieldName']))
+    #print('allo', np.unique(pixels['fieldName']))
     res['field'] = np.unique(pixels['fieldName'])[0]
 
     return res
@@ -1458,7 +1457,7 @@ def ana_DDF(list_DD, params, j, output_q):
     res_DD = pd.DataFrame()
 
     for field in list_DD:
-        print('analyzing', field)
+        #print('analyzing', field)
         idx = obs_DD[fieldColdb] == field
         res = ana_field(np.copy(obs_DD[idx]), dbName, Nvisits,
                         mjdCol=mjdCol,  nightCol=nightCol,
