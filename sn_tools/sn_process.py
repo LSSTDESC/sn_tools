@@ -445,8 +445,9 @@ class Process_deprecated:
 
         return healpixIDs
 
+
 class FP2pixels:
-    
+
     def __init__(self, dbDir='', dbName='', dbExtens='',
                  fieldType='', fieldName='', nside=128,
                  RAmin=0., RAmax=360.,
@@ -923,12 +924,13 @@ class Process(FP2pixels):
             ax.set_ylabel('Dec [deg]')
             plt.show()
 
+        """
         pixRAmin = pixels['pixRA'].min()
         pixRAmax = pixels['pixRA'].max()
         deltaRA = (pixRAmax-pixRAmin)/self.nproc
 
         params_multi = np.arange(pixRAmin, pixRAmax, deltaRA).tolist()
-
+        """
         params = {}
         params['observations'] = observations
         params['pixelmap'] = pixels
