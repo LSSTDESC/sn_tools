@@ -894,7 +894,7 @@ class Process(FP2pixels):
                  RAmin=0., RAmax=360.,
                  Decmin=-80., Decmax=80,
                  saveData=False, remove_dithering=False,
-                 outDir='', nproc=1, metricList=[],
+                 outDir='', nproc=1, nproc_pixels=1,metricList=[],
                  pixelmap_dir='', npixels=0,
                  VRO_FP='circular', project_FP='gnomonic', telrot=0.,
                  radius=4., pixelList='None', display=False, **kwargs):
@@ -910,7 +910,9 @@ class Process(FP2pixels):
         self.saveData = saveData
         self.remove_dithering = remove_dithering
         self.outDir = outDir
+        self.nproc_pixels = nproc_pixels
         self.metricList = metricList
+        
 
         self.processIt(self.obs)
 
@@ -953,7 +955,7 @@ class Process(FP2pixels):
         params['observations'] = observations
         params['pixelmap'] = pixels
         params_multi = np.unique(pixels['healpixID'])
-        nprocb = min(self.nproc, len(params_multi))
+        nprocb = min(self.nproc_pixels, len(params_multi))
         multiproc(params_multi, params, self.process_metric, nprocb)
         
         """

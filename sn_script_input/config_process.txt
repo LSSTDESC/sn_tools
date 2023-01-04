@@ -4,6 +4,7 @@ dbExtens npy str #db extension
 dbDir /sps/lsst/cadence/LSST_SN_CADENCE/cadence_db str #db dir 
 templateDir /sps/lsst/data/dev/pgris/Templates_final_new str #template dir
 nproc 8 int #number of proc
+nproc_pixels 8 int #number of proc to process pixels
 remove_dithering 0 int #remove dithering for DDF
 simuType 0 int #flag for new simulations
 saveData 0 int #flag to dump data on disk
