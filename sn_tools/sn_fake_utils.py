@@ -120,9 +120,9 @@ class FakeObservations:
             mygen = rf.append_fields(mygen, vv, [0.]*len(mygen))
 
         # add Ra, Dec,
-        mygen = rf.append_fields(mygen, 'Ra', mygen['fieldRA'])
-        mygen = rf.append_fields(mygen, 'RA', mygen['fieldRA'])
-        mygen = rf.append_fields(mygen, 'Dec', mygen['fieldRA'])
+        #mygen = rf.append_fields(mygen, 'Ra', mygen['fieldRA'])
+        #mygen = rf.append_fields(mygen, 'RA', mygen['fieldRA'])
+        #mygen = rf.append_fields(mygen, 'Dec', mygen['fieldRA'])
 
         print('array', mygen.dtype)
         # print(mygen)
@@ -149,7 +149,7 @@ class GenerateFakeObservations:
                  DecCol='fieldDec', filterCol='filter', m5Col='fiveSigmaDepth',
                  exptimeCol='visitExposureTime', nexpCol='numExposures',
                  seasonCol='season', seeingEffCol='seeingFwhmEff', seeingGeomCol='seeingFwhmGeom',
-                 visitTime='visitTime',
+                 visitTime='visitTime', rotTelPosCol='rotTelPos',
                  sequences=False):
 
         # config = yaml.load(open(config_filename))
@@ -164,6 +164,7 @@ class GenerateFakeObservations:
         self.seeingEffCol = seeingEffCol
         self.seeingGeomCol = seeingGeomCol
         self.visitTime = visitTime
+        self.rotTelPosCol = rotTelPosCol
 
         # now make fake obs
         if not sequences:
@@ -205,6 +206,7 @@ class GenerateFakeObservations:
         moonphase = dict(zip(bands, config['moonphase']))
         RA = config['RA']
         Dec = config['Dec']
+        rotTelPos = config['rotTelPos']
         rtot = []
         # for season in range(1, config['nseasons']+1):
         Nvisits = {}
@@ -236,16 +238,17 @@ class GenerateFakeObservations:
 
                     myarr = np.array(mjd, dtype=[(self.mjdCol, 'f8')])
                     myarr = rf.append_fields(myarr, 'night', night)
-                    myarr = rf.append_fields(myarr, [self.RACol, self.DecCol, self.filterCol], [
-                        [RA]*len(myarr), [Dec]*len(myarr), [band]*len(myarr)])
+                    nvals = len(myarr)
+                    myarr = rf.append_fields(myarr, [self.RACol, self.DecCol, self.filterCol,self.rotTelPosCol], [
+                        [RA]*nvals, [Dec]*nvals, [band]*nvals], [rotTelPos]*nvals)
                     myarr = rf.append_fields(myarr, [self.m5Col, self.nexpCol, self.exptimeCol, self.seasonCol], [
-                        [m5_coadded]*len(myarr), [Nvisits[band]]*len(myarr), [Nvisits[band]*Single_Exposure_Time[band]]*len(myarr), [season]*len(myarr)])
+                        [m5_coadded]*nvals, [Nvisits[band]]*nvals, [Nvisits[band]*Single_Exposure_Time[band]]*nvals, [season]*nvals])
                     myarr = rf.append_fields(myarr, [self.seeingEffCol, self.seeingGeomCol], [
-                        [seeingEff[band]]*len(myarr), [seeingGeom[band]]*len(myarr)])
+                        [seeingEff[band]]*nvals, [seeingGeom[band]]*nvals])
                     myarr = rf.append_fields(myarr, self.visitTime, [
-                                             Nvisits[band]*Single_Exposure_Time[band]]*len(myarr))
+                                             Nvisits[band]*Single_Exposure_Time[band]]*nvals)
                     myarr = rf.append_fields(myarr, ['airmass', 'sky', 'moonPhase'], [
-                        [airmass[band]]*len(myarr), [sky[band]]*len(myarr), [moonphase[band]]*len(myarr)])
+                        [airmass[band]]*nvals, [sky[band]]*nvals, [moonphase[band]]*nvals])
                     rtot.append(myarr)
 
             """
@@ -260,11 +263,11 @@ class GenerateFakeObservations:
 
                 myarr = np.array(mjd, dtype=[(self.mjdCol, 'f8')])
                 myarr = rf.append_fields(myarr, [self.RACol, self.DecCol, self.filterCol], [
-                                         [RA]*len(myarr), [Dec]*len(myarr), [band]*len(myarr)])
+                                         [RA]*nvals, [Dec]*nvals, [band]*nvals])
                 myarr = rf.append_fields(myarr, [self.m5Col, self.nexpCol, self.exptimeCol, self.seasonCol], [
-                                         [m5_coadded]*len(myarr), [Nvisits[band]]*len(myarr), [Nvisits[band]*Exposure_Time[band]]*len(myarr), [season]*len(myarr)])
+                                         [m5_coadded]*nvals, [Nvisits[band]]*nvals, [Nvisits[band]*Exposure_Time[band]]*nvals, [season]*nvals])
                 myarr = rf.append_fields(myarr, [self.seeingEffCol, self.seeingGeomCol], [
-                                         [seeingEff[band]]*len(myarr), [seeingGeom[band]]*len(myarr)])
+                                         [seeingEff[band]]*nvals, [seeingGeom[band]]*nvals])
                 rtot.append(myarr)
             """
         res = np.copy(np.concatenate(rtot))
@@ -318,6 +321,7 @@ class GenerateFakeObservations:
         inter_season_gap = 300.
         RA = config['RA']
         Dec = config['Dec']
+        rotTelPos = config['rotTelPos']
         rtot = []
         # for season in range(1, config['nseasons']+1):
         for il, season in enumerate(config['seasons']):
@@ -335,14 +339,15 @@ class GenerateFakeObservations:
                                           Exposure_Time[band])
 
                 myarr = np.array(mjd, dtype=[(self.mjdCol, 'f8')])
-                myarr = rf.append_fields(myarr, [self.RACol, self.DecCol, self.filterCol], [
-                                         [RA]*len(myarr), [Dec]*len(myarr), [band]*len(myarr)])
+                nvals = len(myarr)
+                myarr = rf.append_fields(myarr, [self.RACol, self.DecCol, self.filterCol,self.rotTelPosCol], [
+                                         [RA]*nvals, [Dec]*nvals, [band]*nvals,[rotTelPos]*nvals])
                 myarr = rf.append_fields(myarr, [self.m5Col, self.nexpCol, self.exptimeCol, self.seasonCol], [
-                                         [m5_coadded]*len(myarr), [Nvisits[band]]*len(myarr), [Nvisits[band]*Exposure_Time[band]]*len(myarr), [season]*len(myarr)])
+                                         [m5_coadded]*nvals, [Nvisits[band]]*nvals, [Nvisits[band]*Exposure_Time[band]]*nvals, [season]*nvals])
                 myarr = rf.append_fields(myarr, [self.seeingEffCol, self.seeingGeomCol], [
-                                         [seeingEff[band]]*len(myarr), [seeingGeom[band]]*len(myarr)])
+                                         [seeingEff[band]]*nvals, [seeingGeom[band]]*nvals])
                 myarr = rf.append_fields(myarr, ['airmass', 'sky', 'moonPhase'], [
-                                         [airmass[band]]*len(myarr), [sky[band]]*len(myarr), [moonphase[band]]*len(myarr)])
+                                         [airmass[band]]*nvals, [sky[band]]*nvals, [moonphase[band]]*nvals])
                 rtot.append(myarr)
 
         res = np.copy(np.concatenate(rtot))
@@ -387,6 +392,7 @@ class GenerateFakeObservations:
 
         RA = config['RA']
         Dec = config['Dec']
+        rotTelPos = config['rotTelPos']
         rtot = []
         # prepare m5 for interpolation
 
@@ -406,15 +412,15 @@ class GenerateFakeObservations:
                                           Nvisits[band],
                                           Exposure_Time[band])
                 myarr = np.array(mjd, dtype=[(self.mjdCol, 'f8')])
-
-                myarr = rf.append_fields(myarr, [self.RACol, self.DecCol, self.filterCol], [
-                                         [RA]*len(myarr), [Dec]*len(myarr), [band]*len(myarr)])
+                nvals = len(myarr)
+                myarr = rf.append_fields(myarr, [self.RACol, self.DecCol, self.filterCol,self.rotTelPosCol], [
+                                         [RA]*nvals, [Dec]*nvals, [band]*nvals],[rotTelPos]*nvals)
                 myarr = rf.append_fields(myarr, [self.m5Col, self.nexpCol, self.exptimeCol, self.seasonCol], [
-                                         m5_coadded, [Nvisits[band]]*len(myarr), [Nvisits[band]*Exposure_Time[band]]*len(myarr), [season]*len(myarr)])
+                                         m5_coadded, [Nvisits[band]]*nvals, [Nvisits[band]*Exposure_Time[band]]*nvals, [season]*nvals])
                 myarr = rf.append_fields(myarr, [self.seeingEffCol, self.seeingGeomCol], [
-                                         [seeingEff[band]]*len(myarr), [seeingGeom[band]]*len(myarr)])
+                                         [seeingEff[band]]*nvals, [seeingGeom[band]]*nvals])
                 myarr = rf.append_fields(myarr, ['airmass', 'sky', 'moonPhase'], [
-                                         [airmass[band]]*len(myarr), [sky[band]]*len(myarr), [moonphase[band]]*len(myarr)])
+                                         [airmass[band]]*nvals, [sky[band]]*nvals, [moonphase[band]]*nvals])
                 rtot.append(myarr)
 
         res = np.copy(np.concatenate(rtot))
@@ -465,7 +471,8 @@ class GenerateFakeObservations:
         for b in np.unique(sela['filter']):
             idxb = sela['filter'] == b
             selb = sela[idxb]
-            dictout[b] = interpolate.interp1d(
+            from scipy.interpolate import interp1d
+            dictout[b] = interp1d(
                 selb['observationStartMJD'], selb['fiveSigmaDepth'], fill_value=0., bounds_error=False)
             rmin.append(np.min(selb['observationStartMJD']))
             rmax.append(np.max(selb['observationStartMJD']))
