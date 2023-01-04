@@ -621,6 +621,13 @@ class FP2pixels:
                 np.min(observations[self.RACol])
             width_Dec = np.max(observations[self.DecCol]) - \
                 np.min(observations[self.DecCol])
+                
+        
+        if self.fieldType == 'Fake':
+            mean_RA = np.mean(observations[self.RACol])
+            mean_Dec = np.mean(observations[self.DecCol])
+            width_RA = 0.1
+            width_Dec = 0.1       
 
         if self.fieldType == 'WFD':
             width_RA = self.RAmax-self.RAmin
@@ -631,11 +638,22 @@ class FP2pixels:
         # get pixels
         pixels = self.gime_pixels(
             mean_RA, mean_Dec, np.max([width_RA, width_Dec]))
+    
 
         if self.fieldType == 'WFD':
             pixelsb = self.select_zone(
                 pixels.to_records(index=False), self.RAmin, self.RAmax, 'pixRA', None,None, 'pixDec', 0.)
             pixels = pd.DataFrame.from_records(pixelsb)
+            
+        if self.fieldType == 'Fake':
+            
+            pixels['diff_RA'] = pixels['pixRA']-mean_RA
+            pixels['diff_Dec'] = pixels['pixDec']-mean_Dec
+            idx = np.abs(pixels['diff_RA'])<= 0.5
+            idx &= np.abs(pixels['diff_Dec'])<= 0.5
+            pixels = pixels[idx][:1]
+            
+        print('nb pixels',len(pixels))
             
         return pixels
 
