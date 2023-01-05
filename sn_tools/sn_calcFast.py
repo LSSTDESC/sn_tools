@@ -3,11 +3,11 @@ import pandas as pd
 import numpy as np
 from astropy.table import Table, Column, vstack
 import time
-from scipy.linalg import lapack
+#from scipy.linalg import lapack
 # lapack_routine = lapack_lite.dgesv
 import scipy.linalg as la
 import operator
-import numpy.lib.recfunctions as rf
+#import numpy.lib.recfunctions as rf
 from sn_tools.sn_io import check_get_file
 import h5py
 from scipy.interpolate import RegularGridInterpolator
@@ -333,12 +333,12 @@ class LCfast:
         lc['magerr'] = (2.5/np.log(10.))/lc['snr_m5']
         lc['fluxerr'] = np.sqrt(
             lc['fluxerr_photo']**2+lc['fluxerr_model']**2)
-
+        lc['snr'] = lc['snr_m5']
         # Fisher matrix components
         for key, vals in Fisher_Mat.items():
             lc.loc[:, 'F_{}'.format(
                 key)] = vals[~vals.mask]/(lc['fluxerr_photo'].values**2)
-
+        """
         lc.loc[:, 'n_aft'] = (np.sign(lc['phase']) == 1) & (
             lc['snr_m5'] >= self.snr_min)
         lc.loc[:, 'n_bef'] = (np.sign(lc['phase'])
@@ -346,7 +346,8 @@ class LCfast:
 
         lc.loc[:, 'n_phmin'] = (lc['phase'] <= -5.)
         lc.loc[:, 'n_phmax'] = (lc['phase'] >= 20)
-
+        """
+        
         # remove lc points with no flux
         idx = lc['flux_e_sec'] > 0.
         lc_flux = lc[idx]
@@ -650,6 +651,7 @@ class LCfast:
             lc['fluxerr_model'] = fluxes_err_model[~fluxes_err_model.mask]
             lc['fluxerr'] = np.sqrt(
                 lc['fluxerr_photo']**2+lc['fluxerr_model']**2)
+            lc['snr'] = lc['flux']/lc['fluxerr_photo']
             lc['phase'] = phases[~phases.mask]
             lc['snr_m5'] = snr_m5[~snr_m5.mask]
             lc['time'] = obs_time[~obs_time.mask]
