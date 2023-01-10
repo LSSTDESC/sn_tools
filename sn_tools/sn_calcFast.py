@@ -338,15 +338,16 @@ class LCfast:
         for key, vals in Fisher_Mat.items():
             lc.loc[:, 'F_{}'.format(
                 key)] = vals[~vals.mask]/(lc['fluxerr_photo'].values**2)
-        """
+        
         lc.loc[:, 'n_aft'] = (np.sign(lc['phase']) == 1) & (
             lc['snr_m5'] >= self.snr_min)
         lc.loc[:, 'n_bef'] = (np.sign(lc['phase'])
                               == -1) & (lc['snr_m5'] >= self.snr_min)
+        
 
         lc.loc[:, 'n_phmin'] = (lc['phase'] <= -5.)
         lc.loc[:, 'n_phmax'] = (lc['phase'] >= 20)
-        """
+        
         
         # remove lc points with no flux
         idx = lc['flux_e_sec'] > 0.
