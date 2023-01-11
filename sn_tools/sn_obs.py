@@ -1747,8 +1747,8 @@ class DataToPixels:
             todo = 'self.match_multiproc_{}(ll, params)'.format(
                 self.project_FP)
         else:
-            todo = 'multiproc(ll, params, self.match_multiproc_gnomonic, self.nproc)'.format(
-                self.VRO_FP)
+            todo = 'multiproc(ll, params, self.match_multiproc_{}, self.nproc)'.format(
+                self.project_FP)
 
         matched_pixels = eval(todo)
 
