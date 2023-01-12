@@ -1890,26 +1890,25 @@ class DataToPixels:
             xx, yy = fpnew.exterior.coords.xy
             ax.plot(xx, yy)
             ax.plot(x, y, 'b+')
-            """
+            
             pixRA, pixDec = hp.pix2ang(
-                self.nside, 109400, nest=True, lonlat=True)
+                self.nside,47215 , nest=True, lonlat=True)
             xb, yb = proj_gnomonic_plane(
                 pRA_rad, pDec_rad, np.deg2rad(pixRA), np.deg2rad(pixDec))
             ax.plot(xb, yb, 'ro', mfc='None')
-            """
+            
             ax.plot([0.], [0.], 'k*')
             ax.set_xlabel('RA [deg]')
             ax.set_ylabel('Dec [deg]')
             plt.show()
 
         idf = shapely.vectorized.contains(fpnew, x, y)
-
+        if len(healpixIDs[idf]) == 0:
+            return pd.DataFrame()   
+        
         pixID_matched = list(healpixIDs[idf])
         pixRA_matched = list(pixRA[idf])
         pixDec_matched = list(pixDec[idf])
-
-        if len(pixID_matched) == 0:
-            return pd.DataFrame()
 
         df_pix = pd.DataFrame({'healpixID': pixID_matched,
                                'pixRA': pixRA_matched,

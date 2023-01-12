@@ -490,19 +490,28 @@ class FP2pixels:
         # load healpixIDs if not None
         self.healpixIDs = []
         if pixelList != 'None':
-            hh = pd.read_csv(pixelList)
+            hh = pd.read_csv(pixelList,comment='#')
             self.healpixIDs = hh['healpixID'].to_list()
 
     def __call__(self):
 
         pixels = self.get_pixels_field(self.obs)
+        
+        #re-select data to avoid having data too far from pixels
+        pixRA_min = pixels['pixRA'].min()
+        pixRA_max = pixels['pixRA'].max()
+        pixDec_min = pixels['pixDec'].min()
+        pixDec_max = pixels['pixDec'].max()
+        
+        obs = self.select_zone(self.obs,pixRA_min,pixRA_max,self.RACol,pixDec_min, pixDec_max,self.DecCol,5.)
 
         if self.display:
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots()
+            fig.suptitle('Pixels and observations')
             ax.plot(pixels['pixRA'], pixels['pixDec'], 'r*')
-            ax.plot(self.obs[self.RACol],
-                    self.obs[self.DecCol], 'ko', mfc='None')
+            ax.plot(obs[self.RACol],
+                    obs[self.DecCol], 'ko', mfc='None')
             ax.set_xlabel('RA [deg]')
             ax.set_ylabel('Dec [deg]')
             plt.show()
@@ -514,9 +523,17 @@ class FP2pixels:
         datapixels = DataToPixels(
             self.nside, self.project_FP, self.VRO_FP, RACol=self.RACol, DecCol=self.DecCol, telrot=self.telrot, nproc=self.nproc)
         
-        pixels = datapixels(self.obs, pixels,display=self.display)
+        pixels = datapixels(obs, pixels,display=self.display)
 
-        print('FP2pixels done',time.time()-time_ref)
+        pixels['healpixID'] = pixels['healpixID'].astype(int)
+        print('FP2pixels done',time.time()-time_ref,pixels['healpixID'].unique())
+        
+        if self.display:
+            import matplotlib.pyplot as plt
+            fig, ax = plt.subplots()
+            ax.plot(pixels['pixRA'],pixels['pixDec'],'k.')
+            plt.show()
+        
 
         # get the list of pixels Id to process
         pixel_Ids = self.pixelList(self.npixels, pixels, self.healpixIDs)
@@ -545,7 +562,7 @@ class FP2pixels:
             return self.select_zone(observations, RAmin, RAmax, self.RACol,DecCol=self.DecCol)
 
         if self.fieldType == 'WFD':
-            return self.select_zone(observations, RAmin, RAmax, self.RACol,DecCol=self.DecCol)
+            return self.select_zone(observations, RAmin, RAmax, self.RACol,Decmin=self.Decmin, Decmax=self.Decmax,DecCol=self.DecCol)
 
         if self.fieldType == 'Fake':
             return observations
@@ -642,7 +659,7 @@ class FP2pixels:
 
         if self.fieldType == 'WFD':
             pixelsb = self.select_zone(
-                pixels.to_records(index=False), self.RAmin, self.RAmax, 'pixRA', None,None, 'pixDec', 0.)
+                pixels.to_records(index=False), self.RAmin, self.RAmax, 'pixRA', self.Decmin,self.Decmax, 'pixDec', 0.)
             pixels = pd.DataFrame.from_records(pixelsb)
             
         if self.fieldType == 'Fake':
