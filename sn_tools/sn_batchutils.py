@@ -9,13 +9,15 @@ class BatchIt:
                  account='lsst',L='sps',time='20:00:00',mem='10G',n=8):
 
         self.dict_batch = {}
+        self.options = []
 
         self.dict_batch['--account'] = account
         self.dict_batch['-L'] = L
         self.dict_batch['--time'] = time
         self.dict_batch['--mem'] = mem
         self.dict_batch['-n'] = n
-
+        self.options.append('--profile=task')
+        self.options.append('--acctg-freq=task=30')
         # create output dirs if necessary
         self.checkDirs(logDir,scriptDir)
 
@@ -77,6 +79,8 @@ class BatchIt:
         script.write("#!/bin/env bash\n") 
         for key, vals in self.dict_batch.items():
             script.write("#SBATCH {} {} \n".format(key,vals))
+        for vv in self.options:
+            script.write("#SBATCH {} \n".format(vv))
 
         script.write(" cd " + self.cwd + "\n")
         script.write(" export MKL_NUM_THREADS=1 \n")
