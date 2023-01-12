@@ -16,8 +16,8 @@ radius 4.0 float #radius around clusters (DD and Fakes)
 pixelList None str #list of healpixIds to process
 RAmin 0.0 float #RA min for obs area - for WDF only
 RAmax 360. float #RA max for obs area - for WDF only
-Decmin -1.0 float #Dec min for obs area - for WDF only
-Decmax -1.0 float #Dec max for obs area - for WDF only
+Decmin -90.0 float #Dec min for obs area - for WDF only
+Decmax 40.0 float #Dec max for obs area - for WDF only
 npixels -1 int #number of pixels to process
 VRO_FP circular str #VRO Focal Plane
 project_FP gnomonic str #type of projection in FP
