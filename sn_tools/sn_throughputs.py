@@ -196,7 +196,7 @@ class Throughputs(object):
                     wavelen=atmosphere_aero.wavelen, sb=atmosphere_aero.sb)
 
                 for f in self.filterlist:
-                    wavelen, sb = self.lsst_system[f].multiplyThroughputs(
+                    wavelen, sb = self.lsst_system[f].multiply_throughputs(
                         atmosphere_aero.wavelen, atmosphere_aero.sb)
                     self.lsst_atmos_aerosol[f] = Bandpass(
                         wavelen=wavelen, sb=sb)

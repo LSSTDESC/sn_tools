@@ -1,6 +1,6 @@
 from rubin_sim.phot_utils import signaltonoise
 from rubin_sim.phot_utils import photometric_parameters
-from rubin_sim.phot_utils import bandpass, sed
+from rubin_sim.phot_utils import Bandpass, Sed
 from sn_tools.sn_throughputs import Throughputs
 
 import numpy as np
@@ -116,16 +116,17 @@ class Telescope(Throughputs):
 
         """
         filter_trans = self.system[band]
-        wavelen_min, wavelen_max, wavelen_step = filter_trans.getWavelenLimits(
+        wavelen_min, wavelen_max, wavelen_step = filter_trans.get_wavelen_limits(
             None, None, None)
 
-        bpass = bandpass(wavelen=filter_trans.wavelen, sb=filter_trans.sb)
+        bpass = Bandpass(wavelen=filter_trans.wavelen, sb=filter_trans.sb)
 
-        flatSedb = sed()
+        flatSedb = Sed()
         flatSedb.setFlatSED(wavelen_min, wavelen_max, wavelen_step)
         flux0b = np.power(10., -0.4*self.mag_sky(band))
-        flatSedb.multiplyFluxNorm(flux0b)
-        photParams = photometric_parameters(bandpass=band)
+        flatSedb.multiply_flux_norm(flux0b)
+        photParams = photometric_parameters.PhotometricParameters(
+            bandpass=band)
         norm = photParams.platescale**2/2.*photParams.exptime/photParams.gain
         trans = filter_trans
 
@@ -135,7 +136,7 @@ class Telescope(Throughputs):
             flatSedb, trans, filter_trans,
             photParams=photParams,
             FWHMeff=self.FWHMeff(band))
-        adu_int = flatSedb.calcADU(bandpass=trans, photParams=photParams)
+        adu_int = flatSedb.calc_adu(bandpass=trans, phot_params=photParams)
         self.data['flux_sky'][band] = adu_int*norm
 
     @get_val_decor
@@ -171,7 +172,8 @@ class Telescope(Throughputs):
           filter
 
         """
-        photParams = photometric_parameters(bandpass=band)
+        photParams = photometric_parameters.PhotometricParameters(
+            bandpass=band)
         Diameter = 2.*np.sqrt(photParams.effarea*1.e-4 /
                               np.pi)  # diameter in meter
         Cte = 3631.*np.pi*Diameter**2*2.*photParams.exptime/4/h/1.e36
@@ -185,16 +187,17 @@ class Telescope(Throughputs):
         Zb = 181.8*np.power(Diameter/6.5, 2.)*self.Tb(band)
         mbZ = 25.+2.5*np.log10(Zb)
         filtre_trans = self.system[band]
-        wavelen_min, wavelen_max, wavelen_step = filtre_trans.getWavelenLimits(
+        wavelen_min, wavelen_max, wavelen_step = filtre_trans.get_wavelen_limits(
             None, None, None)
-        # bpass = bandpass(wavelen=filtre_trans.wavelen, sb=filtre_trans.sb)
-        flatSed = sed()
-        flatSed.setFlatSED(wavelen_min, wavelen_max, wavelen_step)
+        bpass = Bandpass(wavelen=filtre_trans.wavelen, sb=filtre_trans.sb)
+        flatSed = Sed()
+        flatSed.set_flat_sed(wavelen_min, wavelen_max, wavelen_step)
         flux0 = np.power(10., -0.4*mbZ)
-        flatSed.multiplyFluxNorm(flux0)
-        photParams = photometric_parameters(bandpass=band)
+        flatSed.multiply_flux_norm(flux0)
+        photParams = photometric_parameters.PhotometricParameters(
+            bandpass=band)
         # number of counts for exptime
-        counts = flatSed.calcADU(bandpass, photParams=photParams)
+        counts = flatSed.calc_adu(bpass, phot_params=photParams)
         self.data['zp'][band] = mbZ
         self.data['counts_zp'][band] = counts/2.*photParams.exptime
 
@@ -315,17 +318,17 @@ class Telescope(Throughputs):
         integrated sed over the bandpass
 
         """
-        use_self = sed._checkUseSelf(wavelen, fnu)
+        use_self = sed._check_use_self(wavelen, fnu)
         # Use self values if desired, otherwise use values passed to function.
         if use_self:
             # Calculate fnu if required.
             if sed.fnu is None:
                 # If fnu not present, calculate. (does not regrid).
-                sed.flambdaTofnu()
+                sed.flambda_tofnu()
             wavelen = sed.wavelen
             fnu = sed.fnu
         # Make sure wavelen/fnu are on the same wavelength grid as bandpass.
-        wavelen, fnu = sed.resampleSED(
+        wavelen, fnu = sed.resample_sed(
             wavelen, fnu, wavelen_match=bandpass.wavelen)
 
         # Calculate the number of photons.
@@ -421,18 +424,19 @@ class Telescope(Throughputs):
 
         """
         if not hasattr(mag, '__iter__'):
-            wavelen_min, wavelen_max, wavelen_step = self.atmosphere[band].getWavelenLimits(
-                None, None, None)
+            wavelen_min, wavelen_max, wavelen_step = \
+                self.atmosphere[band].get_avelen_limits(
+                    None, None, None)
             sed = Sed()
             sed.setFlatSED()
 
             flux0 = sed.calcFluxNorm(mag, self.atmosphere[band])
-            sed.multiplyFluxNorm(flux0)
+            sed.multiply_flux_norm(flux0)
 
             photParams = PhotometricParameters(exptime=exptime, nexp=nexp)
 
-            counts = sed.calcADU(
-                bandpass=self.atmosphere[band], photParams=photParams)
+            counts = sed.calc_adu(
+                bandpass=self.atmosphere[band], phot_params=photParams)
             e_per_sec = counts
 
             # counts per sec
