@@ -452,7 +452,7 @@ class FP2pixels:
                  fieldType='', fieldName='', nside=128,
                  RAmin=0., RAmax=360.,
                  Decmin=-80., Decmax=80,
-                 pixelmap_dir='', npixels=0,nproc=1,
+                 pixelmap_dir='', npixels=0, nproc=1,
                  VRO_FP='circular', project_FP='gnomonic', telrot=0.,
                  radius=4., pixelList='None', display=False, **kwargs):
 
@@ -474,7 +474,7 @@ class FP2pixels:
         self.project_FP = project_FP
         self.telrot = telrot
         self.display = display
-        
+
         assert(self.RAmin <= self.RAmax)
 
         observations = get_obs(fieldType, dbDir,
@@ -490,20 +490,21 @@ class FP2pixels:
         # load healpixIDs if not None
         self.healpixIDs = []
         if pixelList != 'None':
-            hh = pd.read_csv(pixelList,comment='#')
+            hh = pd.read_csv(pixelList, comment='#')
             self.healpixIDs = hh['healpixID'].to_list()
 
     def __call__(self):
 
         pixels = self.get_pixels_field(self.obs)
-        
-        #re-select data to avoid having data too far from pixels
+
+        # re-select data to avoid having data too far from pixels
         pixRA_min = pixels['pixRA'].min()
         pixRA_max = pixels['pixRA'].max()
         pixDec_min = pixels['pixDec'].min()
         pixDec_max = pixels['pixDec'].max()
-        
-        obs = self.select_zone(self.obs,pixRA_min,pixRA_max,self.RACol,pixDec_min, pixDec_max,self.DecCol,5.)
+
+        obs = self.select_zone(self.obs, pixRA_min, pixRA_max,
+                               self.RACol, pixDec_min, pixDec_max, self.DecCol, 5.)
 
         if self.display:
             import matplotlib.pyplot as plt
@@ -516,34 +517,32 @@ class FP2pixels:
             ax.set_ylabel('Dec [deg]')
             plt.show()
 
-
-        print('getting pixels',self.nside, self.project_FP, self.VRO_FP,self.RACol, self.DecCol, self.telrot,self.nproc)
+        print('getting pixels', self.nside, self.project_FP, self.VRO_FP,
+              self.RACol, self.DecCol, self.telrot, self.nproc)
         time_ref = time.time()
         from sn_tools.sn_obs import DataToPixels
         datapixels = DataToPixels(
             self.nside, self.project_FP, self.VRO_FP, RACol=self.RACol, DecCol=self.DecCol, telrot=self.telrot, nproc=self.nproc)
-        
-        pixels = datapixels(obs, pixels,display=self.display)
+
+        pixels = datapixels(obs, pixels, display=self.display)
 
         pixels['healpixID'] = pixels['healpixID'].astype(int)
-        print('FP2pixels done',time.time()-time_ref,pixels['healpixID'].unique())
-        
+        print('FP2pixels done', time.time() -
+              time_ref, pixels['healpixID'].unique())
+
         if self.display:
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots()
-            ax.plot(pixels['pixRA'],pixels['pixDec'],'k.')
+            ax.plot(pixels['pixRA'], pixels['pixDec'], 'k.')
             plt.show()
-        
 
         # get the list of pixels Id to process
         pixel_Ids = self.pixelList(self.npixels, pixels, self.healpixIDs)
 
-
         idx = pixels['healpixID'].isin(pixel_Ids)
-        
+
         return pixels[idx]
-        
-        
+
     def select_obs(self, observations, fieldName, RAmin, RAmax):
         """
         Method to select observations
@@ -559,10 +558,10 @@ class FP2pixels:
         if self.fieldType == 'DD':
             idx = np.in1d(observations['note'], fieldName)
             observations = observations[idx]
-            return self.select_zone(observations, RAmin, RAmax, self.RACol,DecCol=self.DecCol)
+            return self.select_zone(observations, RAmin, RAmax, self.RACol, DecCol=self.DecCol)
 
         if self.fieldType == 'WFD':
-            return self.select_zone(observations, RAmin, RAmax, self.RACol,Decmin=self.Decmin, Decmax=self.Decmax,DecCol=self.DecCol)
+            return self.select_zone(observations, RAmin, RAmax, self.RACol, Decmin=self.Decmin, Decmax=self.Decmax, DecCol=self.DecCol)
 
         if self.fieldType == 'Fake':
             return observations
@@ -599,11 +598,11 @@ class FP2pixels:
             idx &= data[DecCol] < Decmax+delta_coord
 
         obs = np.copy(data[idx])
-    
+
         if self.display:
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots()
-            self.plotPixels(obs,RACol,DecCol,ax=ax,show=False)
+            self.plotPixels(obs, RACol, DecCol, ax=ax, show=False)
         if RAmin < delta_coord:
             idk = data[RACol] > 360.-delta_coord
             obs = np.concatenate((obs, data[idk]))
@@ -613,7 +612,7 @@ class FP2pixels:
             obs = np.concatenate((obs, data[idk]))
 
         if self.display:
-            self.plotPixels(obs,RACol,DecCol,ax=ax,show=False)
+            self.plotPixels(obs, RACol, DecCol, ax=ax, show=False)
             plt.show()
         return obs
 
@@ -638,13 +637,12 @@ class FP2pixels:
                 np.min(observations[self.RACol])
             width_Dec = np.max(observations[self.DecCol]) - \
                 np.min(observations[self.DecCol])
-                
-        
+
         if self.fieldType == 'Fake':
             mean_RA = np.mean(observations[self.RACol])
             mean_Dec = np.mean(observations[self.DecCol])
             width_RA = 0.1
-            width_Dec = 0.1       
+            width_Dec = 0.1
 
         if self.fieldType == 'WFD':
             width_RA = self.RAmax-self.RAmin
@@ -655,26 +653,25 @@ class FP2pixels:
         # get pixels
         pixels = self.gime_pixels(
             mean_RA, mean_Dec, np.max([width_RA, width_Dec]))
-    
 
         if self.fieldType == 'WFD':
             pixelsb = self.select_zone(
-                pixels.to_records(index=False), self.RAmin, self.RAmax, 'pixRA', self.Decmin,self.Decmax, 'pixDec', 0.)
+                pixels.to_records(index=False), self.RAmin, self.RAmax, 'pixRA', self.Decmin, self.Decmax, 'pixDec', 0.)
             pixels = pd.DataFrame.from_records(pixelsb)
-            
+
         if self.fieldType == 'Fake':
-            
+
             pixels['diff_RA'] = pixels['pixRA']-mean_RA
             pixels['diff_Dec'] = pixels['pixDec']-mean_Dec
-            idx = np.abs(pixels['diff_RA'])<= 0.5
-            idx &= np.abs(pixels['diff_Dec'])<= 0.5
+            idx = np.abs(pixels['diff_RA']) <= 0.5
+            idx &= np.abs(pixels['diff_Dec']) <= 0.5
             pixels = pixels[idx][:1]
-            
-        print('nb pixels',len(pixels))
-            
+
+        print('nb pixels', len(pixels))
+
         return pixels
 
-    def plotPixels(self,pixels,RACol,DecCol,ax=None,show=True):
+    def plotPixels(self, pixels, RACol, DecCol, ax=None, show=True):
         """
         Method to plot (RA,Dec) of data
 
@@ -699,11 +696,10 @@ class FP2pixels:
         import matplotlib.pyplot as plt
         if ax is None:
             fig, ax = plt.subplots()
-        ax.plot(pixels[RACol],pixels[DecCol],'ko')
+        ax.plot(pixels[RACol], pixels[DecCol], 'ko')
         if show:
             plt.show()
-        
-        
+
     def pixelList(self, npixels, pixels, healpixIDs=[]):
         """
         Method to get the list of pixels to process
@@ -821,7 +817,6 @@ class FP2pixels:
         return pd.DataFrame(res)
 
     def build_pixels(self, pixelIds, params, j=0, output_q=None):
-
         """
         Method to grab pixels matching VRO FP
 
@@ -858,7 +853,8 @@ class FP2pixels:
             return output_q.put({j: pixels})
         else:
             return pixels
-    
+
+
 class Process(FP2pixels):
     """
     Class to process data ie run metrics on a set of pixels
@@ -911,25 +907,23 @@ class Process(FP2pixels):
                  RAmin=0., RAmax=360.,
                  Decmin=-80., Decmax=80,
                  saveData=False, remove_dithering=False,
-                 outDir='', nproc=1, nproc_pixels=1,metricList=[],
+                 outDir='', nproc=1, nproc_pixels=1, metricList=[],
                  pixelmap_dir='', npixels=0,
                  VRO_FP='circular', project_FP='gnomonic', telrot=0.,
                  radius=4., pixelList='None', display=False, **kwargs):
         super().__init__(dbDir, dbName, dbExtens,
-                 fieldType, fieldName, nside,
-                 RAmin, RAmax,
-                 Decmin, Decmax,
-                 pixelmap_dir, npixels,nproc,
-                 VRO_FP, project_FP, telrot,
-                 radius, pixelList, display)
+                         fieldType, fieldName, nside,
+                         RAmin, RAmax,
+                         Decmin, Decmax,
+                         pixelmap_dir, npixels, nproc,
+                         VRO_FP, project_FP, telrot,
+                         radius, pixelList, display)
 
-      
         self.saveData = saveData
         self.remove_dithering = remove_dithering
         self.outDir = outDir
         self.nproc_pixels = nproc_pixels
         self.metricList = metricList
-        
 
         self.processIt(self.obs)
 
@@ -945,12 +939,12 @@ class Process(FP2pixels):
         """
 
         #pixels = self.get_pixels_field(observations)
-        #getting the pixels
+        # getting the pixels
         print('getting pixels call')
-        pixels = super(Process,self).__call__()
+        pixels = super(Process, self).__call__()
 
         print('finished with pixels')
-        
+
         if self.display:
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots()
@@ -974,7 +968,7 @@ class Process(FP2pixels):
         params_multi = np.unique(pixels['healpixID'])
         nprocb = min(self.nproc_pixels, len(params_multi))
         multiproc(params_multi, params, self.process_metric, nprocb)
-        
+
         """
         eval('multiproc(params_multi, params, self.process_metric_{}, nprocb)'.format(
             self.fieldType))
@@ -984,7 +978,6 @@ class Process(FP2pixels):
         params_multi = [0.]
         eval('self.process_metric_{}(params_multi, params)'.format(self.fieldType))
         """
-        
 
     def process_metric(self, pixels, params, j=0, output_q=None):
         """
@@ -1037,7 +1030,8 @@ class Process(FP2pixels):
             return output_q.put({j: 1})
         else:
             return 1
-        
+
+
 class Process_old:
     """
     Class to process data ie run metrics on a set of pixels
@@ -1154,10 +1148,10 @@ class Process_old:
         if self.fieldType == 'DD':
             idx = np.in1d(observations['note'], fieldName)
             observations = observations[idx]
-            return self.select_zone(observations, RAmin, RAmax, self.RACol,DecCol=self.DecCol)
+            return self.select_zone(observations, RAmin, RAmax, self.RACol, DecCol=self.DecCol)
 
         if self.fieldType == 'WFD':
-            return self.select_zone(observations, RAmin, RAmax, self.RACol,DecCol=self.DecCol)
+            return self.select_zone(observations, RAmin, RAmax, self.RACol, DecCol=self.DecCol)
 
         if self.fieldType == 'Fake':
             return observations
@@ -1303,8 +1297,6 @@ class Process_old:
         # get pixels
         pixels = self.gime_pixels(
             mean_RA, mean_Dec, np.max([width_RA, width_Dec]))
-
-
 
         if self.fieldType == 'WFD':
             pixels = self.select_zone(
@@ -1638,9 +1630,6 @@ class Process_old:
             print('pb here no data in ', pixels)
 
         print('end of processing for', j, time.time()-time_ref)
-
-
-
 
 
 def randomPixels(hIDs, npixels):
