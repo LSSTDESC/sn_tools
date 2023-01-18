@@ -175,12 +175,9 @@ class Throughputs(object):
             atmosphere = Bandpass()
             path_atmos = os.path.join(
                 self.atmosDir, 'atmos_%d.dat' % (self.airmass*10))
-            if os.path.exists(path_atmos):
-                atmosphere.read_throughput(os.path.join(
-                    self.atmosDir, 'atmos_%d.dat' % (self.airmass*10)))
-            else:
-                atmosphere.read_throughput(
-                    os.path.join(self.atmosDir, 'atmos.dat'))
+            if not os.path.exists(path_atmos):
+                path_atmos = 'atmos.dat'
+            atmosphere.read_throughput(path_atmos)
             self.atmos = Bandpass(wavelen=atmosphere.wavelen, sb=atmosphere.sb)
 
             for f in self.filterlist:
@@ -190,8 +187,9 @@ class Throughputs(object):
 
             if self.aerosol_b:
                 atmosphere_aero = Bandpass()
-                atmosphere_aero.read_throughput(os.path.join(
-                    self.atmosDir, 'atmos_%d_aerosol.dat' % (self.airmass*10)))
+                path_aero_atmos = os.path.join(
+                    self.atmosDir, 'atmos_%d_aerosol.dat' % (self.airmass*10))
+                atmosphere_aero.read_throughput(path_aero_atmos)
                 self.atmos_aerosol = Bandpass(
                     wavelen=atmosphere_aero.wavelen, sb=atmosphere_aero.sb)
 
@@ -209,7 +207,7 @@ class Throughputs(object):
         """ Plot the throughputs
         """
         # colors=['b','g','r','m','c',[0.8,0,0]]
-        style = [',', ',', ',', ',']
+        # style = [',', ',', ',', ',']
         for i, band in enumerate(self.filterlist):
 
             plt.plot(self.lsst_system[band].wavelen,
@@ -229,8 +227,10 @@ class Throughputs(object):
         plt.plot(self.atmos.wavelen, self.atmos.sb, color='k',
                  label='X =%.1f atmos' % (self.airmass), linestyle='-')
         if len(self.lsst_atmos_aerosol) > 0:
-            plt.plot(self.atmos_aerosol.wavelen, self.atmos_aerosol.sb, color='k',
-                     label='X =%.1f atm+aero' % (self.airmass), linestyle='--')
+            plt.plot(self.atmos_aerosol.wavelen, self.atmos_aerosol.sb,
+                     color='k',
+                     label='X =%.1f atm+aero' % (self.airmass),
+                     linestyle='--')
         # plt.legend(loc=(0.85, 0.1), fontsize='smaller',
             # fancybox=True, numpoints=1)
 
@@ -256,7 +256,7 @@ class Throughputs(object):
         """ Plot throughput spectrum
         """
         fig, ax1 = plt.subplots()
-        style = [',', ',', ',', ',']
+        # style = [',', ',', ',', ',']
 
         for i, band in enumerate(self.filterlist):
 

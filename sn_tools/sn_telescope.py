@@ -116,10 +116,10 @@ class Telescope(Throughputs):
 
         """
         filter_trans = self.system[band]
-        wavelen_min, wavelen_max, wavelen_step = filter_trans.get_wavelen_limits(
-            None, None, None)
+        wavelen_min, wavelen_max, wavelen_step = \
+            filter_trans.get_wavelen_limits(None, None, None)
 
-        bpass = Bandpass(wavelen=filter_trans.wavelen, sb=filter_trans.sb)
+        # bpass = Bandpass(wavelen=filter_trans.wavelen, sb=filter_trans.sb)
 
         flatSedb = Sed()
         flatSedb.setFlatSED(wavelen_min, wavelen_max, wavelen_step)
@@ -153,7 +153,10 @@ class Telescope(Throughputs):
 
         """
         myup = self.Calc_Integ_Sed(self.darksky, self.system[band])
-        self.data['Tb'][band] = self.Calc_Integ(self.atmosphere[band])
+        bpass = self.atmosphere[band]
+        if self.aerosol_b:
+            bpass = self.aerosol[band]
+        self.data['Tb'][band] = self.Calc_Integ(bpass)
         self.data['Sigmab'][band] = self.Calc_Integ(self.system[band])
         self.data['mag_sky'][band] = -2.5 * \
             np.log10(myup/(3631.*self.Sigmab(band)))
@@ -187,8 +190,13 @@ class Telescope(Throughputs):
         Zb = 181.8*np.power(Diameter/6.5, 2.)*self.Tb(band)
         mbZ = 25.+2.5*np.log10(Zb)
         filtre_trans = self.system[band]
-        wavelen_min, wavelen_max, wavelen_step = filtre_trans.get_wavelen_limits(
-            None, None, None)
+        if self.atmos:
+            filtre_trans = self.atmosphere[band]
+        if self.aerosol_b:
+            filtre_trans = self.aerosol[band]
+        wavelen_min, wavelen_max, wavelen_step = \
+            filtre_trans.get_wavelen_limits(None, None, None)
+
         bpass = Bandpass(wavelen=filtre_trans.wavelen, sb=filtre_trans.sb)
         flatSed = Sed()
         flatSed.set_flat_sed(wavelen_min, wavelen_max, wavelen_step)
@@ -261,6 +269,23 @@ class Telescope(Throughputs):
         """
         self.get_zp('zp', filtre)
         return self.return_value('zp', filtre)
+
+    def counts_zp(self, filtre):
+        """
+        counts_zp accessor
+
+        Parameters
+        ----------
+        filtre : str
+            filter to consider.
+
+        Returns
+        -------
+        None.
+
+        """
+        self.get_zp('counts_zp', filtre)
+        return self.return_value('counts_zp', filtre)
 
     def FWHMeff(self, filtre):
         """
@@ -433,7 +458,9 @@ class Telescope(Throughputs):
             flux0 = sed.calcFluxNorm(mag, self.atmosphere[band])
             sed.multiply_flux_norm(flux0)
 
-            photParams = PhotometricParameters(exptime=exptime, nexp=nexp)
+            photParams = \
+                photometric_parameters.PhotometricParameters(
+                    exptime=exptime, nexp=nexp)
 
             counts = sed.calc_adu(
                 bandpass=self.atmosphere[band], phot_params=photParams)
@@ -455,7 +482,9 @@ class Telescope(Throughputs):
         """
         gamma parameter estimation
 
-        cf eq(5) of the paper LSST : from science drivers to reference design and anticipated data products
+        cf eq(5) of the paper LSST :
+            from science drivers to reference design
+            and anticipated data products
 
         with sigma_rand = 0.2 and m=m5
 
@@ -475,7 +504,9 @@ class Telescope(Throughputs):
         """
 
         if not hasattr(mag, '__iter__'):
-            photParams = PhotometricParameters(nexp=nexp, exptime=exptime)
+            photParams = \
+                photometric_parameters.PhotometricParameters(
+                    nexp=nexp, exptime=exptime)
             counts, e_per_sec = self.mag_to_flux_e_sec(
                 mag, band, exptime, nexp)
             gamma = 0.04-1./(photParams.gain*counts)
