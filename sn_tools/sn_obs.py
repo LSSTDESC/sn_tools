@@ -1890,13 +1890,13 @@ class DataToPixels:
             xx, yy = fpnew.exterior.coords.xy
             ax.plot(xx, yy)
             ax.plot(x, y, 'b+')
-            
+
             pixRA, pixDec = hp.pix2ang(
-                self.nside,47215 , nest=True, lonlat=True)
+                self.nside, 47215, nest=True, lonlat=True)
             xb, yb = proj_gnomonic_plane(
                 pRA_rad, pDec_rad, np.deg2rad(pixRA), np.deg2rad(pixDec))
             ax.plot(xb, yb, 'ro', mfc='None')
-            
+
             ax.plot([0.], [0.], 'k*')
             ax.set_xlabel('RA [deg]')
             ax.set_ylabel('Dec [deg]')
@@ -1904,8 +1904,8 @@ class DataToPixels:
 
         idf = shapely.vectorized.contains(fpnew, x, y)
         if len(healpixIDs[idf]) == 0:
-            return pd.DataFrame()   
-        
+            return pd.DataFrame()
+
         pixID_matched = list(healpixIDs[idf])
         pixRA_matched = list(pixRA[idf])
         pixDec_matched = list(pixDec[idf])
@@ -2033,8 +2033,6 @@ class ProcessPixels:
         self.dbName = dbName
         self.num = ipoint
 
-       
-
     def clean(self):
         """
         Method to clean potential existing output files
@@ -2056,6 +2054,7 @@ class ProcessPixels:
                 for val in listf:
                     os.system('rm {}'.format(val))
         """
+
     def __call__(self, pixels, observations, ip):
         """
         Main processing here
@@ -2079,7 +2078,7 @@ class ProcessPixels:
         # data will be save so clean the output directory first
         if self.saveData:
             self.clean()
-            
+
         data = pd.DataFrame(np.copy(observations))
 
         # run the metrics on those pixels
@@ -3189,7 +3188,8 @@ class ObsPixel_old:
 
         # print(self.scanzone.centroid.x,self.scanzone.centroid.y)
         polyscan = affinity.translate(
-            self.scanzone, xoff=pixRA-self.scanzone.centroid.x, yoff=pixDec-self.scanzone.centroid.y)
+            self.scanzone, xoff=pixRA-self.scanzone.centroid.x,
+            yoff=pixDec-self.scanzone.centroid.y)
         # check wether this polyscan goes beyond 360. in RA
         ramax = np.max(polyscan.exterior.coords.xy[0])
 
@@ -3456,12 +3456,13 @@ class GetOverlap:
             pf = PolygonPatch(fp, facecolor=(0, 0, 0, 0), edgecolor='red')
             ax.add_patch(pf)
 
-    def overlap(self, healpixID=100, pointingRA=None, pointingDec=None, ax=None):
+    def overlap(self, healpixID=100, pointingRA=None,
+                pointingDec=None, ax=None):
 
         # get initial pixel
         pixRA, pixDec, poly = self.polypix(healpixID)
 
-        if PointingRA is None:
+        if pointingRA is None:
             fpRA = pixRA+self.dRA
             fpDec = pixDec+self.dDec
         else:
@@ -3717,7 +3718,8 @@ def getFields(observations, fieldType='WFD', fieldIds=None,
             if fieldType == 'DD':
                 # could be tricky here depending on the database structure
                 dd_get = getDD_from_note(
-                    observations, nside, RACol=RACol, DecCol=DecCol, fieldName='')
+                    observations, nside, RACol=RACol, DecCol=DecCol,
+                    fieldName='')
                 if dd_get is not None:
                     return dd_get
 
@@ -3730,7 +3732,8 @@ def getFields(observations, fieldType='WFD', fieldIds=None,
                             obser = getFields_fromId(observations, [0])
 
                         print('resultat fieldids', np.unique(obser['note']))
-                        return pixelate(obser, nside, RACol=RACol, DecCol=DecCol)
+                        return pixelate(obser, nside, RACol=RACol,
+                                        DecCol=DecCol)
 
                     else:
                         """
@@ -3787,7 +3790,8 @@ def getDD_from_note(observations, nside, RACol, DecCol, fieldName=''):
 
 
 def renameDDF(obser,
-              torep=dict(zip(['ECDFS', 'EDFS, a', 'EDFS, b', 'EDFS_a', 'EDFS_b', 'XMM_LSS'], [
+              torep=dict(zip(['ECDFS', 'EDFS, a', 'EDFS, b',
+                              'EDFS_a', 'EDFS_b', 'XMM_LSS'], [
                   'CDFS', 'EDFSa', 'EDFSb', 'EDFSa', 'EDFSb', 'XMM-LSS']))):
     """
      Method to rename DDF name (note col)
@@ -3797,9 +3801,11 @@ def renameDDF(obser,
      obser : numpy array
          observations - data to process
      torep : dict, optional
-         Names to replace. 
-         The default is dict(zip(['ECDFS', 'EDFS, a', 'EDFS, b', 'EDFS_a', 'EDFS_b', 'XMM_LSS'], 
-                                 ['CDFS', 'EDFSa', 'EDFSb', 'EDFSa', 'EDFSb', 'XMM-LSS'])).
+         Names to replace.
+         The default is dict(zip(['ECDFS', 'EDFS, a', 'EDFS, b',
+                                  'EDFS_a', 'EDFS_b', 'XMM_LSS'],
+                                 ['CDFS', 'EDFSa', 'EDFSb', 'EDFSa',
+                                  'EDFSb', 'XMM-LSS'])).
 
      Returns
      -------
@@ -3817,7 +3823,7 @@ def renameDDF(obser,
 
     obser['note'] = bb
 
-    #print('jjjj', len(obser))
+    # print('jjjj', len(obser))
     return obser
 
 
