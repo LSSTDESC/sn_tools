@@ -1,11 +1,11 @@
-from rubin_sim.photUtils import SignalToNoise
-from rubin_sim.photUtils import PhotometricParameters
-from rubin_sim.photUtils import Bandpass, Sed
+from rubin_sim.phot_utils import signaltonoise
+from rubin_sim.phot_utils import photometric_parameters
+from rubin_sim.phot_utils import bandpass, sed
 from sn_tools.sn_throughputs import Throughputs
 
 import numpy as np
-import matplotlib.pyplot as plt
-import math
+# import matplotlib.pyplot as plt
+# import math
 from scipy.constants import *
 from functools import wraps
 
@@ -119,19 +119,19 @@ class Telescope(Throughputs):
         wavelen_min, wavelen_max, wavelen_step = filter_trans.getWavelenLimits(
             None, None, None)
 
-        bandpass = Bandpass(wavelen=filter_trans.wavelen, sb=filter_trans.sb)
+        bpass = bandpass(wavelen=filter_trans.wavelen, sb=filter_trans.sb)
 
-        flatSedb = Sed()
+        flatSedb = sed()
         flatSedb.setFlatSED(wavelen_min, wavelen_max, wavelen_step)
         flux0b = np.power(10., -0.4*self.mag_sky(band))
         flatSedb.multiplyFluxNorm(flux0b)
-        photParams = PhotometricParameters(bandpass=band)
+        photParams = photometric_parameters(bandpass=band)
         norm = photParams.platescale**2/2.*photParams.exptime/photParams.gain
         trans = filter_trans
 
         if self.atmos:
             trans = self.atmosphere[band]
-        self.data['m5'][band] = SignalToNoise.calcM5(
+        self.data['m5'][band] = signaltonoise.calcM5(
             flatSedb, trans, filter_trans,
             photParams=photParams,
             FWHMeff=self.FWHMeff(band))
@@ -171,7 +171,7 @@ class Telescope(Throughputs):
           filter
 
         """
-        photParams = PhotometricParameters(bandpass=band)
+        photParams = photometric_parameters(bandpass=band)
         Diameter = 2.*np.sqrt(photParams.effarea*1.e-4 /
                               np.pi)  # diameter in meter
         Cte = 3631.*np.pi*Diameter**2*2.*photParams.exptime/4/h/1.e36
@@ -187,12 +187,12 @@ class Telescope(Throughputs):
         filtre_trans = self.system[band]
         wavelen_min, wavelen_max, wavelen_step = filtre_trans.getWavelenLimits(
             None, None, None)
-        bandpass = Bandpass(wavelen=filtre_trans.wavelen, sb=filtre_trans.sb)
-        flatSed = Sed()
+        # bpass = bandpass(wavelen=filtre_trans.wavelen, sb=filtre_trans.sb)
+        flatSed = sed()
         flatSed.setFlatSED(wavelen_min, wavelen_max, wavelen_step)
         flux0 = np.power(10., -0.4*mbZ)
         flatSed.multiplyFluxNorm(flux0)
-        photParams = PhotometricParameters(bandpass=band)
+        photParams = photometric_parameters(bandpass=band)
         # number of counts for exptime
         counts = flatSed.calcADU(bandpass, photParams=photParams)
         self.data['zp'][band] = mbZ

@@ -1,7 +1,7 @@
 import os
 import matplotlib.pyplot as plt
-from rubin_sim.photUtils import Bandpass
-from rubin_sim.photUtils import Sed
+from rubin_sim.phot_utils import Bandpass, Sed
+# from rubin_sim.phot_utils import Sed
 import numpy as np
 
 
@@ -139,10 +139,10 @@ class Throughputs(object):
                 telfiles = self.telescope_files+[self.filter_files[index[0]]]
             else:
                 telfiles = self.filter_files
-            self.lsst_system[f].readThroughputList(telfiles,
-                                                   rootDir=self.throughputsDir,
-                                                   wavelen_min=self.wave_min,
-                                                   wavelen_max=self.wave_max)
+            self.lsst_system[f].read_throughput_list(telfiles,
+                                                     root_dir=self.throughputsDir,
+                                                     wavelen_min=self.wave_min,
+                                                     wavelen_max=self.wave_max)
     """
     def Load_Telescope(self):
         for system in self.telescope_files+self.filter_files:
@@ -157,7 +157,7 @@ class Throughputs(object):
         """ Load DarkSky
         """
         self.darksky = Sed()
-        self.darksky.readSED_flambda(os.path.join(
+        self.darksky.read_sed_flambda(os.path.join(
             self.throughputsDir, 'darksky.dat'))
 
     def Load_Atmosphere(self, airmass=1.2):
@@ -176,21 +176,21 @@ class Throughputs(object):
             path_atmos = os.path.join(
                 self.atmosDir, 'atmos_%d.dat' % (self.airmass*10))
             if os.path.exists(path_atmos):
-                atmosphere.readThroughput(os.path.join(
+                atmosphere.read_throughput(os.path.join(
                     self.atmosDir, 'atmos_%d.dat' % (self.airmass*10)))
             else:
-                atmosphere.readThroughput(
+                atmosphere.read_throughput(
                     os.path.join(self.atmosDir, 'atmos.dat'))
             self.atmos = Bandpass(wavelen=atmosphere.wavelen, sb=atmosphere.sb)
 
             for f in self.filterlist:
-                wavelen, sb = self.lsst_system[f].multiplyThroughputs(
+                wavelen, sb = self.lsst_system[f].multiply_throughputs(
                     atmosphere.wavelen, atmosphere.sb)
                 self.lsst_atmos[f] = Bandpass(wavelen=wavelen, sb=sb)
 
             if self.aerosol_b:
                 atmosphere_aero = Bandpass()
-                atmosphere_aero.readThroughput(os.path.join(
+                atmosphere_aero.read_throughput(os.path.join(
                     self.atmosDir, 'atmos_%d_aerosol.dat' % (self.airmass*10)))
                 self.atmos_aerosol = Bandpass(
                     wavelen=atmosphere_aero.wavelen, sb=atmosphere_aero.sb)
