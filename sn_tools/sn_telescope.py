@@ -169,8 +169,6 @@ class Telescope(Throughputs):
 
         Parameters
         ---------------
-        what: str
-          parameter to estimate
         band: str
           filter
 
@@ -189,14 +187,18 @@ class Telescope(Throughputs):
 
         Zb = 181.8*np.power(Diameter/6.5, 2.)*self.Tb(band)
         mbZ = 25.+2.5*np.log10(Zb)
-        filtre_trans = self.system[band]
+        """
+        filtre_trans = self.atmosphere[band]
         if self.atmos:
             filtre_trans = self.atmosphere[band]
         if self.aerosol_b:
             filtre_trans = self.aerosol[band]
         wavelen_min, wavelen_max, wavelen_step = \
             filtre_trans.get_wavelen_limits(None, None, None)
-
+        """
+        filtre_trans = self.system[band]
+        wavelen_min, wavelen_max, wavelen_step = \
+            filtre_trans.get_wavelen_limits(None, None, None)
         bpass = Bandpass(wavelen=filtre_trans.wavelen, sb=filtre_trans.sb)
         flatSed = Sed()
         flatSed.set_flat_sed(wavelen_min, wavelen_max, wavelen_step)
@@ -207,6 +209,7 @@ class Telescope(Throughputs):
         # number of counts for exptime
         counts = flatSed.calc_adu(bpass, phot_params=photParams)
         self.data['zp'][band] = mbZ
+        print('aoooo', counts/2., photParams.exptime)
         self.data['counts_zp'][band] = counts/2.*photParams.exptime
 
     def return_value(self, what, band):
@@ -284,7 +287,7 @@ class Telescope(Throughputs):
         None.
 
         """
-        self.get_zp('counts_zp', filtre)
+        self.get_zp('zp', filtre)
         return self.return_value('counts_zp', filtre)
 
     def FWHMeff(self, filtre):
