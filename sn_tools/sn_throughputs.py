@@ -143,6 +143,7 @@ class Throughputs(object):
                                                      root_dir=self.throughputsDir,
                                                      wavelen_min=self.wave_min,
                                                      wavelen_max=self.wave_max)
+
     """
     def Load_Telescope(self):
         for system in self.telescope_files+self.filter_files:

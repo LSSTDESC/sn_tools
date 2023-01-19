@@ -196,7 +196,7 @@ class Telescope(Throughputs):
         wavelen_min, wavelen_max, wavelen_step = \
             filtre_trans.get_wavelen_limits(None, None, None)
         """
-        filtre_trans = self.system[band]
+        filtre_trans = self.lsst_system[band]
         wavelen_min, wavelen_max, wavelen_step = \
             filtre_trans.get_wavelen_limits(None, None, None)
         bpass = Bandpass(wavelen=filtre_trans.wavelen, sb=filtre_trans.sb)
@@ -209,8 +209,7 @@ class Telescope(Throughputs):
         # number of counts for exptime
         counts = flatSed.calc_adu(bpass, phot_params=photParams)
         self.data['zp'][band] = mbZ
-        print('aoooo', counts/2., photParams.exptime)
-        self.data['counts_zp'][band] = counts/2.*photParams.exptime
+        self.data['counts_zp'][band] = counts/photParams.exptime
 
     def return_value(self, what, band):
         """
