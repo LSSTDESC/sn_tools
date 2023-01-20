@@ -3,11 +3,8 @@ import pandas as pd
 import numpy as np
 from astropy.table import Table, Column, vstack
 import time
-#from scipy.linalg import lapack
-# lapack_routine = lapack_lite.dgesv
 import scipy.linalg as la
 import operator
-#import numpy.lib.recfunctions as rf
 from sn_tools.sn_io import check_get_file
 import h5py
 from scipy.interpolate import RegularGridInterpolator
@@ -41,9 +38,11 @@ class LCfast:
     filterCol: str, opt
        name of the filter col in data to simulate (default: filter)
     exptimeCol: str, opt
-      name of the exposure time  col in data to simulate (default: visitExposureTime)
+      name of the exposure time  col in data to simulate
+          (default: visitExposureTime)
     m5Col: str, opt
-       name of the fiveSigmaDepth col in data to simulate (default: fiveSigmaDepth)
+       name of the fiveSigmaDepth col in data to simulate
+       (default: fiveSigmaDepth)
     seasonCol: str, opt
        name of the season col in data to simulate (default: season)
     snr_min: float, opt
@@ -56,10 +55,14 @@ class LCfast:
        red cutoff for SN (default: 800.0 nm)
     """
 
-    def __init__(self, reference_lc, dustcorr, x1, color, mjdCol='observationStartMJD',
+    def __init__(self, reference_lc, dustcorr, zp_slope,
+                 zp_intercept,
+                 x1, color,
+                 mjdCol='observationStartMJD',
                  RACol='fieldRA', DecCol='fieldDec',
                  filterCol='filter', exptimeCol='visitExposureTime',
-                 m5Col='fiveSigmaDepth', seasonCol='season', nexpCol='numExposures', seeingCol='seeingFwhmEff',
+                 m5Col='fiveSigmaDepth', seasonCol='season',
+                 nexpCol='numExposures', seeingCol='seeingFwhmEff',
                  snr_min=5.,
                  lightOutput=True,
                  ebvofMW=-1.0,
@@ -84,6 +87,8 @@ class LCfast:
         self.dustcorr = dustcorr
         # Loading reference file
         self.reference_lc = reference_lc
+        self.zp_slope = zp_slope
+        self.zp_intercept = zp_intercept
 
         # This cutoffs are used to select observations:
         # phase = (mjd - DayMax)/(1.+z)
@@ -132,7 +137,7 @@ class LCfast:
             idx = obs[self.filterCol] == band
             if len(obs[idx]) > 0:
                 resband = self.processBand(obs[idx], ebvofMW, band, gen_par)
-                #tab_tot = tab_tot.append(resband, ignore_index=True)
+                # tab_tot = tab_tot.append(resband, ignore_index=True)
                 tab_tot = pd.concat((tab_tot, resband))
 
         # return produced LC
@@ -140,7 +145,8 @@ class LCfast:
 
     def call_multiproc(self, obs, gen_par=None, bands='grizy'):
         """ Simulation of the light curve
-        This method uses multiprocessing (one band per process) to increase speed
+        This method uses multiprocessing
+        (one band per process) to increase speed
 
         Parameters
         ----------------
@@ -158,9 +164,6 @@ class LCfast:
         metadata : SNID,RA,Dec,DayMax,X1,Color,z
         """
 
-        ra = np.mean(obs[self.RACol])
-        dec = np.mean(obs[self.DecCol])
-
         if len(obs) == 0:
             return None
 
@@ -176,7 +179,8 @@ class LCfast:
             if len(obs[idx]) > 0:
                 jproc += 1
                 p = multiprocessing.Process(name='Subprocess-'+str(
-                    j), target=self.processBand, args=(obs[idx], band, gen_par, jproc, result_queue))
+                    j), target=self.processBand,
+                    args=(obs[idx], band, gen_par, jproc, result_queue))
                 p.start()
 
         resultdict = {}
@@ -193,7 +197,8 @@ class LCfast:
         # return produced LC
         return tab_tot
 
-    def processBand(self, sel_obs, ebvofMW, band, gen_par, j=-1, output_q=None):
+    def processBand(self, sel_obs, ebvofMW,
+                    band, gen_par, j=-1, output_q=None):
         """ LC simulation of a set of obs corresponding to a band
         The idea is to use python broadcasting so as to estimate
         all the requested values (flux, flux error, Fisher components, ...)
@@ -287,7 +292,8 @@ class LCfast:
         sel_obs['healpixID'] = sel_obs['healpixID'].astype(int)
 
         cols = [self.mjdCol, self.seasonCol, self.m5Col, self.exptimeCol,
-                self.nexpCol, self.seeingCol, 'night', 'healpixID', 'pixRA', 'pixDec']
+                self.nexpCol, self.seeingCol, 'night', 'airmass',
+                'healpixID', 'pixRA', 'pixDec']
 
         # take columns common with obs cols
         colcoms = set(cols).intersection(sel_obs.dtype.names)
@@ -305,8 +311,9 @@ class LCfast:
         lc['mag'] = -2.5*np.log10(lc['flux']/3631.)
         lc['phase'] = phases[~phases.mask]
         lc['band'] = ['LSST::'+band]*len(lc)
-        lc['zp'] = self.reference_lc.zp[band]
-        lc['zp'] = 2.5*np.log10(3631)
+        #lc['zp'] = self.reference_lc.zp[band]
+        #lc['zp'] = 2.5*np.log10(3631)
+
         lc['zpsys'] = 'ab'
         lc['z'] = z_vals
         lc['daymax'] = daymax_vals
@@ -314,6 +321,10 @@ class LCfast:
         for key, vals in masked_tile.items():
             lc[key] = vals[~vals.mask]
 
+        lst = [band]*len(lc)
+        lc['zp_slope'] = np.array([*map(self.zp_slope.get, lst)])
+        lc['zp_intercept'] = np.array([*map(self.zp_intercept.get, lst)])
+        lc['zp'] = lc['zp_slope']*lc['airmass']+lc['zp_intercept']
         lc['time'] = lc[self.mjdCol]
         lc.loc[:, 'x1'] = self.x1
         lc.loc[:, 'color'] = self.color
@@ -322,13 +333,24 @@ class LCfast:
         lc['fluxerr_model'] = fluxes_err_model[~fluxes_err_model.mask]
         lc['flux_e_sec'] = self.reference_lc.mag_to_flux[band]((
             lc['mag'], lc[self.exptimeCol]/lc[self.nexpCol], lc[self.nexpCol]))
+        """
         lc['flux_5_old'] = 10**(-0.4*(lc[self.m5Col] -
                                       self.reference_lc.zp[band]))
         lc['flux_5'] = self.reference_lc.mag_to_flux[band]((
-            lc[self.m5Col], lc[self.exptimeCol]/lc[self.nexpCol], lc[self.nexpCol]))
+            lc[self.m5Col], lc[self.exptimeCol]/lc[self.nexpCol],
+            lc[self.nexpCol]))
+        """
+        flux5 = 10**(-0.4*(lc[self.m5Col]-lc['zp']))
+        lc['flux_5'] = flux5
+        sigma_5 = flux5/5.
+        shot_noise = np.sqrt(lc['flux_e_sec']/lc[self.exptimeCol])
+        lc['fluxerr'] = np.sqrt(sigma_5**2+shot_noise**2)
+        lc['snr_m5'] = lc['flux_e_sec']/lc['fluxerr']
+        """
         lc['snr_m5'] = lc['flux_e_sec'] / \
             np.sqrt((lc['flux_5']/5.)**2 +
                     lc['flux_e_sec']/lc[self.exptimeCol])
+        """
         lc['fluxerr_photo'] = lc['flux']/lc['snr_m5']
         lc['magerr'] = (2.5/np.log(10.))/lc['snr_m5']
         lc['fluxerr'] = np.sqrt(
@@ -338,17 +360,15 @@ class LCfast:
         for key, vals in Fisher_Mat.items():
             lc.loc[:, 'F_{}'.format(
                 key)] = vals[~vals.mask]/(lc['fluxerr_photo'].values**2)
-        
+
         lc.loc[:, 'n_aft'] = (np.sign(lc['phase']) == 1) & (
             lc['snr_m5'] >= self.snr_min)
         lc.loc[:, 'n_bef'] = (np.sign(lc['phase'])
                               == -1) & (lc['snr_m5'] >= self.snr_min)
-        
 
         lc.loc[:, 'n_phmin'] = (lc['phase'] <= -5.)
         lc.loc[:, 'n_phmax'] = (lc['phase'] >= 20)
-        
-        
+
         # remove lc points with no flux
         idx = lc['flux_e_sec'] > 0.
         lc_flux = lc[idx]
