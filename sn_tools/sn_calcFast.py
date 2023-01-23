@@ -312,7 +312,7 @@ class LCfast:
         lc['phase'] = phases[~phases.mask]
         lc['band'] = ['LSST::'+band]*len(lc)
         #lc['zp'] = self.reference_lc.zp[band]
-        #lc['zp'] = 2.5*np.log10(3631)
+        lc['zp'] = 2.5*np.log10(3631)
 
         lc['zpsys'] = 'ab'
         lc['z'] = z_vals
@@ -324,7 +324,7 @@ class LCfast:
         lst = [band]*len(lc)
         lc['zp_slope'] = np.array([*map(self.zp_slope.get, lst)])
         lc['zp_intercept'] = np.array([*map(self.zp_intercept.get, lst)])
-        lc['zp'] = lc['zp_slope']*lc['airmass']+lc['zp_intercept']
+        lc['zp_new'] = lc['zp_slope']*lc['airmass']+lc['zp_intercept']
         lc['time'] = lc[self.mjdCol]
         lc.loc[:, 'x1'] = self.x1
         lc.loc[:, 'color'] = self.color
@@ -336,21 +336,25 @@ class LCfast:
         """
         lc['flux_5_old'] = 10**(-0.4*(lc[self.m5Col] -
                                       self.reference_lc.zp[band]))
+        """
         lc['flux_5'] = self.reference_lc.mag_to_flux[band]((
             lc[self.m5Col], lc[self.exptimeCol]/lc[self.nexpCol],
             lc[self.nexpCol]))
+
         """
-        flux5 = 10**(-0.4*(lc[self.m5Col]-lc['zp']))
-        lc['flux_5'] = flux5
+        flux5 = 10**(-0.4*(lc[self.m5Col]-lc['zp_new']))
+        lc['flux_5_new'] = flux5
         sigma_5 = flux5/5.
-        shot_noise = np.sqrt(lc['flux_e_sec']/lc[self.exptimeCol])
-        lc['fluxerr'] = np.sqrt(sigma_5**2+shot_noise**2)
-        lc['snr_m5'] = lc['flux_e_sec']/lc['fluxerr']
+        shot_noise = np.sqrt(lc['flux_e_sec']/2.4/lc[self.exptimeCol])
+        lc['fluxerr_new'] = np.sqrt(sigma_5**2+shot_noise**2)
+        lc['snr_m5_new'] = lc['flux_e_sec']/lc['fluxerr_new']
         """
         lc['snr_m5'] = lc['flux_e_sec'] / \
             np.sqrt((lc['flux_5']/5.)**2 +
-                    lc['flux_e_sec']/lc[self.exptimeCol])
-        """
+                    lc['flux_e_sec']/2.4/lc[self.exptimeCol])
+
+        #print(lc[['snr_m5', 'snr_m5_new', 'flux_5', 'flux_5_new']])
+        lc['fluxerr'] = lc['flux']/lc['snr_m5']
         lc['fluxerr_photo'] = lc['flux']/lc['snr_m5']
         lc['magerr'] = (2.5/np.log(10.))/lc['snr_m5']
         lc['fluxerr'] = np.sqrt(
