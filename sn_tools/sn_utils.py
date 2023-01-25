@@ -411,7 +411,7 @@ class GenerateSample:
             if N_SN < 1:
                 N_SN = 1
                 # weight_z = 1
-            print('nsn', zmin, zmax, survey_area, duration, N_SN)
+            # print('nsn', zmin, zmax, survey_area, duration, N_SN)
             for j in range(N_SN):
                 z = self.getVal(self.params['z']['type'], zmin, zz, weight_z)
                 zrange = 'low_z'
@@ -605,7 +605,8 @@ class SimuParameters:
     """
 
     def __init__(self, sn_parameters, cosmo_parameters,
-                 mjdCol='mjd', seasonCol='season', filterCol='filter', area=9.6, web_path=''):
+                 mjdCol='mjd', seasonCol='season', filterCol='filter',
+                 area=9.6, web_path=''):
 
         self.params = sn_parameters
 
@@ -694,7 +695,7 @@ class SimuParameters:
 
         return params
 
-    def Params(self, obs):
+    def simuparams(self, obs):
         """
         Method to estimate simulation parameters according to obs and config
 
@@ -847,7 +848,8 @@ class SimuParameters:
                 N_SN = NSN_absolute
                 weight_z = [1./len(zz)]*len(zz)
             # print('nsn from rate', zmin, zmax,
-            #      duration, self.area, self.min_rf_phase_qual, self.max_rf_phase_qual, N_SN, NSN_factor)
+            #      duration, self.area, self.min_rf_phase_qual,
+            # self.max_rf_phase_qual, N_SN, NSN_factor)
 
             if N_SN < 0.5:
                 return None
@@ -887,7 +889,6 @@ class SimuParameters:
         if daymaxtype == 'unique':
             daymaxdf = pd.DataFrame(pars)
             daymaxdf['daymax'] = daymin+21*(1.+daymaxdf['z'])
-
         if daymaxtype == 'uniform':
             daymaxdf = pd.DataFrame()
             for z in pars['z'].values:
@@ -2222,11 +2223,11 @@ class Gamma:
             dict_meta['zp'][b] = telescope.zp(b)
             dict_meta['mean_wavelength'][b] = telescope.mean_wavelength[b]
 
-        print('hello', dict_meta)
         restot.meta = dict_meta
         return restot
 
-    def calcGamma(self, band, mag_range, single_exposure_time, nexps, telescope, j=-1, output_q=None):
+    def calcGamma(self, band, mag_range, single_exposure_time,
+                  nexps, telescope, j=-1, output_q=None):
         """ Gamma parameter estimation
 
         Parameters

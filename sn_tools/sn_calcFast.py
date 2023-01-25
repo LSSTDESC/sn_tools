@@ -307,12 +307,13 @@ class LCfast:
         # put data in a pandas df
         lc = pd.DataFrame()
 
-        lc['flux'] = fluxes[~fluxes.mask]
-        lc['mag'] = -2.5*np.log10(lc['flux']/3631.)
+        lc['flux'] = fluxes[~fluxes.mask]  # flux in ADU/s
+        # lc['mag'] = -2.5*np.log10(lc['flux']/3631.)
         lc['phase'] = phases[~phases.mask]
-        lc['band'] = ['LSST::'+band]*len(lc)
-        #lc['zp'] = self.reference_lc.zp[band]
-        lc['zp'] = 2.5*np.log10(3631)
+        # lc['band'] = ['LSST::'+band]*len(lc)
+        lc['band'] = ['lsst'+band]*len(lc)
+        # lc['zp'] = self.reference_lc.zp[band]
+        # lc['zp'] = 2.5*np.log10(3631)
 
         lc['zpsys'] = 'ab'
         lc['z'] = z_vals
@@ -324,37 +325,43 @@ class LCfast:
         lst = [band]*len(lc)
         lc['zp_slope'] = np.array([*map(self.zp_slope.get, lst)])
         lc['zp_intercept'] = np.array([*map(self.zp_intercept.get, lst)])
-        lc['zp_new'] = lc['zp_slope']*lc['airmass']+lc['zp_intercept']
+        lc['zp'] = lc['zp_slope']*lc['airmass']+lc['zp_intercept']
+        lc['mag'] = -2.5*np.log10(lc['flux'])+lc['zp']
         lc['time'] = lc[self.mjdCol]
         lc.loc[:, 'x1'] = self.x1
         lc.loc[:, 'color'] = self.color
 
         # estimate errors
         lc['fluxerr_model'] = fluxes_err_model[~fluxes_err_model.mask]
+        """
         lc['flux_e_sec'] = self.reference_lc.mag_to_flux[band]((
             lc['mag'], lc[self.exptimeCol]/lc[self.nexpCol], lc[self.nexpCol]))
         """
+        """
         lc['flux_5_old'] = 10**(-0.4*(lc[self.m5Col] -
                                       self.reference_lc.zp[band]))
+        """
+        lc['flux_e_sec'] = lc['flux']*2.4  # assuming gain 2.4
         """
         lc['flux_5'] = self.reference_lc.mag_to_flux[band]((
             lc[self.m5Col], lc[self.exptimeCol]/lc[self.nexpCol],
             lc[self.nexpCol]))
 
         """
-        flux5 = 10**(-0.4*(lc[self.m5Col]-lc['zp_new']))
-        lc['flux_5_new'] = flux5
+        flux5 = 10**(-0.4*(lc[self.m5Col]-lc['zp']))
+        lc['flux_5'] = flux5
         sigma_5 = flux5/5.
-        shot_noise = np.sqrt(lc['flux_e_sec']/2.4/lc[self.exptimeCol])
-        lc['fluxerr_new'] = np.sqrt(sigma_5**2+shot_noise**2)
-        lc['snr_m5_new'] = lc['flux_e_sec']/lc['fluxerr_new']
+        shot_noise = np.sqrt(lc['flux']/lc[self.exptimeCol])
+        lc['fluxerr'] = np.sqrt(sigma_5**2+shot_noise**2)
+        lc['snr_m5'] = lc['flux']/lc['fluxerr']
         """
         lc['snr_m5'] = lc['flux_e_sec'] / \
             np.sqrt((lc['flux_5']/5.)**2 +
                     lc['flux_e_sec']/2.4/lc[self.exptimeCol])
 
-        #print(lc[['snr_m5', 'snr_m5_new', 'flux_5', 'flux_5_new']])
+        # print(lc[['snr_m5', 'snr_m5_new', 'flux_5', 'flux_5_new']])
         lc['fluxerr'] = lc['flux']/lc['snr_m5']
+        """
         lc['fluxerr_photo'] = lc['flux']/lc['snr_m5']
         lc['magerr'] = (2.5/np.log(10.))/lc['snr_m5']
         lc['fluxerr'] = np.sqrt(
@@ -434,8 +441,8 @@ class LCfast:
     def processBand_gamma(self, sel_obs, ebvofMW, band, gen_par, j=-1, output_q=None):
         """ LC simulation of a set of obs corresponding to a band
         The idea is to use python broadcasting so as to estimate
-        all the requested values (flux, flux error, Fisher components, ...)
-        in a single path (i.e no loop!)
+        all the requested values(flux, flux error, Fisher components, ...)
+        in a single path(i.e no loop!)
 
         Parameters
         ---------------
@@ -446,10 +453,9 @@ class LCfast:
         gen_par: array
          simulation parameters
         j: int, opt
-         index for multiprocessing (default: -1)
-        output_q: multiprocessing.Queue(),opt
-         queue for multiprocessing (default: None)
-
+         index for multiprocessing(default: -1)
+        output_q: multiprocessing.Queue(), opt
+         queue for multiprocessing(default: None)
 
         Returns
         -------
@@ -522,7 +528,7 @@ class LCfast:
             p_mask = np.ma.array(p, mask=~flag)
             yi_mask = np.ma.array(yi_arr, mask=~flag)
 
-            pts = (p_mask[~p.mask],yi_mask[~p.mask])
+            pts = (p_mask[~p.mask], yi_mask[~p.mask])
             """
             pts = (p, yi_arr)
             fluxes_obs = self.reference_lc.flux[band](pts)
@@ -843,10 +849,9 @@ class LCfast:
 
 def srand(gamma, mag, m5):
     """
-    Function to estimate :math:`srand=\sqrt((0.04-\gamma)*x+\gamma*x^2)`
+    Function to estimate: math: `srand =\sqrt((0.04 -\gamma)*x +\gamma*x ^ 2)`
 
-    with :math:`x = 10^{0.4*(m-m_5)}`
-
+    with: math: `x = 10 ^ {0.4*(m-m_5)}`
 
     Parameters
     ---------------
@@ -877,16 +882,16 @@ class CalcSN:
     lc_all: astropy Table
       light curve points
     nBef: int, opt
-      quality selection: number of LC points before max (default: 2)
+      quality selection: number of LC points before max(default: 2)
     nAft: int, opt
-       quality selection: number of LC points after max (default: 5)
+       quality selection: number of LC points after max(default: 5)
     nPhamin: int, opt
        quality selection: number of point with phase <= -5(default: 1)
     nPhamax: int, opt
     quality selection: number of point with phase >= 30 (default: 1)
 
     params: list(str)
-      list of Fisher parameters to estimate (default: ['x0', 'x1', 'color'])
+      list of Fisher parameters to estimate(default: ['x0', 'x1', 'color'])
 
     """
 
@@ -1053,7 +1058,7 @@ class CalcSN:
 
         Returns
         -----------
-        None. astropy Table of results (restab) is updated
+        None. astropy Table of results(restab) is updated
         """
 
         time_ref = time.time()
@@ -1113,21 +1118,21 @@ class CalcSN_df:
     lc_all: astropy Table
       light curve points
     n_bef: int, opt
-      quality selection: number of LC points before max (default: 4)
+      quality selection: number of LC points before max(default: 4)
     n_aft: int, opt
-       quality selection: number of LC points after max (default: 10)
+       quality selection: number of LC points after max(default: 10)
     snr_min: float, opt
-       quality selection: min SNR for LC points (default: 5.)
+       quality selection: min SNR for LC points(default: 5.)
     phase_min: float, opt
-        phase corresponding to n_phase_min cut (default: -5)
+        phase corresponding to n_phase_min cut(default: -5)
     phase_max: float, opt
-        phase corresponding to n_phase_max cut (default: 20)
+        phase corresponding to n_phase_max cut(default: 20)
     n_phase_min: int, opt
        quality selection: number of point with phase <= -5(default: 1)
     n_phase_max: int, opt
     quality selection: number of point with phase >= 30 (default: 1)
     params: list(str)
-      list of Fisher parameters to estimate (default: ['x0', 'x1', 'daymax','color'])
+      list of Fisher parameters to estimate(default: ['x0', 'x1', 'daymax', 'color'])
     invert_matrix: bool, opt
       if True, SN parameter variances are estimated by inverting the Fisher matrix
       if False, only color variance is estimated from analytic estimation.
@@ -1189,7 +1194,7 @@ class CalcSN_df:
 
         Parameters
         ---------------
-        grp : df group
+        grp: df group
           data to process
         tosam: list(str)
            list of var to sum-up
@@ -1199,8 +1204,8 @@ class CalcSN_df:
         pandas df with the following cols:
         n_bef: number of LC point before max
         n_aft: number of LC points after max
-        n_phmin: number of LC points with phase<=phase_min
-        n_phmax: number of LC points with phase>= phase_max
+        n_phmin: number of LC points with phase <= phase_min
+        n_phmax: number of LC points with phase >= phase_max
         Cov_colorcolor: color variance
 
         """
@@ -1250,8 +1255,8 @@ class CalcSN_df:
         initial df with added cols:
         n_bef: number of LC point before max
         n_aft: number of LC points after max
-        n_phmin: number of LC points with phase<=phase_min
-        n_phmax: number of LC points with phase>= phase_max
+        n_phmin: number of LC points with phase <= phase_min
+        n_phmax: number of LC points with phase >= phase_max
 
         """
         lc.loc[:, 'n_aft'] = (np.sign(lc['phase']) == 1) & (
@@ -1278,7 +1283,7 @@ class CalcSN_df:
 
         Returns
         ----------
-        Diagonal elements of the inverted matrix (as pandas df)
+        Diagonal elements of the inverted matrix(as pandas df)
 
         """
         parts = {}
@@ -1382,7 +1387,7 @@ class CovColor:
         Parameters
         ---------------
         Values of the matrix
-        ( a1 a2 a3)
+        (a1 a2 a3)
         (b1 b2 b3)
         (c1 c2 c3)
 
@@ -1397,6 +1402,8 @@ class CovColor:
 
 
 """
+
+
 def det(a1, a2, a3, b1, b2, b3, c1, c2, c3):
 
     resp = a1*b2*c3+b1*c2*a3+c1*a2*b3
@@ -1436,9 +1443,12 @@ def covColor(lc):
 
     return res/detM
 
+
 """
 
 """
+
+
 def calcSN_last(lc_all, params=['x0', 'x1', 'color'], j=-1, output_q=None):
 
     time_ref = time.time()
@@ -1541,9 +1551,13 @@ def calcSN_last(lc_all, params=['x0', 'x1', 'color'], j=-1, output_q=None):
         output_q.put({j: restab})
     else:
         return restab
+
+
 """
 
 """
+
+
 def npoints(gr):
 
     idx = gr['phase'] < 0.
@@ -1551,9 +1565,13 @@ def npoints(gr):
     gr['N_aft'] = len(gr)-len(gr.loc[idx])
 
     return gr
+
+
 """
 
 """
+
+
 def npointBand(lc, band):
 
     valu = np.unique(lc['z', 'daymax'])
@@ -1581,6 +1599,8 @@ def npointBand(lc, band):
             restab.add_column(Column(count, name='N_{}'.format(key, band)))
 
     return restab
+
+
 """
 
 
@@ -1593,7 +1613,7 @@ def sigmaSNparams(resu, restab, params=['x0', 'x1', 'color']):
     resu:
     restab:
     params: list(str)
-      list of parameters to consider (default: ['x0', 'x1', 'color'])
+      list of parameters to consider(default: ['x0', 'x1', 'color'])
 
     Returns
     -----------
@@ -1673,14 +1693,14 @@ class GetReference:
     templateDir: str
       location dir of the reference LC files
     lcName: str
-      name of the reference file to load (lc)
+      name of the reference file to load(lc)
     gammaDir: str
        location dir where gamma files are located
     gammaName: str
-      name of the reference file to load (gamma)
+      name of the reference file to load(gamma)
     web_path: str
-      web adress where files (LC reference and gamma) can be found if not already on disk
-    param_Fisher : list(str),opt
+      web adress where files(LC reference and gamma) can be found if not already on disk
+    param_Fisher: list(str), opt
       list of SN parameter for Fisher estimation to consider
       (default: ['x0', 'x1', 'color', 'daymax'])
 
@@ -1688,13 +1708,12 @@ class GetReference:
     -----------
     The following dict can be accessed:
 
-    mag_to_flux_e_sec : Interp1D of mag to flux(e.sec-1)  conversion
-    flux : dict of RegularGridInterpolator of fluxes (key: filters, (x,y)=(phase, z), result=flux)
-    fluxerr : dict of RegularGridInterpolator of flux errors (key: filters, (x,y)=(phase, z), result=fluxerr)
-    param : dict of dict of RegularGridInterpolator of flux derivatives wrt SN parameters
-                  (key: filters plus param_Fisher parameters; (x,y)=(phase, z), result=flux derivatives)
-    gamma : dict of RegularGridInterpolator of gamma values (key: filters)
-
+    mag_to_flux_e_sec: Interp1D of mag to flux(e.sec-1)  conversion
+    flux: dict of RegularGridInterpolator of fluxes(key: filters, (x, y)=(phase, z), result=flux)
+    fluxerr: dict of RegularGridInterpolator of flux errors(key: filters, (x, y)=(phase, z), result=fluxerr)
+    param: dict of dict of RegularGridInterpolator of flux derivatives wrt SN parameters
+                  (key: filters plus param_Fisher parameters; (x, y)=(phase, z), result=flux derivatives)
+    gamma: dict of RegularGridInterpolator of gamma values(key: filters)
 
     """""
 
@@ -1753,7 +1772,7 @@ class GetReference:
             lc_sel['phase'] = lc_sel['phase'].data.round(decimals=1)
 
             """
-            select phases between -20 and -60 only
+            select phases between - 20 and -60 only
 
             """
 
@@ -1764,7 +1783,7 @@ class GetReference:
             """
             for z in np.unique(lc_sel['z']):
                 ig = lc_sel['z'] == z
-                print(band,z,len(lc_sel[ig]))
+                print(band, z, len(lc_sel[ig]))
             """
             """
             fluxes_e_sec = telescope.mag_to_flux_e_sec(
@@ -1775,8 +1794,8 @@ class GetReference:
 
             # these reference data will be used for griddata interp.
             self.lc_ref[band] = lc_sel
-            #self.gamma_ref[band] = lc_sel['gamma'][0]
-            #self.m5_ref[band] = np.unique(lc_sel['m5'])[0]
+            # self.gamma_ref[band] = lc_sel['gamma'][0]
+            # self.m5_ref[band] = np.unique(lc_sel['m5'])[0]
 
             # Fluxes and errors
             zmin, zmax, zstep, nz = self.limVals(lc_sel, 'z')
@@ -1805,14 +1824,14 @@ class GetReference:
             """
             zref = 0.8
             if band == 'g':
-                phases = [-5,12.]
-                interp = self.flux[band]((phases,[zref,zref]))
-                print('interp',interp)
+                phases = [-5, 12.]
+                interp = self.flux[band]((phases, [zref, zref]))
+                print('interp', interp)
                 import matplotlib.pyplot as plt
-                iu = np.abs(lc_sel['z']-zref)<1.e-8
+                iu = np.abs(lc_sel['z']-zref) < 1.e-8
                 ll = lc_sel[iu]
-                plt.plot(ll['phase'],ll['flux'],'ko',mfc='None')
-                plt.plot(phases,interp,'r*')
+                plt.plot(ll['phase'], ll['flux'], 'ko', mfc='None')
+                plt.plot(phases, interp, 'r*')
                 plt.show()
               """
 
