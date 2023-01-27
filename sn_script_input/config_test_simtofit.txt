@@ -1,3 +1,9 @@
+## config file for observation
+config_obs input/sim_to_simu_test/combi_obs.csv str #config file for obs
+
+## config file for simu+fit scheme
+config_simu input/sim_to_simu_test/combi_simufit.csv str #config file for simu
+
 ## RA and Dec
 RA 0.0 float # RA
 Dec 0.0 float #Dec
@@ -10,12 +16,12 @@ MJDmin -40. str #MJD min for observations
 ## bands to consider
 bands grizy str #bands to consider
 
-## cadence[day] per band
-cadence g 1. float # cadence g band
-cadence r 1. float # cadence r band
-cadence i 1. float # cadence i band
-cadence z 1. float # cadence z band
-cadence y 1. float # cadence y band
+## cadence[day] per band - see config_obs
+## cadence g 1. float # cadence g band
+## cadence r 1. float # cadence r band
+## cadence i 1. float # cadence i band
+## cadence z 1. float # cadence z band
+## cadence y 1. float # cadence y band
 
 ## m5 per band
 m5 g 24.51 float #g 5-sigma depth values
@@ -24,12 +30,12 @@ m5 i 23.62 float #i 5-sigma depth values
 m5 z 23.00 float #z 5-sigma depth values
 m5 y 22.17 float #y 5-sigma depth values
 
-## number of visits per band
-Nvisits g 10,2 str #Nvisits g
-Nvisits r  20,9 str #Nvisits r
-Nvisits i 20,37  str #Nvisits i
-Nvisits z 26,52 str #Nvisits z
-Nvisits y 20,21 str #Nvisits y
+## number of visits per band - see config_obs
+#Nvisits g 10,2 str #Nvisits g
+#Nvisits r  20,9 str #Nvisits r
+#Nvisits i 20,37  str #Nvisits i
+#Nvisits z 26,52 str #Nvisits z
+#Nvisits y 20,21 str #Nvisits y
 
 ## Single visit exposure time
 ExposureTime g  30. float #single visit exp time g-band
