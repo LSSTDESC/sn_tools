@@ -115,7 +115,7 @@ class TemplateData(object):
     def __init__(self, filename, band):
         self.fi = filename
         self.refdata = self.Stack()
-        from sn_tools.sn_telescope import Telescope
+        from sn_telmodel.sn_telescope import Telescope
         self.telescope = Telescope(airmass=1.1)
         self.blue_cutoff = 300.
         self.red_cutoff = 800.

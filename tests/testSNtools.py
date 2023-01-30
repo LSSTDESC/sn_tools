@@ -15,7 +15,7 @@ from sn_tools.sn_obs import DataInside, proj_gnomonic_plane, proj_gnomonic_spher
 from sn_tools.sn_obs import pixelate, season, DataToPixels, ProcessPixels, ProcessArea, getFields
 from sn_tools.sn_process import Process
 from sn_tools.sn_clusters import ClusterObs
-from sn_tools.sn_telescope import Telescope
+from sn_telmodel.sn_telescope import Telescope
 from sn_tools.sn_visu import fieldType, SnapNight, CadenceMovie
 from sn_tools.sn_io import Read_Sqlite
 from sn_tools.sn_obs import getObservations
