@@ -517,18 +517,20 @@ class FP2pixels:
             ax.set_ylabel('Dec [deg]')
             plt.show()
 
-        print('getting pixels', self.nside, self.project_FP, self.VRO_FP,
-              self.RACol, self.DecCol, self.telrot, self.nproc)
+        # print('getting pixels', self.nside, self.project_FP, self.VRO_FP,
+        #      self.RACol, self.DecCol, self.telrot, self.nproc)
         time_ref = time.time()
         from sn_tools.sn_obs import DataToPixels
         datapixels = DataToPixels(
-            self.nside, self.project_FP, self.VRO_FP, RACol=self.RACol, DecCol=self.DecCol, telrot=self.telrot, nproc=self.nproc)
+            self.nside, self.project_FP, self.VRO_FP,
+            RACol=self.RACol, DecCol=self.DecCol,
+            telrot=self.telrot, nproc=self.nproc)
 
         pixels = datapixels(obs, pixels, display=self.display)
 
         pixels['healpixID'] = pixels['healpixID'].astype(int)
-        print('FP2pixels done', time.time() -
-              time_ref, pixels['healpixID'].unique())
+        # print('FP2pixels done', time.time() -
+        #       time_ref, pixels['healpixID'].unique())
 
         if self.display:
             import matplotlib.pyplot as plt
@@ -667,7 +669,7 @@ class FP2pixels:
             idx &= np.abs(pixels['diff_Dec']) <= 0.5
             pixels = pixels[idx][:1]
 
-        print('nb pixels', len(pixels))
+        # print('nb pixels', len(pixels))
 
         return pixels
 
@@ -940,10 +942,11 @@ class Process(FP2pixels):
 
         #pixels = self.get_pixels_field(observations)
         # getting the pixels
-        print('getting pixels call')
+        #print('getting pixels call')
+
         pixels = super(Process, self).__call__()
 
-        print('finished with pixels')
+        #print('finished with pixels')
 
         if self.display:
             import matplotlib.pyplot as plt
@@ -1239,14 +1242,14 @@ class Process_old:
 
         if self.fieldType == 'DD':
             paramsb = dict(zip(['obs', 'pixels'], [observations, pixels]))
-            print('getting pixels')
+            # print('getting pixels')
             time_ref = time.time()
             from sn_tools.sn_obs import DataToPixels
             datapixels = DataToPixels(
                 self.nside, self.project_FP, self.VRO_FP, RACol=self.RACol, DecCol=self.DecCol, telrot=self.telrot, nproc=self.nproc)
             pixels = datapixels(observations, pixels)
             params_multi = np.unique(pixels['healpixID'])
-            print('after pixels', time.time()-time_ref, len(pixels))
+            # print('after pixels', time.time()-time_ref, len(pixels))
             params['pixelmap'] = pixels
             #pixels.to_hdf('allpixels.hdf5', key='pixels')
 

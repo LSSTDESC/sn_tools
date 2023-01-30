@@ -3947,7 +3947,7 @@ def getObservations(dbDir, dbName, dbExtens):
 
     """
     import time
-    print('getting data')
+    # print('getting data')
     time_ref = time.time()
     dbFullName = '{}/{}.{}'.format(dbDir, dbName, dbExtens)
     # if extension is npy -> load
