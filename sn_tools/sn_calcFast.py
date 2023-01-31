@@ -226,6 +226,7 @@ class LCfast:
         """
 
         # if there are no observations in this filter: return None
+
         if len(sel_obs) == 0:
             if output_q is not None:
                 output_q.put({j: None})
