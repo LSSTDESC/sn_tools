@@ -1,4 +1,6 @@
 from .version import __version__
+
+"""
 import os
 
 # requested infos for throughputs
@@ -13,3 +15,4 @@ os.environ['THROUGHPUTS_DIR'] = throughputs_dir
 
 print('Reading throughputs from',
       os.environ['LSST_THROUGHPUTS_BASELINE'], os.environ['THROUGHPUTS_DIR'])
+"""

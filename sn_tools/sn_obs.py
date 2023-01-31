@@ -2107,11 +2107,12 @@ class ProcessPixels:
 
             dataPixels['iproc'] = [self.num]*len(dataPixels)
 
-            # print('running the metrics')
+            #print('running the metrics - here', ipix, vv)
             self.runMetrics(dataPixels)
             # print('pixel processed',ipixel,time.time()-time_ref)
 
             if self.saveData and ipix >= 20:
+                #print('dumping intermed')
                 isave += 1
                 self.dump(ip, isave)
                 ipix = -1
@@ -2234,7 +2235,7 @@ class ProcessPixels:
         for key, vals in self.resfi.items():
             outName = '{}/{}_{}_{}.hdf5'.format(self.outDir,
                                                 self.dbName, key, self.num)
-            print('dumping', outName)
+            #print('dumping in dump', outName)
             if vals is not None:
                 # transform to astropy table to dump in hdf5 file
                 tab = Table.from_pandas(vals)
@@ -2531,7 +2532,7 @@ class ProcessPixels_new:
         for key, vals in self.resfi.items():
             outName = '{}/{}_{}_{}.hdf5'.format(self.outDir,
                                                 self.dbName, key, self.num)
-            print('dumping', outName)
+            print('dumping in dumpb', outName)
             if vals is not None:
                 # transform to astropy table to dump in hdf5 file
                 tab = Table.from_pandas(vals)
