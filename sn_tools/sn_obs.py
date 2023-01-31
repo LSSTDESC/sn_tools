@@ -2002,7 +2002,8 @@ class DataToPixels:
 
 
 class ProcessPixels:
-    def __init__(self, metricList, ipoint, outDir='', dbName='', RACol='fieldRA', DecCol='fieldDec', saveData=False):
+    def __init__(self, metricList, ipoint, outDir='', dbName='',
+                 RACol='fieldRA', DecCol='fieldDec', saveData=False):
         """
         class to process metrics on a set of data corresponding to pixels
 
@@ -2062,7 +2063,8 @@ class ProcessPixels:
         Parameters
         --------------
         pixels: pandas df
-          containing list of pixels (healpixID, pixRA, pixDec) with corresponding observations (self.RACol, self.DecCol)
+          containing list of pixels (healpixID, pixRA, pixDec) with 
+          corresponding observations (self.RACol, self.DecCol)
         observations: array
            array of observations (from the scheduler)
         ip: int,
@@ -2089,7 +2091,7 @@ class ProcessPixels:
               len(pixels['healpixID'].unique()))
         """
         for ipixel, vv in enumerate(pixels['healpixID'].unique()):
-            # print('processing pixel', ipixel, vv)
+            #print('processing pixel', ipixel, vv)
             time_ref = time.time()
             ipix += 1
             idf = pixels['healpixID'] == vv
@@ -2101,13 +2103,13 @@ class ProcessPixels:
             # print('got datapixels', time.time()-time_ref, selpix)
             # dataPixels = data.iloc[selpix['index'].tolist()].copy()
 
-            for val in ['healpixID', 'pixRA', 'pixDec']:
+            for val in ['healpixID', 'pixRA', 'pixDec', 'fieldName']:
                 dataPixels[val] = selpix[val].unique().tolist()*len(dataPixels)
             # time_ref = time.time()
 
             dataPixels['iproc'] = [self.num]*len(dataPixels)
 
-            #print('running the metrics - here', ipix, vv)
+            # print('running the metrics - here', ipix, vv, len(dataPixels))
             self.runMetrics(dataPixels)
             # print('pixel processed',ipixel,time.time()-time_ref)
 

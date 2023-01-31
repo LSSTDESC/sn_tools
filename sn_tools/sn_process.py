@@ -460,7 +460,7 @@ class FP2pixels:
         self.dbName = dbName
         self.dbExtens = dbExtens
         self.fieldType = fieldType
-        self.fieldName = fieldName
+        self.fieldNames = fieldName.split(',')
         self.nside = nside
         self.RAmin = RAmin
         self.RAmax = RAmax
@@ -485,7 +485,15 @@ class FP2pixels:
         self.DecCol = colName(names, ['fieldDec', 'Dec'])
 
         # select observations
-        self.obs = self.select_obs(observations, [fieldName], RAmin, RAmax)
+        if self.fieldType != 'DD':
+            self.fieldNames = [self.fieldType]
+        self.obs = None
+        for fieldName in self.fieldNames:
+            obs = self.select_obs(observations, [fieldName], RAmin, RAmax)
+            if self.obs is None:
+                self.obs = obs
+            else:
+                self.obs = np.concatenate((self.obs, obs))
 
         # load healpixIDs if not None
         self.healpixIDs = []
@@ -493,9 +501,11 @@ class FP2pixels:
             hh = pd.read_csv(pixelList, comment='#')
             self.healpixIDs = hh['healpixID'].to_list()
 
-    def __call__(self):
+    def __call__(self, obs):
 
-        pixels = self.get_pixels_field(self.obs)
+        print('getting pixels')
+
+        pixels = self.get_pixels_field(obs)
 
         # re-select data to avoid having data too far from pixels
         pixRA_min = pixels['pixRA'].min()
@@ -503,8 +513,9 @@ class FP2pixels:
         pixDec_min = pixels['pixDec'].min()
         pixDec_max = pixels['pixDec'].max()
 
-        obs = self.select_zone(self.obs, pixRA_min, pixRA_max,
-                               self.RACol, pixDec_min, pixDec_max, self.DecCol, 5.)
+        obs = self.select_zone(obs, pixRA_min, pixRA_max,
+                               self.RACol, pixDec_min, pixDec_max,
+                               self.DecCol, 5.)
 
         if self.display:
             import matplotlib.pyplot as plt
@@ -560,15 +571,19 @@ class FP2pixels:
         if self.fieldType == 'DD':
             idx = np.in1d(observations['note'], fieldName)
             observations = observations[idx]
-            return self.select_zone(observations, RAmin, RAmax, self.RACol, DecCol=self.DecCol)
+            return self.select_zone(observations, RAmin, RAmax,
+                                    self.RACol, DecCol=self.DecCol)
 
         if self.fieldType == 'WFD':
-            return self.select_zone(observations, RAmin, RAmax, self.RACol, Decmin=self.Decmin, Decmax=self.Decmax, DecCol=self.DecCol)
+            return self.select_zone(observations, RAmin, RAmax,
+                                    self.RACol, Decmin=self.Decmin,
+                                    Decmax=self.Decmax, DecCol=self.DecCol)
 
         if self.fieldType == 'Fake':
             return observations
 
-    def select_zone(self, data, RAmin, RAmax, RACol, Decmin=None, Decmax=None, DecCol='Dec', delta_coord=5.):
+    def select_zone(self, data, RAmin, RAmax, RACol, Decmin=None,
+                    Decmax=None, DecCol='Dec', delta_coord=5.):
         """
         Method to select data in a given area defined by (RA_min, RA_max)
 
@@ -653,12 +668,14 @@ class FP2pixels:
             mean_Dec = np.mean([self.Decmin, self.Decmax])
 
         # get pixels
+
         pixels = self.gime_pixels(
             mean_RA, mean_Dec, np.max([width_RA, width_Dec]))
 
         if self.fieldType == 'WFD':
             pixelsb = self.select_zone(
-                pixels.to_records(index=False), self.RAmin, self.RAmax, 'pixRA', self.Decmin, self.Decmax, 'pixDec', 0.)
+                pixels.to_records(index=False), self.RAmin, self.RAmax,
+                'pixRA', self.Decmin, self.Decmax, 'pixDec', 0.)
             pixels = pd.DataFrame.from_records(pixelsb)
 
         if self.fieldType == 'Fake':
@@ -670,7 +687,8 @@ class FP2pixels:
             pixels = pixels[idx][:1]
 
         # print('nb pixels', len(pixels))
-
+        print('there we go man', mean_RA, mean_Dec,
+              width_RA, width_Dec, len(pixels))
         return pixels
 
     def plotPixels(self, pixels, RACol, DecCol, ax=None, show=True):
@@ -748,11 +766,12 @@ class FP2pixels:
 
         """
 
-        search_path = '{}/{}/{}_{}_nside_{}_{}_{}_{}_{}'.format(self.pixelmap_dir,
-                                                                self.dbName, self.dbName,
-                                                                self.fieldType, self.nside,
-                                                                self.RAmin, self.RAmax,
-                                                                self.Decmin, self.Decmax)
+        search_path = '{}/{}/{}_{}_nside_{}_{}_{}_{}_\
+        {}'.format(self.pixelmap_dir,
+                   self.dbName, self.dbName,
+                   self.fieldType, self.nside,
+                   self.RAmin, self.RAmax,
+                   self.Decmin, self.Decmax)
         if self.fieldType == 'DD':
             search_path += '_{}'.format(self.fieldName)
         search_path += '.npy'
@@ -788,7 +807,8 @@ class FP2pixels:
         # get nearby pixels
         vec = hp.pix2vec(self.nside, healpixID, nest=True)
         healpixIDs = hp.query_disc(
-            self.nside, vec, np.deg2rad(width)+np.deg2rad(3.5), inclusive=inclusive, nest=True)
+            self.nside, vec, np.deg2rad(width)+np.deg2rad(3.5),
+            inclusive=inclusive, nest=True)
 
         # get pixel coordinates
         coords = hp.pix2ang(self.nside, healpixIDs,
@@ -846,7 +866,9 @@ class FP2pixels:
 
         from sn_tools.sn_obs import DataToPixels
         datapixels = DataToPixels(
-            self.nside, self.project_FP, self.VRO_FP, RACol=self.RACol, DecCol=self.DecCol, telrot=self.telrot, nproc=self.nproc)
+            self.nside, self.project_FP, self.VRO_FP,
+            RACol=self.RACol, DecCol=self.DecCol,
+            telrot=self.telrot, nproc=self.nproc)
         pixels = datapixels(obs, pixels, display=display)
 
         print('after pixel/obs matching', time.time()-time_ref)
@@ -942,11 +964,20 @@ class Process(FP2pixels):
 
         #pixels = self.get_pixels_field(observations)
         # getting the pixels
-        #print('getting pixels call')
+        # print('getting pixels call')
 
-        pixels = super(Process, self).__call__()
-
-        #print('finished with pixels')
+        pixels = pd.DataFrame()
+        for field in self.fieldNames:
+            if self.fieldType == 'DD':
+                idx = observations['note'] == field
+                selobs = observations[idx]
+                ppix = super(Process, self).__call__(selobs)
+                ppix['fieldName'] = field
+                pixels = pd.concat((pixels, ppix))
+            else:
+                pixels = super(Process, self).__call__(observations)
+                pixels['fieldName'] = field
+        # print('finished with pixels')
 
         if self.display:
             import matplotlib.pyplot as plt
@@ -1003,7 +1034,8 @@ class Process(FP2pixels):
         pixelmap = params['pixelmap']
 
         procpix = ProcessPixels(
-            self.metricList, j, outDir=self.outDir, dbName=self.dbName, saveData=self.saveData)
+            self.metricList, j, outDir=self.outDir,
+            dbName=self.dbName, saveData=self.saveData)
 
         valsdf = pd.DataFrame(pixelmap)
         ido = valsdf['healpixID'].isin(pixels)
@@ -1015,6 +1047,8 @@ class Process(FP2pixels):
             ax.plot(observations[self.RACol],
                     observations[self.DecCol], 'ko', mfc='None')
             ax.plot(pixelmap['pixRA'], pixelmap['pixDec'], 'r*')
+            RAmin = pixelmap['pixRA'].min()
+            RAmax = pixelmap['pixRA'].max()
             Decmin = pixelmap['pixDec'].min()
             Decmax = pixelmap['pixDec'].max()
             ax.plot([RAmin, RAmin], [Decmin, Decmax], color='r')
@@ -1022,7 +1056,7 @@ class Process(FP2pixels):
             plt.show()
 
         if len(ppix) > 0:
-            print('processing pixels', len(ppix))
+            #print('processing pixels bb', len(ppix))
             procpix(ppix, observations, self.npixels)
         else:
             print('No matching obs found!')
