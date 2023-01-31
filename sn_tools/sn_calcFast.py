@@ -56,7 +56,7 @@ class LCfast:
     """
 
     def __init__(self, reference_lc, dustcorr, zp_slope,
-                 zp_intercept,
+                 zp_intercept, mean_wavelength,
                  x1, color,
                  mjdCol='observationStartMJD',
                  RACol='fieldRA', DecCol='fieldDec',
@@ -89,6 +89,7 @@ class LCfast:
         self.reference_lc = reference_lc
         self.zp_slope = zp_slope
         self.zp_intercept = zp_intercept
+        self.mean_wavelength = mean_wavelength
 
         # This cutoffs are used to select observations:
         # phase = (mjd - DayMax)/(1.+z)
@@ -416,7 +417,7 @@ class LCfast:
 
         # remove LC points outside the (blue-red) range
         mean_restframe_wavelength = np.array(
-            [self.reference_lc.mean_wavelength[band]]*len(sel_obs))
+            [self.mean_wavelength[band]]*len(sel_obs))
         mean_restframe_wavelength = np.tile(
             mean_restframe_wavelength, (len(gen_par), 1))/(1.+gen_par['z'][:, np.newaxis])
         # flag &= (mean_restframe_wavelength > 0.) & (
@@ -1737,11 +1738,13 @@ class GetReference:
         # Load the file - gamma values
 
         # fgamma = h5py.File(gammaName, 'r')
+        """
         gammas = LoadGamma('grizy', gammaDir, gammaName, web_path)
         self.gamma = gammas.gamma
         self.mag_to_flux = gammas.mag_to_flux
         self.zp = gammas.zp
         self.mean_wavelength = gammas.mean_wavelength
+        """
 
         # Load references needed for the following
         self.lc_ref = {}
