@@ -503,7 +503,7 @@ class FP2pixels:
 
     def __call__(self, obs):
 
-        print('getting pixels')
+        #print('getting pixels')
 
         pixels = self.get_pixels_field(obs)
 
@@ -687,8 +687,9 @@ class FP2pixels:
             pixels = pixels[idx][:1]
 
         # print('nb pixels', len(pixels))
-        print('there we go man', mean_RA, mean_Dec,
-              width_RA, width_Dec, len(pixels))
+        # print('there we go man', mean_RA, mean_Dec,
+        #      width_RA, width_Dec, len(pixels))
+
         return pixels
 
     def plotPixels(self, pixels, RACol, DecCol, ax=None, show=True):
@@ -1517,7 +1518,8 @@ class Process_old:
         deltaRA = params['deltaRA']
 
         procpix = ProcessPixels(
-            self.metricList, j, outDir=self.outDir, dbName=self.dbName, saveData=self.saveData)
+            self.metricList, j, outDir=self.outDir,
+            dbName=self.dbName, saveData=self.saveData)
 
         RAmin = RArange[0]
         RAmax = RAmin+deltaRA

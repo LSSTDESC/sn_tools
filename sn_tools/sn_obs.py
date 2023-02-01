@@ -919,7 +919,7 @@ def pixelate(data, nside, RACol='RA', DecCol='Dec'):
     return res
 
 
-def season(obs, season_gap=80., mjdCol='observationStartMJD'):
+def season(obs, season_gap=50., mjdCol='observationStartMJD'):
     """
     Function to estimate seasons
 
@@ -2091,7 +2091,6 @@ class ProcessPixels:
               len(pixels['healpixID'].unique()))
         """
         for ipixel, vv in enumerate(pixels['healpixID'].unique()):
-            #print('processing pixel', ipixel, vv)
             time_ref = time.time()
             ipix += 1
             idf = pixels['healpixID'] == vv
@@ -2102,14 +2101,23 @@ class ProcessPixels:
                 continue
             # print('got datapixels', time.time()-time_ref, selpix)
             # dataPixels = data.iloc[selpix['index'].tolist()].copy()
-
-            for val in ['healpixID', 'pixRA', 'pixDec', 'fieldName']:
+            """
+            print('processing pixel sn_obs', ipix, len(selpix),
+                  len(dataPixels), selpix['fieldName'].unique())
+            """
+            for val in ['healpixID', 'pixRA', 'pixDec']:
                 dataPixels[val] = selpix[val].unique().tolist()*len(dataPixels)
+
+            # common pixels to be treated here
+            fieldName = selpix['fieldName'].unique().tolist()
+
+            dataPixels['fieldName'] = fieldName[0]
             # time_ref = time.time()
 
             dataPixels['iproc'] = [self.num]*len(dataPixels)
 
             # print('running the metrics - here', ipix, vv, len(dataPixels))
+
             self.runMetrics(dataPixels)
             # print('pixel processed',ipixel,time.time()-time_ref)
 
