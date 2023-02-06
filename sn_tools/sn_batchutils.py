@@ -6,7 +6,7 @@ class BatchIt:
     class to setup environment, create batch script, and launch the batch
     """
     def __init__(self, logDir='logs',scriptDir='scripts',processName='test_batch',
-                 account='lsst',L='sps',time='20:00:00',mem='10G',n=8):
+                 account='lsst',L='sps',time='20:00:00',mem='40G',n=8):
 
         self.dict_batch = {}
         self.options = []
@@ -15,7 +15,7 @@ class BatchIt:
         self.dict_batch['-L'] = L
         self.dict_batch['--time'] = time
         self.dict_batch['--mem'] = mem
-        self.dict_batch['-n'] = n
+        self.dict_batch['--cpus-per-task'] = n
         self.options.append('--profile=task')
         self.options.append('--acctg-freq=task=30')
         # create output dirs if necessary
