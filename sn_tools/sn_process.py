@@ -950,7 +950,8 @@ class Process(FP2pixels):
         self.nproc_pixels = nproc_pixels
         self.metricList = metricList
 
-        self.processIt(self.obs)
+        if len(self.obs) > 0:
+            self.processIt(self.obs)
 
     def processIt(self, observations):
         """
@@ -1042,6 +1043,7 @@ class Process(FP2pixels):
         ido = valsdf['healpixID'].isin(pixels)
         ppix = valsdf[ido]
 
+        # print('processing', j, len(pixels), pixels)
         if self.display:
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots()
