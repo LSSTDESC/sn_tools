@@ -2,7 +2,7 @@
 from sn_tools.sn_obs import renameFields, patchObs
 from sn_tools.sn_obs import ProcessPixels
 from sn_tools.sn_io import colName
-from sn_tools.sn_obs import getObservations, get_obs
+from sn_tools.sn_obs import getObservations, get_obs, season
 from sn_tools.sn_utils import multiproc
 import time
 import numpy as np
@@ -114,7 +114,7 @@ class Process_deprecated:
             self.pixelmap = self.multiprocess_getpixels(
                 patches, obs, func=self.processPatch, nnproc=nnproc).to_records(index=False)
         else:
-            # load the pixel maps
+            # load the ps
             print('pixel map loading', self.pixelmap_dir, self.fieldType,
                   self.nside, self.dbName, self.npixels)
             search_path = '{}/{}/{}_{}_nside_{}_{}_{}_{}_{}'.format(self.pixelmap_dir,
@@ -327,7 +327,7 @@ class Process_deprecated:
         datapixels = DataToPixels(
             self.nside, self.RACol, self.DecCol, self.outDir, self.dbName)
 
-        print('there man', self.outDir, self.dbName)
+        # print('there man', self.outDir, self.dbName)
         procpix = ProcessPixels(
             self.metricList, j, outDir=self.outDir, dbName=self.dbName, saveData=self.saveData)
 
@@ -410,7 +410,8 @@ class Process_deprecated:
         print('processing pixel', pixels, len(
             observations), self.outDir, self.dbName)
         procpix = ProcessPixels(
-            self.metricList, j, outDir=self.outDir, dbName=self.dbName, saveData=self.saveData)
+            self.metricList, j, outDir=self.outDir, dbName=self.dbName,
+            saveData=self.saveData)
 
         # print('continuing')
         valsdf = pd.DataFrame(self.pixelmap)
@@ -454,7 +455,8 @@ class FP2pixels:
                  Decmin=-80., Decmax=80,
                  pixelmap_dir='', npixels=0, nproc=1,
                  VRO_FP='circular', project_FP='gnomonic', telrot=0.,
-                 radius=4., pixelList='None', display=False, **kwargs):
+                 radius=4., pixelList='None', display=False,
+                 seasons=-1, **kwargs):
 
         self.dbDir = dbDir
         self.dbName = dbName
@@ -490,10 +492,22 @@ class FP2pixels:
         self.obs = None
         for fieldName in self.fieldNames:
             obs = self.select_obs(observations, [fieldName], RAmin, RAmax)
-            if self.obs is None:
-                self.obs = obs
+            # add season here
+            obs = season(obs)
+            # select obs corresponding to seasons
+            if seasons == '-1':
+                these_seasons = np.unique(obs['season'])
             else:
-                self.obs = np.concatenate((self.obs, obs))
+                these_seasons = self.load_season(seasons)
+
+            idx = np.in1d(obs['season'], these_seasons)
+            obs = obs[idx]
+            #print('there man', len(obs), these_seasons)
+            if len(obs) > 0:
+                if self.obs is None:
+                    self.obs = obs
+                else:
+                    self.obs = np.concatenate((self.obs, obs))
 
         # load healpixIDs if not None
         self.healpixIDs = []
@@ -501,9 +515,37 @@ class FP2pixels:
             hh = pd.read_csv(pixelList, comment='#')
             self.healpixIDs = hh['healpixID'].to_list()
 
-    def __call__(self, obs):
+    def load_season(self, seasons):
+        """
+        Method to get the list of seasons
+
+        Parameters
+        ----------
+        seasons : str
+               list of seasons.
+
+        Returns
+        -------
+        season : list(int)
+            list of seasons to process
+
+        """
+        print('hello man', seasons)
+        if '-' not in seasons or seasons[0] == '-':
+            season = list(map(int, seasons.split(',')))
+        else:
+            seasl = seasons.split('-')
+            seasmin = int(seasl[0])
+            seasmax = int(seasl[1])
+            season = list(range(seasmin, seasmax+1))
+
+        return season
+
+    def __call__(self, obs=None):
 
         #print('getting pixels')
+        if obs is None:
+            obs = self.obs
 
         pixels = self.get_pixels_field(obs)
 
@@ -535,7 +577,7 @@ class FP2pixels:
         datapixels = DataToPixels(
             self.nside, self.project_FP, self.VRO_FP,
             RACol=self.RACol, DecCol=self.DecCol,
-            telrot=self.telrot, nproc=self.nproc)
+            telrot=self.telrot, nproc=self.nproc_pixels)
 
         pixels = datapixels(obs, pixels, display=self.display)
 
@@ -932,7 +974,7 @@ class Process(FP2pixels):
                  RAmin=0., RAmax=360.,
                  Decmin=-80., Decmax=80,
                  saveData=False, remove_dithering=False,
-                 outDir='', nproc=1, nproc_pixels=1, metricList=[],
+                 outDir='', nproc=1, nproc_pixels=1, seasons=-1, metricList=[],
                  pixelmap_dir='', npixels=0,
                  VRO_FP='circular', project_FP='gnomonic', telrot=0.,
                  radius=4., pixelList='None', display=False, **kwargs):
@@ -942,7 +984,7 @@ class Process(FP2pixels):
                          Decmin, Decmax,
                          pixelmap_dir, npixels, nproc,
                          VRO_FP, project_FP, telrot,
-                         radius, pixelList, display)
+                         radius, pixelList, display, seasons)
 
         self.saveData = saveData
         self.remove_dithering = remove_dithering
@@ -979,16 +1021,18 @@ class Process(FP2pixels):
             else:
                 pixels = super(Process, self).__call__(observations)
                 pixels['fieldName'] = field
-        # print('finished with pixels')
+        #print('finished with pixels')
 
+        #self.display = True
         if self.display:
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots()
+            fig.suptitle('pixel coord.')
             ax.plot(pixels['pixRA'], pixels['pixDec'], 'r*')
-            ax.plot(observations[self.RACol],
-                    observations[self.DecCol], 'ko', mfc='None')
-            ax.set_xlabel('RA [deg]')
-            ax.set_ylabel('Dec [deg]')
+            # ax.plot(observations[self.RACol],
+            #        observations[self.DecCol], 'ko', mfc='None')
+            ax.set_xlabel('pixRA [deg]')
+            ax.set_ylabel('pixDec [deg]')
             plt.show()
 
         """
