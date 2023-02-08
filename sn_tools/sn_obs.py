@@ -1237,7 +1237,8 @@ class DataToPixels_deprecated:
         rat = 135./189.
         self.area_part = [rat*self.FoV, rat*self.FoV]
 
-    def __call__(self, data, RA, Dec, widthRA, widthDec, nodither=False, display=False, inclusive=False):
+    def __call__(self, data, RA, Dec, widthRA, widthDec,
+                 nodither=False, display=False, inclusive=False):
         """
         call method: this is where the processing is.
 
@@ -1634,7 +1635,9 @@ class DataToPixels:
      to speed matching pixels/obs by using approximate (RA,Dec,telrot) (default: 0)
     """
 
-    def __init__(self, nside, project_FP, VRO_FP, RACol='RA', DecCol='Dec', rotTelCol='rotTelPos', telrot=0, FoV=9.62, nproc=1, fast_pixel_map=0):
+    def __init__(self, nside, project_FP, VRO_FP, RACol='RA',
+                 DecCol='Dec', rotTelCol='rotTelPos',
+                 telrot=0, FoV=9.62, nproc=1, fast_pixel_map=0):
 
         # load parameters
         self.nside = nside
@@ -1706,7 +1709,7 @@ class DataToPixels:
             plt.show()
 
         #
-        #data = np.copy(data)
+        # data = np.copy(data)
         # add round coord to improve speed processing
         if self.fast_pixel_map:
             data = rf.append_fields(
@@ -1717,7 +1720,7 @@ class DataToPixels:
                 data[key] = data[key].round(1)
 
         if display:
-            print('number of pixels here', len(pixels))
+            print('number of pixels hore', len(pixels))
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots()
             fig.suptitle('Selected data and pixels')
@@ -1731,7 +1734,7 @@ class DataToPixels:
         time_ref = time.time()
         params = {}
         params['data'] = data
-        #params['grpCol'] = ['observationId', 'night', 'filter']
+        # params['grpCol'] = ['observationId', 'night', 'filter']
         params['grpCol'] = [self.RACol, self.DecCol, self.rotTelCol]
         if self.fast_pixel_map:
             params['grpCol'] = [self.RACol_round,
@@ -1774,7 +1777,8 @@ class DataToPixels:
 
     def match_multiproc_gnomonic(self, obsid, params, j=0, output_q=None):
         """
-        Method to grab matched pixels for the gnomonic proj using multiprocessing
+        Method to grab matched pixels for the gnomonic proj 
+        using multiprocessing
 
         Parameters
         ---------------
@@ -1800,9 +1804,12 @@ class DataToPixels:
         time_ref = time.time()
         seldata = pd.DataFrame(np.copy(data[idx]))
 
+        # print('process for pixel match', j, len(obsid))
         matched_pixels = seldata.groupby(grpCol).apply(
-            lambda x: self.match_gnomonic(x, healpixIDs, pixRA, pixDec, display)).reset_index()
+            lambda x: self.match_gnomonic(x, healpixIDs, pixRA,
+                                          pixDec, display)).reset_index()
 
+        # print('pixel match done', j)
         if output_q is not None:
             return output_q.put({j: matched_pixels})
         else:
@@ -1863,6 +1870,8 @@ class DataToPixels:
         pixRA_rad = np.deg2rad(pixRA)
         pixDec_rad = np.deg2rad(pixDec)
 
+        obsid = grp['observationId'].unique()[0]
+        mjd = grp['observationStartMJD'].unique()[0]
         pRA = grp.name[0]
         pDec = grp.name[1]
         rotTelPos = grp.name[2]
@@ -1882,26 +1891,6 @@ class DataToPixels:
         if self.VRO_FP == 'circular':
             fpnew = LSSTPointing_circular(0., 0., maxbound=self.fpscale)
 
-        # draw here
-        if display:
-            import matplotlib.pyplot as plt
-            fig, ax = plt.subplots(figsize=(4, 10))
-            fig.suptitle('gnomonic projection - {} FP'.format(self.VRO_FP))
-            xx, yy = fpnew.exterior.coords.xy
-            ax.plot(xx, yy)
-            ax.plot(x, y, 'b+')
-
-            pixRA, pixDec = hp.pix2ang(
-                self.nside, 47215, nest=True, lonlat=True)
-            xb, yb = proj_gnomonic_plane(
-                pRA_rad, pDec_rad, np.deg2rad(pixRA), np.deg2rad(pixDec))
-            ax.plot(xb, yb, 'ro', mfc='None')
-
-            ax.plot([0.], [0.], 'k*')
-            ax.set_xlabel('RA [deg]')
-            ax.set_ylabel('Dec [deg]')
-            plt.show()
-
         idf = shapely.vectorized.contains(fpnew, x, y)
         if len(healpixIDs[idf]) == 0:
             return pd.DataFrame()
@@ -1909,6 +1898,12 @@ class DataToPixels:
         pixID_matched = list(healpixIDs[idf])
         pixRA_matched = list(pixRA[idf])
         pixDec_matched = list(pixDec[idf])
+
+        # draw here
+        if display:
+            self.plot_matched_FP(obsid, mjd, x, y, fpnew, pRA_rad, pDec_rad,
+                                 pixRA_matched, pixDec_matched,
+                                 healpixID=109400)
 
         df_pix = pd.DataFrame({'healpixID': pixID_matched,
                                'pixRA': pixRA_matched,
@@ -1974,6 +1969,38 @@ class DataToPixels:
         res = rf.append_fields(res, 'pixDec', pixDec)
 
         return pd.DataFrame.from_records(res)
+
+    def plot_matched_FP(self, obsid, mjd, x, y, fpnew, pRA_rad, pDec_rad,
+                        pixRA_matched=None, pixDec_matched=None,
+                        healpixID=109400):
+
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots(figsize=(8, 8))
+        tit = 'gnomonic projection - {} FP \n'.format(self.VRO_FP)
+        tit += 'MJD={}'.format(mjd)
+        fig.suptitle(tit)
+        xx, yy = fpnew.exterior.coords.xy
+        ax.plot(xx, yy)
+        ax.plot(x, y, 'b+')
+
+        ppixRA, ppixDec = hp.pix2ang(
+            self.nside, healpixID, nest=True, lonlat=True)
+        xb, yb = proj_gnomonic_plane(
+            pRA_rad, pDec_rad, np.deg2rad(ppixRA), np.deg2rad(ppixDec))
+        ax.plot(xb, yb, 'ro', mfc='None')
+
+        if pixRA_matched is not None:
+            xm, ym = proj_gnomonic_plane(
+                pRA_rad, pDec_rad, np.deg2rad(pixRA_matched),
+                np.deg2rad(pixDec_matched))
+            ax.plot(xm, ym, 'bs')
+
+        ax.plot([0.], [0.], 'k*')
+        ax.set_xlabel('x')
+        ax.set_ylabel('y')
+        plotName = 'plot_proj_FP/proj_{}'.format(int(obsid))
+        plt.savefig(plotName)
+        plt.close()
 
     def plot(self, pixels, plt):
         """
@@ -2078,6 +2105,7 @@ class ProcessPixels:
             self.resfi[metric.name] = pd.DataFrame()
 
         # data will be save so clean the output directory first
+
         if self.saveData:
             self.clean()
 
@@ -2122,7 +2150,7 @@ class ProcessPixels:
             # print('pixel processed',ipixel,time.time()-time_ref)
 
             if self.saveData and ipix >= 20:
-                #print('dumping intermed')
+                # print('dumping intermed')
                 isave += 1
                 self.dump(ip, isave)
                 ipix = -1
@@ -2171,7 +2199,7 @@ class ProcessPixels:
         """
 
         obsIds = self.getList(selpix)
-        #ido = dataset['observationId'].isin(selpix['observationId'])
+        # ido = dataset['observationId'].isin(selpix['observationId'])
         ido = dataset['observationId'].isin(obsIds)
 
         datasel = dataset[ido]
@@ -2245,11 +2273,13 @@ class ProcessPixels:
         for key, vals in self.resfi.items():
             outName = '{}/{}_{}_{}.hdf5'.format(self.outDir,
                                                 self.dbName, key, self.num)
-            #print('dumping in dump', outName)
+            # print('dumping in dump', outName)
             if vals is not None:
                 # transform to astropy table to dump in hdf5 file
+                seas = '_'.join(map(str, np.unique(vals['season']).tolist()))
                 tab = Table.from_pandas(vals)
-                keyhdf = 'metric_{}_{}_{}'.format(self.num, ipoint, isave)
+                keyhdf = 'metric_{}_{}_{}_{}'.format(self.num, ipoint,
+                                                     isave, seas)
                 tab.write(outName, keyhdf, append=True, compression=True)
 
         # reset the metric after dumping
@@ -3895,7 +3925,7 @@ def load_obs(dbDir, dbName, dbExtens):
     dict_rep = dict(zip(lla, llb))
     rec = rfn.rename_fields(observations, dict_rep)
 
-    #observations = renameFields(observations)
+    # observations = renameFields(observations)
 
     return rec
 
