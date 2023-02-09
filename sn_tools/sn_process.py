@@ -453,10 +453,10 @@ class FP2pixels:
                  fieldType='', fieldName='', nside=128,
                  RAmin=0., RAmax=360.,
                  Decmin=-80., Decmax=80,
-                 pixelmap_dir='', npixels=0, nproc=1,
+                 pixelmap_dir='', npixels=0, nproc_pixels=1,
                  VRO_FP='circular', project_FP='gnomonic', telrot=0.,
                  radius=4., pixelList='None', display=False,
-                 seasons=-1, **kwargs):
+                 seasons='-1', **kwargs):
 
         self.dbDir = dbDir
         self.dbName = dbName
@@ -468,7 +468,7 @@ class FP2pixels:
         self.RAmax = RAmax
         self.Decmin = Decmin
         self.Decmax = Decmax
-        self.nproc = nproc
+        self.nproc_pixels = nproc_pixels
         self.pixelmap_dir = pixelmap_dir
         self.npixels = npixels
         self.radius = radius
@@ -982,7 +982,7 @@ class Process(FP2pixels):
                          fieldType, fieldName, nside,
                          RAmin, RAmax,
                          Decmin, Decmax,
-                         pixelmap_dir, npixels, nproc,
+                         pixelmap_dir, npixels, nproc_pixels,
                          VRO_FP, project_FP, telrot,
                          radius, pixelList, display, seasons)
 
