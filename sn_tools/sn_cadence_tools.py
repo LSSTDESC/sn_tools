@@ -914,9 +914,12 @@ class Stat_DD_night:
         numpy array of data
         """
 
+        from sn_tools.sn_obs import getObservations
+        """
         fName = '{}/{}.{}'.format(self.dbDir, self.dbName, self.dbExtens)
         data = np.load(fName, allow_pickle=True)
-
+        """
+        data = getObservations(self.dbDir, self.dbName, self.dbExtens)
         return data
 
     def get_DD(self):
@@ -1016,7 +1019,7 @@ def process_night_pixel(pixels, dbName, nproc=8):
     res = multiproc(
         np.unique(pixels['healpixID']), params, ana_DDF, nproc)
 
-    #print('allo', np.unique(pixels['fieldName']))
+    # print('allo', np.unique(pixels['fieldName']))
     res['field'] = np.unique(pixels['fieldName'])[0]
 
     return res
@@ -1088,7 +1091,7 @@ def ana_DDF(list_DD, params, j, output_q):
     res_DD = pd.DataFrame()
 
     for field in list_DD:
-        #print('analyzing', field)
+        # print('analyzing', field)
         idx = obs_DD[fieldColdb] == field
         res = ana_field(np.copy(obs_DD[idx]), dbName, Nvisits,
                         mjdCol=mjdCol,  nightCol=nightCol,
@@ -1116,7 +1119,7 @@ def ana_field(obs, dbName, Nvisits, mjdCol='mjd', nightCol='night', fieldColdb='
     """
     # estimate seasons
     obs = season(obs, mjdCol=mjdCol)
-    #print('aoooo', np.unique(obs[['note', 'season']]), obs.dtype.names)
+    # print('aoooo', np.unique(obs[['note', 'season']]), obs.dtype.names)
     # print(test)
     field = np.unique(np.copy(obs[fieldColdb]))[0]
 
@@ -1220,7 +1223,7 @@ def seas_cad(obs, meta={}):
     dictout = {}
 
     if meta:
-        #print('aoooou', obs.name, meta['time_budget_{}'.format(obs.name[0])])
+        # print('aoooou', obs.name, meta['time_budget_{}'.format(obs.name[0])])
         dictout['time_budget_field'] = [
             meta['time_budget_{}'.format(obs.name[0])]]
 
