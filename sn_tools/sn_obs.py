@@ -2274,8 +2274,9 @@ class ProcessPixels:
             outName = '{}/{}_{}_{}.hdf5'.format(self.outDir,
                                                 self.dbName, key, self.num)
             # print('dumping in dump', outName)
-            if vals is not None:
+            if vals is not None and not vals.empty:
                 # transform to astropy table to dump in hdf5 file
+                print('dumping', vals, self.num)
                 seas = '_'.join(map(str, np.unique(vals['season']).tolist()))
                 tab = Table.from_pandas(vals)
                 keyhdf = 'metric_{}_{}_{}_{}'.format(self.num, ipoint,
