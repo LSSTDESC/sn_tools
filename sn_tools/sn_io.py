@@ -1,4 +1,5 @@
 import h5py
+import astropy
 from astropy.table import Table, vstack
 import numpy as np
 import pandas as pd
@@ -976,3 +977,50 @@ def add_parser(parser, confDict):
             vv = eval('{}({})'.format(vals[0], vals[1]))
         parser.add_option('--{}'.format(key), help='{} [%default]'.format(
             vals[2]), default=vv, type=vals[0], metavar='')
+
+
+class Read_LightCurve:
+
+    def __init__(self, file_name='Data.hdf5', inputDir='dataLC'):
+        """
+        Parameters
+        ----------
+        file_name : str
+            Name of the hdf5 file that you want to read.
+        """
+        self.file_name = file_name
+        self.file = h5py.File('{}/{}'.format(inputDir, file_name), 'r')
+
+    def get_path(self):
+        """
+        Method to return the list of keys of the hdf5 file
+
+        Returns
+        ----------
+        list(str): list of keys (aka paths)
+
+        """
+
+        return list(self.file.keys())
+
+    def get_table(self, path):
+        """
+        Parameters
+        ----------
+        path : str
+            hdf5 path for light curve.
+
+        Returns
+        -------
+        AstropyTable
+            Returns the reading of an .hdf5 file as an AstropyTable.
+        """
+
+        tab = Table()
+        try:
+            tab = astropy.io.misc.hdf5.read_table_hdf5(
+                self.file, path=path, character_as_bytes=False)
+        except (OSError, KeyError):
+            pass
+
+        return tab
