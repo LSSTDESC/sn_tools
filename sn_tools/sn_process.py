@@ -495,7 +495,7 @@ class FP2pixels:
             # add season here
             obs = season(obs)
             # select obs corresponding to seasons
-            if seasons == '-1':
+            if seasons == '-1' or seasons == -1:
                 these_seasons = np.unique(obs['season'])
             else:
                 these_seasons = self.load_season(seasons)
