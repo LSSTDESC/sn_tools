@@ -1107,7 +1107,11 @@ def ana_DDF(list_DD, params, j, output_q):
         return res_DD
 
 
-def ana_field(obs, dbName, Nvisits, mjdCol='mjd', nightCol='night', fieldColdb='note', fieldCol='field', filterCol='band', list_moon=['moonAz', 'moonRA', 'moonDec', 'moonDistance', 'season']):
+def ana_field(obs, dbName, Nvisits, mjdCol='mjd',
+              nightCol='night', fieldColdb='note',
+              fieldCol='field', filterCol='band',
+              list_moon=['moonAz', 'moonRA', 'moonDec',
+                         'moonDistance', 'season']):
     """
     Method to analyze a single DD field
 
@@ -1256,6 +1260,8 @@ def seas_cad(obs, meta={}):
         list(np.around(np.array(combis.values.tolist()), 2))]
 
     dictout['Nfc'] = [np.sum(obs['Nfc'])]
+    for b in 'ugrizy':
+        dictout[b] = [np.sum(obs[b])]
 
     return pd.DataFrame.from_dict(dictout)
 
@@ -1282,7 +1288,9 @@ def Stat_DD_season(data_tab, cols=['field', 'season']):
     return res
 
 
-def stat_DD_season_pixel(data_tab, cols=['healpixID', 'field', 'pixRA', 'pixDec', 'season', 'dbName']):
+def stat_DD_season_pixel(data_tab, cols=['healpixID', 'field',
+                                         'pixRA', 'pixDec',
+                                         'season', 'dbName']):
     """
     Function to analyze a set of observing data per obs night and per pixel
 
