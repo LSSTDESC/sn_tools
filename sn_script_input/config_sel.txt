@@ -1,1 +1,2 @@
 selection_params input/lc_selection/light_curve_selection.csv str #csv file of LC selection
+nproc_sel 8 int # number of procs for multiprocessing
