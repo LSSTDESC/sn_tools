@@ -2160,7 +2160,7 @@ class ProcessPixels:
             self.dump(ip, isave)
             ipix = -1
 
-        self.finish()
+        # self.finish()
 
     def finish(self):
         """
@@ -2423,7 +2423,7 @@ class ProcessPixels_new:
             self.dump(ip, isave)
             ipix = -1
 
-        self.finish()
+        # self.finish()
 
     def finish(self):
         """
