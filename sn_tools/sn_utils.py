@@ -121,6 +121,12 @@ def gather_results(resultdict):
         def concat(a, b):
             return dict(a, **b)
 
+    if isinstance(first_value, list):
+        restot = []
+
+        def concat(a, b):
+            return a+b
+
     if restot is None:
         print('Sorry to bother you but: unknown data type', type(first_value))
         print('Supported types', supported_types)
