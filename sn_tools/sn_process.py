@@ -1042,6 +1042,7 @@ class Process(FP2pixels):
 
         params_multi = np.arange(pixRAmin, pixRAmax, deltaRA).tolist()
         """
+        print('number of pixels', len(pixels['healpixID'].unique()))
         params = {}
         params['observations'] = observations
         params['pixelmap'] = pixels
