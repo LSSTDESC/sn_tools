@@ -27,3 +27,4 @@ fieldType DD str #field type DD or WFD
 nside 64 int #healpix nside
 DD_list COSMOS,CDFS,EDFSa,EDFSb,ELAISS1,XMM-LSS str #list of DDFs
 fieldName COSMOS str #fieldName - for DD only
+ebvofMW_pixel -1.0 float #E(B-V) for pixel processing
