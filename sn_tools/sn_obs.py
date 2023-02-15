@@ -4023,3 +4023,41 @@ def getObservations(dbDir, dbName, dbExtens):
         """
 
     return observations
+
+
+def ebv_pixels(healpix):
+    """
+    Method to get E(B-V)
+
+    Parameters
+    ----------
+    healpix : array
+        array with healpixID,pixRA, pixDec columns.
+
+    Returns
+    -------
+    array
+         with healpixID and E(B-V)
+
+    """
+
+    from astropy.coordinates import SkyCoord
+    from dustmaps.sfd import SFDQuery
+    import numpy.lib.recfunctions as rf
+
+    RA = healpix[:, 1]
+    Dec = healpix[:, 2]
+    coords = SkyCoord(RA, Dec, unit='deg')
+    try:
+        sfd = SFDQuery()
+    except Exception:
+        import dustmaps.sfd
+        dustmaps.sfd.fetch()
+
+    sfd = SFDQuery()
+    ebvofMW = sfd(coords)
+
+    res = pd.DataFrame(healpix[:, 0], columns=['healpixID'])
+    res['ebvofMW'] = ebvofMW
+
+    return res
