@@ -3,6 +3,7 @@ from sn_tools.sn_obs import renameFields, patchObs
 from sn_tools.sn_obs import ProcessPixels
 from sn_tools.sn_io import colName
 from sn_tools.sn_obs import getObservations, get_obs, season
+from sn_tools.sn_obs import ebv_pixels
 from sn_tools.sn_utils import multiproc
 import time
 import numpy as np
@@ -502,7 +503,7 @@ class FP2pixels:
 
             idx = np.in1d(obs['season'], these_seasons)
             obs = obs[idx]
-            #print('there man', len(obs), these_seasons)
+            # print('there man', len(obs), these_seasons)
             if len(obs) > 0:
                 if self.obs is None:
                     self.obs = obs
@@ -543,7 +544,7 @@ class FP2pixels:
 
     def __call__(self, obs=None):
 
-        #print('getting pixels')
+        # print('getting pixels')
         if obs is None:
             obs = self.obs
 
@@ -975,7 +976,7 @@ class Process(FP2pixels):
                  Decmin=-80., Decmax=80,
                  saveData=False, remove_dithering=False,
                  outDir='', nproc=1, nproc_pixels=1, seasons=-1, metricList=[],
-                 pixelmap_dir='', npixels=0,
+                 pixelmap_dir='', npixels=0, ebvofMW_pixel=-1.,
                  VRO_FP='circular', project_FP='gnomonic', telrot=0.,
                  radius=4., pixelList='None', display=False, **kwargs):
         super().__init__(dbDir, dbName, dbExtens,
@@ -990,7 +991,9 @@ class Process(FP2pixels):
         self.remove_dithering = remove_dithering
         self.outDir = outDir
         self.nproc_pixels = nproc_pixels
+        self.nproc = nproc
         self.metricList = metricList
+        self.ebvofMW_pixel = ebvofMW_pixel
 
         if len(self.obs) > 0:
             self.processIt(self.obs)
@@ -1006,7 +1009,7 @@ class Process(FP2pixels):
 
         """
 
-        #pixels = self.get_pixels_field(observations)
+        # pixels = self.get_pixels_field(observations)
         # getting the pixels
         # print('getting pixels call')
 
@@ -1021,9 +1024,9 @@ class Process(FP2pixels):
             else:
                 pixels = super(Process, self).__call__(observations)
                 pixels['fieldName'] = field
-        #print('finished with pixels')
+        # print('finished with pixels')
 
-        #self.display = True
+        # self.display = True
         if self.display:
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots()
@@ -1043,11 +1046,23 @@ class Process(FP2pixels):
         params_multi = np.arange(pixRAmin, pixRAmax, deltaRA).tolist()
         """
         print('number of pixels', len(pixels['healpixID'].unique()))
+        # get E(B-V) for these pixels
+        hpixes = np.unique(pixels[['healpixID', 'pixRA', 'pixDec']], axis=0)
+        hpixes = ebv_pixels(hpixes)
+        pixels = pixels.merge(hpixes,
+                              left_on=['healpixID'], right_on=['healpixID'])
+
+        # do not process pixels with high E(B-V)
+        if self.ebvofMW_pixel > 0.:
+            idx = pixels['ebvofMW'] <= self.ebvofMW_pixel
+            pixels = pixels[idx]
+
+        print('number of pixels - ebvofMW', len(pixels['healpixID'].unique()))
         params = {}
         params['observations'] = observations
         params['pixelmap'] = pixels
         params_multi = np.unique(pixels['healpixID'])
-        nprocb = min(self.nproc_pixels, len(params_multi))
+        nprocb = min(self.nproc, len(params_multi))
         multiproc(params_multi, params, self.process_metric, nprocb)
 
         """
@@ -1104,7 +1119,7 @@ class Process(FP2pixels):
             plt.show()
 
         if len(ppix) > 0:
-            #print('processing pixels bb', len(ppix))
+            # print('processing pixels bb', len(ppix))
             procpix(ppix, observations, self.npixels)
         else:
             print('No matching obs found!')
@@ -1333,7 +1348,7 @@ class Process_old:
             params_multi = np.unique(pixels['healpixID'])
             # print('after pixels', time.time()-time_ref, len(pixels))
             params['pixelmap'] = pixels
-            #pixels.to_hdf('allpixels.hdf5', key='pixels')
+            # pixels.to_hdf('allpixels.hdf5', key='pixels')
 
         # get the list of pixels Id to process
         pixel_Ids = self.pixelList(npixels, pixels, healpixIDs)
