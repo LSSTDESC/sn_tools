@@ -9,7 +9,37 @@ class BatchIt:
 
     def __init__(self, logDir='logs', scriptDir='scripts',
                  processName='test_batch',
-                 account='lsst', L='sps', time='20:00:00', mem='40G', n=8):
+                 account='lsst', L='sps', time='20:00:00', mem='40G', n=8,
+                 conda_activate=True):
+        """
+        general class to use the batch system
+
+        Parameters
+        ----------
+        logDir : str, optional
+            dir location of lofg files. The default is 'logs'.
+        scriptDir : str, optional
+            script location of the scripts. The default is 'scripts'.
+        processName : str, optional
+            batch process name. The default is 'test_batch'.
+        account : str, optional
+            account to use. The default is 'lsst'.
+        L : str, optional
+            L batch option. The default is 'sps'.
+        time : str, optional
+            processing time. The default is '20:00:00'.
+        mem : str, optional
+            mem for the jobs. The default is '40G'.
+        n : int, optional
+            ncpus for the job. The default is 8.
+        conda_activate : bool, optional
+            to activate conda env when running the job. The default is True.
+
+        Returns
+        -------
+        None.
+
+        """
 
         self.dict_batch = {}
         self.options = []
@@ -21,6 +51,7 @@ class BatchIt:
         self.dict_batch['--cpus-per-task'] = n
         self.options.append('--profile=task')
         self.options.append('--acctg-freq=task=30')
+        self.conda_activate = conda_activate
         # create output dirs if necessary
         self.checkDirs(logDir, scriptDir)
 
@@ -82,6 +113,11 @@ class BatchIt:
             script.write("#SBATCH {} \n".format(vv))
 
         script.write(" cd " + self.cwd + "\n")
+        # this is required for conda
+        if self.conda_activate:
+            script.write('. \"/pbs/throng/lsst/users/gris/anaconda3\
+                     /etc/profile.d/conda.sh\"'+'\n')
+            script.write('conda activate myenv'+'\n')
         script.write(" export MKL_NUM_THREADS=1 \n")
         script.write(" export NUMEXPR_NUM_THREADS=1 \n")
         script.write(" export OMP_NUM_THREADS=1 \n")
@@ -104,7 +140,7 @@ class BatchIt:
         and to launch the batch
         """
 
-        #self.script.write("EOF" + "\n")
+        # self.script.write("EOF" + "\n")
         self.script.close()
-        #os.system("sh "+scriptName)
+        # os.system("sh "+scriptName)
         os.system("sbatch "+self.scriptName)
