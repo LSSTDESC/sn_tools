@@ -1,12 +1,15 @@
 from sn_tools.sn_io import checkDir
 import os
 
+
 class BatchIt:
     """
     class to setup environment, create batch script, and launch the batch
     """
-    def __init__(self, logDir='logs',scriptDir='scripts',processName='test_batch',
-                 account='lsst',L='sps',time='20:00:00',mem='40G',n=8):
+
+    def __init__(self, logDir='logs', scriptDir='scripts',
+                 processName='test_batch',
+                 account='lsst', L='sps', time='20:00:00', mem='40G', n=8):
 
         self.dict_batch = {}
         self.options = []
@@ -19,15 +22,15 @@ class BatchIt:
         self.options.append('--profile=task')
         self.options.append('--acctg-freq=task=30')
         # create output dirs if necessary
-        self.checkDirs(logDir,scriptDir)
+        self.checkDirs(logDir, scriptDir)
 
         # output files
         self.prepareOut(processName)
 
         # start filling script
         self.startScript()
-        
-    def checkDirs(self,logDir,scriptDir):
+
+    def checkDirs(self, logDir, scriptDir):
         """
         Method to create (if necessary) output dirs
         Parameters
@@ -42,15 +45,13 @@ class BatchIt:
         self.cwd = os.getcwd()
 
         # script dir
-        self.scriptDir = '{}/{}'.format(self.cwd,scriptDir)
+        self.scriptDir = '{}/{}'.format(self.cwd, scriptDir)
         checkDir(self.scriptDir)
 
-        self.logDir = '{}/{}'.format(self.cwd,logDir)
+        self.logDir = '{}/{}'.format(self.cwd, logDir)
         checkDir(self.logDir)
 
-        
-
-    def prepareOut(self,processName):
+    def prepareOut(self, processName):
         """
         method to define a set of files required for batch
         Parameters
@@ -58,14 +59,12 @@ class BatchIt:
         processName: str
           name of the process
         """
-        
-        self.scriptName = '{}/{}.sh'.format(self.scriptDir,processName)
-        self.logName = '{}/{}.log'.format(self.logDir,processName)
-        self.errlogName =  '{}/{}.err'.format(self.logDir,processName)
 
+        self.scriptName = '{}/{}.sh'.format(self.scriptDir, processName)
+        self.logName = '{}/{}.log'.format(self.logDir, processName)
+        self.errlogName = '{}/{}.err'.format(self.logDir, processName)
 
     def startScript(self):
-
         """
         Method to write generic parameter to the script
         """
@@ -75,10 +74,10 @@ class BatchIt:
 
         # fill the script
         script = open(self.scriptName, "w")
-        #script.write(qsub + "\n")
-        script.write("#!/bin/env bash\n") 
+        # script.write(qsub + "\n")
+        script.write("#!/bin/env bash\n")
         for key, vals in self.dict_batch.items():
-            script.write("#SBATCH {} {} \n".format(key,vals))
+            script.write("#SBATCH {} {} \n".format(key, vals))
         for vv in self.options:
             script.write("#SBATCH {} \n".format(vv))
 
@@ -90,16 +89,14 @@ class BatchIt:
 
         self.script = script
 
-    def add_batch(self,thescript,params):
+    def add_batch(self, thescript, params):
 
         cmd = 'python {}'.format(thescript)
 
-        for key,vals in params.items():
-            cmd += ' --{} {}'.format(key,vals)
+        for key, vals in params.items():
+            cmd += ' --{} {}'.format(key, vals)
 
         self.script.write(cmd+'\n')
-
-
 
     def go_batch(self):
         """
