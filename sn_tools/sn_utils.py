@@ -719,6 +719,9 @@ class SimuParameters:
         """
 
         # first estimation: z distribution - will rule daymax distribution
+        if len(obs) == 0:
+            return None
+
         daymin = np.min(obs[self.mjdCol])
         daymax = np.max(obs[self.mjdCol])
         duration = daymax-daymin
