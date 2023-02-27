@@ -2118,8 +2118,9 @@ class ProcessPixels:
         print('number of pixels', len(pixels),
               len(pixels['healpixID'].unique()))
         """
+        time_ref = time.time()
         for ipixel, vv in enumerate(pixels['healpixID'].unique()):
-            time_ref = time.time()
+
             ipix += 1
             idf = pixels['healpixID'] == vv
             selpix = pixels[idf]
@@ -2147,13 +2148,14 @@ class ProcessPixels:
             # print('running the metrics - here', ipix, vv, len(dataPixels))
 
             self.runMetrics(dataPixels)
-            # print('pixel processed',ipixel,time.time()-time_ref)
+            # print('pixel processed', ipix, time.time()-time_ref)
 
             if self.saveData and ipix >= 20:
                 # print('dumping intermed')
                 isave += 1
                 self.dump(ip, isave)
                 ipix = -1
+            del dataPixels
 
         if ipix >= 0 and self.saveData:
             isave += 1
