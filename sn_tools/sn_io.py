@@ -1024,3 +1024,77 @@ class Read_LightCurve:
             pass
 
         return tab
+    
+    def get_all_data(self):
+        
+        paths = self.get_path() 
+        paths = list(filter(lambda s: not ('meta_columns' in s), paths))
+        metaTot = Table()
+        for pp in paths:
+            metaTable = self.get_table(path=pp)
+            metadata = metaTable.meta
+            lcDir = metadata['lc_dir']
+            lcName = metadata['lc_fileName']
+            metaTable.add_column(lcDir,name='lc_dir')
+            metaTable.add_column(lcName,name='lc_fileName')
+            metaTot = vstack([metaTot,metaTable])
+
+        return metaTot
+    
+def get_meta(prodID, metaDir):
+    """
+    function to grab metadata from prodID and metaDir
+
+    Parameters
+    ----------
+    prodID : str
+        production ID.
+    metaDir : str
+        mate data (simu) rep.
+
+    Returns
+    -------
+    metaTable : astropy table
+        table of meta data.
+
+    """
+
+    import glob
+
+    full_path = '{}/Simu_{}*.hdf5'.format(metaDir, prodID)
+    fis = glob.glob(full_path)
+
+    metaTable = Table()
+    for io, fi in enumerate(fis):
+        metaName = fi.split('/')[-1]
+        meta = Read_LightCurve(file_name=metaName, inputDir=metaDir)
+        metaTot = meta.get_all_data()
+        metaTable = vstack([metaTable,metaTot], metadata_conflicts='silent')
+    return metaTable
+
+
+def load_SN(SNDir, SNFile):
+    """
+    Function to load SN from file
+
+    Parameters
+    ----------
+    SNDir : str
+        SN dir.
+    SNFile : str
+        SN file.
+
+    Returns
+    -------
+    SN : astropy table
+        table of SN.
+
+    """
+
+    SN = Table()
+
+    from sn_tools.sn_io import loopStack
+    path = '{}/{}'.format(SNDir, SNFile)
+    SN = loopStack([path], 'astropyTable')
+
+    return SN
