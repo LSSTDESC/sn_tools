@@ -2118,7 +2118,7 @@ class ProcessPixels:
         print('number of pixels', len(pixels),
               len(pixels['healpixID'].unique()))
         """
-        time_ref = time.time()
+        # time_ref = time.time()
         for ipixel, vv in enumerate(pixels['healpixID'].unique()):
 
             ipix += 1
@@ -2279,9 +2279,10 @@ class ProcessPixels:
             if vals is not None and not vals.empty:
                 # transform to astropy table to dump in hdf5 file
                 seas = '_'.join(map(str, np.unique(vals['season']).tolist()))
+                kkey = '{}'.format(int(vals['healpixID'].mean()))
                 tab = Table.from_pandas(vals)
-                keyhdf = 'metric_{}_{}_{}_{}'.format(self.num, ipoint,
-                                                     isave, seas)
+                keyhdf = 'metric_{}_{}_{}_{}_{}'.format(self.num, ipoint,
+                                                        isave, seas, kkey)
                 tab.write(outName, keyhdf, append=True, compression=True)
 
         # reset the metric after dumping
