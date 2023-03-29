@@ -1,4 +1,4 @@
-#from sn_tools.sn_cadence_tools import GenerateFakeObservations
+# from sn_tools.sn_cadence_tools import GenerateFakeObservations
 from sn_tools.sn_io import make_dict_from_optparse
 import numpy.lib.recfunctions as rf
 import numpy as np
@@ -120,11 +120,18 @@ class FakeObservations:
             mygen = rf.append_fields(mygen, vv, [0.]*len(mygen))
 
         # add Ra, Dec,
-        #mygen = rf.append_fields(mygen, 'Ra', mygen['fieldRA'])
-        #mygen = rf.append_fields(mygen, 'RA', mygen['fieldRA'])
-        #mygen = rf.append_fields(mygen, 'Dec', mygen['fieldRA'])
+        # mygen = rf.append_fields(mygen, 'Ra', mygen['fieldRA'])
+        # mygen = rf.append_fields(mygen, 'RA', mygen['fieldRA'])
+        # mygen = rf.append_fields(mygen, 'Dec', mygen['fieldRA'])
 
-        print('array', mygen.dtype)
+        # plot test
+
+        """
+        plot_test(mygen, 'observationStartMJD', 'mjd',
+                  'moonPhase', 'Moon phase', 'uz')
+        plot_test(mygen, 'night', 'night', 'moonPhase', 'Moon phase', 'ugrizy')
+        """
+
         # print(mygen)
         return mygen
 
@@ -312,10 +319,11 @@ class GenerateFakeObservations:
         airmass = config['airmass']
         sky = config['sky']
         moonphase = config['moonphase']
+
         """
         Nvisits = dict(zip(bands, config['Nvisits']))
         Exposure_Time = dict(zip(bands, config['Exposure_Time']))
-       
+
         seeingEff = dict(zip(bands, config['seeingEff']))
         seeingGeom = dict(zip(bands, config['seeingGeom']))
         airmass = dict(zip(bands, config['airmass']))
@@ -381,7 +389,83 @@ class GenerateFakeObservations:
         res = rf.append_fields(res, 'observationId',
                                np.random.randint(10*len(res), size=len(res)))
 
+        res = self.moonImpact(config, res)
+
         self.Observations = res
+
+    def moonImpact(self, config, res):
+        """
+        Method to add u-obs and remove u <-> filter obs.
+
+        Parameters
+        ----------
+        config : dict
+            config parameters.
+        res : numpy array
+            array of obs.
+
+        Returns
+        -------
+        numpy array
+            array with u-obs if moonPhase_u >= 0.
+
+        """
+
+        moonPhase_u = config['moonPhaseu']
+
+        if moonPhase_u < 0:
+            return res
+
+        import ephem
+        # estimate moonPhase
+        r = []
+        for mjd in res['observationStartMJD']:
+            moon = ephem.Moon(mjd2djd(mjd))
+            r.append((moon.phase))
+
+        print(r)
+
+        # remove moonPhase field from res
+
+        res = rf.drop_fields(res, 'moonPhase')
+
+        # and replace this monnPhase col by estimation
+        res = rf.append_fields(res, 'moonPhase', r)
+
+        # remove x-band observations to be replaced by u-band obs
+        idx = res['moonPhase'] <= moonPhase_u
+        idx &= res['filter'] == config['moonswapFilter']
+        sel_drop = np.copy(res[idx])
+
+        sel_main = np.copy(res[~idx])
+
+        # drop filter field and replace by u-obs
+
+        vvals = ['Nvisits', 'ExposureTime',
+                 'seeingEff', 'seeingGeom', 'airmass', 'm5']
+        dict_var = {}
+        for vv in vvals:
+            dict_var[vv] = config[vv]['u']
+
+        dict_var['numExposures'] = dict_var.pop('Nvisits')
+        dict_var['visitExposureTime'] = dict_var.pop('ExposureTime')
+        dict_var['seeingFwhmEff'] = dict_var.pop('seeingEff')
+        dict_var['seeingFwhmGeom'] = dict_var.pop('seeingGeom')
+        dict_var['filter'] = 'u'
+        dict_var['fiveSigmaDepth'] = dict_var['m5'] + \
+            1.25*np.log10(dict_var['numExposures'])
+
+        del dict_var['m5']
+
+        for key, vals in dict_var.items():
+            # sel_drop = drop_add(sel_drop, key, [vals]*len(sel_drop))
+            sel_drop[key] = [vals]*len(sel_drop)
+
+        sel_main = np.concatenate((sel_main, sel_drop))
+
+        # plot_test(sel_main)
+
+        return sel_main
 
     def makeFake_from_simu(self, config):
         """ Generate Fake observations
@@ -432,7 +516,7 @@ class GenerateFakeObservations:
                 mjd = np.arange(mjd_min, mjd_max+cadence[band], cadence[band])
                 # if mjd_max not in mjd:
                 #    mjd = np.append(mjd, mjd_max)
-                #mjd += shift_days[band]
+                # mjd += shift_days[band]
                 m5_coadded = self.m5coadd(m5_interp[band](mjd),
                                           Nvisits[band],
                                           Exposure_Time[band])
@@ -447,18 +531,18 @@ class GenerateFakeObservations:
                 myarr = rf.append_fields(myarr, [self.m5Col, self.nexpCol,
                                                  self.exptimeCol,
                                                  self.seasonCol], [
-                                         m5_coadded,
-                                         [Nvisits[band]]*nvals,
-                                         [Nvisits[band]*Exposure_Time[band]]
-                                         * nvals,
-                                         [season]*nvals])
+                    m5_coadded,
+                    [Nvisits[band]]*nvals,
+                    [Nvisits[band]*Exposure_Time[band]]
+                    * nvals,
+                    [season]*nvals])
                 myarr = rf.append_fields(myarr, [self.seeingEffCol, self.seeingGeomCol], [
-                                         [seeingEff[band]]*nvals, [seeingGeom[band]]*nvals])
+                    [seeingEff[band]]*nvals, [seeingGeom[band]]*nvals])
                 myarr = rf.append_fields(myarr, ['airmass', 'sky',
                                                  'moonPhase'], [
-                                         [airmass[band]]*nvals,
-                                         [sky[band]]*nvals,
-                                         [moonphase[band]]*nvals])
+                    [airmass[band]]*nvals,
+                    [sky[band]]*nvals,
+                    [moonphase[band]]*nvals])
                 rtot.append(myarr)
 
         res = np.copy(np.concatenate(rtot))
@@ -542,3 +626,93 @@ class GenerateFakeObservations:
         """
         m5_coadd = m5+1.25*np.log10(float(Nvisits)*Tvisit/30.)
         return m5_coadd
+
+
+def mjd2djd(mjd):
+    """Convert from modified Julian date to Dublin Julian date
+    pyephem uses Dublin Julian dates
+    Parameters
+    ----------
+    mjd : float
+        The modified Julian date to be converted.
+    Returns
+    -------
+    The Dublin Julian date corresponding to `mjd`.
+    """
+    # (this function adapted from Peter Yoachim's code)
+    doff = 15019.5  # this equals ephem.Date(0)-ephem.Date('1858/11/17')
+    return mjd - doff
+
+
+def drop_add(res, col, vals):
+    """
+    Function to drop a column and add it again (with different values)
+
+    Parameters
+    ----------
+    res : record array
+        data to process.
+    col : str
+        field to consider.
+    vals : list
+        values for replacement.
+
+    Returns
+    -------
+    res : record array
+        updated array.
+
+    """
+
+    # drop
+
+    res = rf.drop_fields(res, col)
+
+    # replace
+    res = rf.append_fields(res, col, vals)
+
+    return res
+
+
+def plot_test(sel_main, xvar, xlabel, yvar, ylabel, bands):
+    """
+    Method to plot moonPhase vs mjd for cross check
+
+    Parameters
+    ----------
+    sel_main : numpy array
+        data to plot.
+    xvar : str
+        x-axis var.
+    xlabel : str
+        x-axis label.
+    yvar : str
+        y-axis var.
+    ylabel : str
+        y-axis label.
+    bands: str
+        list of bands to consider.
+
+    Returns
+    -------
+    None.
+
+    """
+
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots()
+    ax.plot(sel_main[xvar],
+            sel_main[yvar], 'ko', mfc='None')
+
+    filtercolors = dict(zip('ugrizy', ['b', 'c', 'g', 'y', 'r', 'm']))
+    for b in bands:
+        idx = sel_main['filter'] == b
+        selp = sel_main[idx]
+        color = filtercolors[b]
+        ax.plot(selp[xvar], selp[yvar],
+                '{}*'.format(color), mfc='None')
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+
+    plt.show()

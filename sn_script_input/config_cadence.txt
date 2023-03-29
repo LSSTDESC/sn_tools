@@ -5,7 +5,7 @@ Dec 0.0 float #Dec
 ## seasons
 seasons 1 str # seasons
 seasonLength 180 str #season_length (days)
-MJDmin -40. str #MJD min for observations
+MJDmin 60321. str #MJD min for observations - 1/12/2024
 
 ## bands to consider
 bands grizy str #bands to consider
@@ -18,20 +18,23 @@ cadence z 1. float # cadence z band
 cadence y 1. float # cadence y band
 
 ## m5 per band
-m5 g 24.51 float #g 5-sigma depth values
-m5 r 24.06 float #r 5-sigma depth values
-m5 i 23.62 float #i 5-sigma depth values
-m5 z 23.00 float #z 5-sigma depth values
-m5 y 22.17 float #y 5-sigma depth values
+m5 u 23.48 float #u 5-sigma depth values
+m5 g 24.26 float #g 5-sigma depth values
+m5 r 23.87 float #r 5-sigma depth values
+m5 i 23.46 float #i 5-sigma depth values
+m5 z 22.76 float #z 5-sigma depth values
+m5 y 22.02 float #y 5-sigma depth values
 
 ## number of visits per band
+Nvisits u 10 int #Nvisits u
 Nvisits g 10 int #Nvisits g
-Nvisits r  20 int #Nvisits r
+Nvisits r 20 int #Nvisits r
 Nvisits i 20  int #Nvisits i
 Nvisits z 26 int #Nvisits z
 Nvisits y 20 int #Nvisits y
 
 ## Single visit exposure time
+ExposureTime u  30. float #single visit exp time u-band
 ExposureTime g  30. float #single visit exp time g-band
 ExposureTime r  30. float #single visit exp time r-band
 ExposureTime i  30. float #single visit exp time i-band
@@ -42,12 +45,14 @@ ExposureTime y  30. float #single visit exp time y-band
 shiftDays 0.0069444 float #in days: 10./(24.*60.)
 
 ##seeing
+seeingEff u 0.90 float # seeingEff u-band
 seeingEff g 0.87 float # seeingEff g-band
 seeingEff r 0.83 float # seeingEff r-band
 seeingEff i 0.80  float # seeingEff i-band
 seeingEff z 0.78 float # seeingEff z-band
 seeingEff y 0.76 float # seeingEff y-band
 
+seeingGeom u 0.90 float # seeingGeom u-band
 seeingGeom g 0.87 float # seeingGeom g-band
 seeingGeom r 0.83 float # seeingGeom r-band
 seeingGeom i 0.80  float # seeingGeom i-band
@@ -55,6 +60,7 @@ seeingGeom z 0.78 float # seeingGeom z-band
 seeingGeom y 0.76 float # seeingGeom y-band
 
 ##airmass
+airmass u 1.2 float #airmass u-band
 airmass g 1.2 float #airmass g-band
 airmass r 1.2 float #airmass r-band
 airmass i 1.2 float #airmass i-band
@@ -62,6 +68,7 @@ airmass z 1.2 float #airmass z-band
 airmass y 1.2 float #airmass y-band
 
 ##sky
+sky u 1.2 float #sky g-band
 sky g 1.2 float #sky g-band
 sky r 1.2 float #sky r-band
 sky i 1.2 float #sky i-band
@@ -75,6 +82,8 @@ moonphase r 0.5 float #moonphase r-band
 moonphase i 0.5 float #moonphase i-band
 moonphase z 0.5 float #moonphase z-band
 moonphase y 0.5 float #moonphase y-band
+moonPhaseu 20. float #max moon phase for u-obs
+moonswapFilter z str #filter to be replaced by when no moon
 
 ## rotTelPos
 rotTelPos 0 int #tel rotation dithering
