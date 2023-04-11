@@ -1,0 +1,24 @@
+#x1
+SN x1 type unique str #SN x1 type
+SN x1 min -2.0 float #SN x1 min
+SN x1 max 0.2 float #SN x1 max
+SN x1 step 0.1 float #SN x1 step
+# color
+SN color type unique str #SN color type
+SN color min 0.2 float #SN color min
+SN color max 1.0 float #SN color max
+SN color step 0.1 float #SN color step
+# redshift
+SN z type uniform str #SN z type
+SN z min 0.2 float #SN z min
+SN z max 1.1 float #SN z max
+SN z step 0.01 float #SN z step
+# daymax
+SN daymax type unique str #SN daymax type
+SN daymax step 1. float #SN daymax step
+# other parameters
+# SN NSNfactor 1 int #NSN*factor for simulation
+SN NSNabsolute 1 int #absolute number of SN to produce
+#Multiprocessing
+MultiprocessingSimu nproc 1 int #multiprocessing number of procs
+
