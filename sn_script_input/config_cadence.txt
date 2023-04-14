@@ -84,6 +84,7 @@ moonphase z 0.5 float #moonphase z-band
 moonphase y 0.5 float #moonphase y-band
 moonPhaseu 20. float #max moon phase for u-obs
 moonswapFilter z str #filter to be replaced by when no moon
+mooncompensate 0 int # to compensate for moon effects
 
 ## rotTelPos
 rotTelPos 0 int #tel rotation dithering
