@@ -389,9 +389,50 @@ class GenerateFakeObservations:
         res = rf.append_fields(res, 'observationId',
                                np.random.randint(10*len(res), size=len(res)))
 
+        # before moon impact: get the total number of visits per band
+
+        Nvisits = {}
+        for b in np.unique(res['filter']):
+            idx = res['filter'] == b
+            sel = res[idx]
+            Nvisits[b] = np.sum(sel['numExposures'])
+
         res = self.moonImpact(config, res)
 
+        res = self.moonCompensate(config, res, Nvisits)
+
         self.Observations = res
+
+    def moonCompensate(self, config, res, Nvisits):
+
+        comp = config['mooncompensate']
+
+        moonPhase_u = config['moonPhaseu']
+
+        if comp == 0 or moonPhase_u < 0:
+            return res
+
+        # comp = 1: need to rescale swapfilter obs
+
+        swapfilter = config['moonswapFilter']
+
+        idx = res['filter'] == swapfilter
+        sel = res[idx]
+        selb = res[~idx]
+
+        Nvisits_swap = np.sum(sel['numExposures'])
+        Nnights_swap = len(sel)
+        Nvisits_req = Nvisits[swapfilter]
+        delta_Nvisits = Nvisits_req-Nvisits_swap
+        Nvisits_to_add = int(delta_Nvisits/Nnights_swap)
+        sel['numExposures'] += Nvisits_to_add
+        sel['visitExposureTime'] += Nvisits_to_add*30.
+        # correct for m5 value
+        sel['fiveSigmaDepth'] = config['m5'][swapfilter] + \
+            1.25*np.log10(sel['numExposures'])
+
+        res = np.concatenate((selb, sel))
+        return res
 
     def moonImpact(self, config, res):
         """
