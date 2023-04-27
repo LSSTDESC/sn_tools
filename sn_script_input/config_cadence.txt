@@ -2,6 +2,9 @@
 RA 0.0 float # RA
 Dec 0.0 float #Dec
 
+## fieldName (to be set as 'note' in the file)
+field DD:COSMOS str # field
+
 ## seasons
 seasons 1 str # seasons
 seasonLength 180 str #season_length (days)
