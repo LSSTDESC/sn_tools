@@ -177,13 +177,20 @@ class GenerateFakeObservations:
         self.rotTelPosCol = rotTelPosCol
 
         # now make fake obs
+        res = None
         if not sequences:
             if config['m5File'] == 'NoData':
-                self.makeFake(config)
+                res = self.makeFake(config)
             else:
-                self.makeFake_from_simu(config)
+                res = self.makeFake_from_simu(config)
         else:
-            self.makeFake_sqs(config)
+            res = self.makeFake_sqs(config)
+
+        # add note column
+        res = rf.append_fields(
+            res, 'note', [config['field']]*len(res), dtypes='<U11')
+
+        self.Observations = res
 
     def makeFake_sqs(self, config):
         """ Generate Fake observations
@@ -287,7 +294,7 @@ class GenerateFakeObservations:
         res = rf.append_fields(res, 'observationId',
                                np.random.randint(10*len(res), size=len(res)))
 
-        self.Observations = res
+        return res
 
     def makeFake(self, config):
         """ Generate Fake observations
@@ -401,7 +408,7 @@ class GenerateFakeObservations:
 
         res = self.moonCompensate(config, res, Nvisits)
 
-        self.Observations = res
+        return res
 
     def moonCompensate(self, config, res, Nvisits):
 
@@ -592,7 +599,7 @@ class GenerateFakeObservations:
         res = rf.append_fields(res, 'observationId',
                                np.random.randint(10*len(res), size=len(res)))
 
-        self.Observations = res
+        return res
 
     def m5Interp(self, season, fName, healpixID):
         """
