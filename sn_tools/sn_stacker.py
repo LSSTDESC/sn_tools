@@ -90,7 +90,12 @@ class CoaddStacker:
         if not vv.empty:
             tt = tt.merge(vv, left_on=['night', 'filter'],
                           right_on=['night', 'filter'])
-        vv = self.get_vals(listref, self.col_median, groups, np.median)
+
+        # vv = self.get_vals_b(listref, self.col_median,
+        #                     df, keygroup, 'median')
+        vv = df.groupby(keygroup)[self.col_median].apply(
+            lambda x: x.median()).reset_index()
+
         if not vv.empty:
             tt = tt.merge(vv, left_on=['night', 'filter'],
                           right_on=['night', 'filter'])
@@ -99,6 +104,7 @@ class CoaddStacker:
         tt = tt.sort_values(by=['night'])
         tt.loc[:, self.col_coadd[0]] += 1.25 * \
             np.log10(tt[self.col_coadd[1]]/tt['exptime_single'])
+
         return tt.to_records(index=False)
 
     def get_vals(self, listref, cols, group, op):
@@ -125,6 +131,37 @@ class CoaddStacker:
         res = pd.DataFrame()
         if col_df:
             res = group[col_df].apply(lambda x: op(x)).reset_index()
+
+        return res
+
+    def get_vals_b(self, listref, cols, df, keygroup, op):
+        """
+        Method to estimate a set of value using op
+
+        Parameters
+        --------------
+        listref: list(str)
+          list of columns of the group
+        cols: list(str)
+          list of columns to estimate values (op)
+        group: pandas group
+          data to process
+        op: operator
+         operator to apply
+
+        Returns
+        ----------
+          pandas df with oped values
+
+        """
+        col_df = list(set(listref).intersection(cols))
+        print('col df', col_df)
+        res = pd.DataFrame()
+        if col_df:
+            print('go man', df[col_df])
+            res = df.groupby(keygroup)[col_df].apply(
+                lambda x: eval('{}.{}()'.format(x, op))).reset_index()
+            print(res)
 
         return res
 
