@@ -471,7 +471,7 @@ class GenerateFakeObservations:
             moon = ephem.Moon(mjd2djd(mjd))
             r.append((moon.phase))
 
-        print(r)
+        # print(r)
 
         # remove moonPhase field from res
 
