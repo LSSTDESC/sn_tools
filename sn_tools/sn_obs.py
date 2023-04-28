@@ -3957,7 +3957,7 @@ def get_obs(fieldType, dbDir, dbName, dbExtens):
     # loading all obs here
     observations = load_obs(dbDir, dbName, dbExtens)
 
-    if 'note' in observations.dtype.names:
+    if 'note' in observations.dtype.names and fieldType != 'Fake':
         ido = np.core.defchararray.find(
             observations['note'].astype(str), 'DD')
         if ido.tolist():
