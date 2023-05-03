@@ -21,4 +21,4 @@ SN NSNfactor 1 int #NSN*factor for simulation
 SN NSNabsolute -1 int #absolute number of SN to produce
 #Multiprocessing
 MultiprocessingSimu nproc 1 int #multiprocessing number of procs
-
+MultiprocessingFit nproc 1 int #multiprocessing number of procs
