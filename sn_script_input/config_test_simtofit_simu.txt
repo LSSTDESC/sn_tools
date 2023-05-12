@@ -18,7 +18,7 @@ SN daymax type unique str #SN daymax type
 SN daymax step 1. float #SN daymax step
 # other parameters
 SN NSNfactor 1 int #NSN*factor for simulation
-SN NSNabsolute -1 int #absolute number of SN to produce
+SN NSNabsolute 1 int #absolute number of SN to produce
 #Multiprocessing
 MultiprocessingSimu nproc 1 int #multiprocessing number of procs
 MultiprocessingFit nproc 1 int #multiprocessing number of procs
