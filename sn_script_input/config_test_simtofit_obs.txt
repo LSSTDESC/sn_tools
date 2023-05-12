@@ -16,6 +16,10 @@ MJDmin 60321. str #MJD min for observations - 1/12/2024
 ## bands to consider
 bands grizy str #bands to consider
 
+## obs file
+obsCondFile m5_night.csv str # Observing condition file
+obsFromSimu 0 int # to take obs. cond. from obsCondFile
+
 ## cadence[day] per band - see config_obs
 ## cadence g 1. float # cadence g band
 ## cadence r 1. float # cadence r band
@@ -96,8 +100,8 @@ mooncompensate 0 int # to compensate for moon effects
 rotTelPos 0 int #tel rotation dithering
 
 ## m5file from realistic simus
-m5File NoData str #m5 file from realistic simus
-healpixID -1 int #healpixID for m5 values
+# m5File NoData str #m5 file from realistic simus
+# healpixID -1 int #healpixID for m5 values
 
 ## Save data infos
 saveData 0 int #flag to save data
