@@ -2,6 +2,7 @@
 from sn_tools.sn_io import make_dict_from_optparse
 import numpy.lib.recfunctions as rf
 import numpy as np
+import pandas as pd
 
 
 def add_option(parser, confDict):
@@ -89,6 +90,7 @@ class FakeObservations:
                 nn = range(np.min(nn), np.max(nn))
             self.dd[vv] = nn
 
+        """
         for vv in ['MJDmin']:
             what = self.dd[vv]
             if '-' not in what or what[0] == '-':
@@ -97,6 +99,7 @@ class FakeObservations:
                 nn = list(map(float, what.split('-')))
                 nn = range(np.min(nn), np.max(nn))
             self.dd[vv] = nn
+        """
 
     def genData(self):
         """
@@ -111,10 +114,6 @@ class FakeObservations:
         mygen = GenerateFakeObservations(self.dd).Observations
         # add a night column
 
-        MJD_min = np.min(mygen['observationStartMJD'])
-        nights = list(map(int, mygen['observationStartMJD']-MJD_min+1))
-
-        mygen = rf.append_fields(mygen, 'night', nights)
         # add pixRA, pixDex, healpixID columns
         for vv in ['pixRA', 'pixDec', 'healpixID']:
             mygen = rf.append_fields(mygen, vv, [0.]*len(mygen))
@@ -176,13 +175,23 @@ class GenerateFakeObservations:
         self.visitTime = visitTime
         self.rotTelPosCol = rotTelPosCol
 
+        self.obs_from_simu = config['obsFromSimu']
+        self.obs_conditions = {}
+        if self.obs_from_simu:
+            self.obs_conditions = self.load_observing_conditions(
+                config['obsCondFile'])[config['field']]
+
         # now make fake obs
         res = None
         if not sequences:
+            res = self.makeFake(config)
+            """
             if config['m5File'] == 'NoData':
                 res = self.makeFake(config)
+            
             else:
                 res = self.makeFake_from_simu(config)
+            """
         else:
             res = self.makeFake_sqs(config)
 
@@ -191,6 +200,75 @@ class GenerateFakeObservations:
             res, 'note', [config['field']]*len(res), dtypes='<U11')
 
         self.Observations = res
+
+    def load_observing_conditions(self, csvFile, cols=['fiveSigmaDepth', 'airmass']):
+        """
+        Method to load obs condition file
+
+        Parameters
+        ----------
+        csvFile : str
+            name of the files to load.
+        cols : list(str), optional
+            list of cols to load. The default is ['fiveSigmaDepth'].
+
+        Returns
+        -------
+        dictfi : dict
+            obs conditions (interpolator).
+
+        """
+
+        # read csv file as pandas df
+        obs_cond = pd.read_csv(csvFile, comment='#')
+
+        #
+        notes = obs_cond['note'].unique()
+        dictfi = {}
+        for note in notes:
+            idx = obs_cond['note'] == note
+            sel = obs_cond[idx]
+            dd = self.make_obs_interp(sel, cols)
+            dictfi.update(dd)
+
+        return dictfi
+
+    def make_obs_interp(self, tt, cols):
+        """
+        Method to load obs conditions, interpolate and make a dict
+
+        Parameters
+        ----------
+        grp : pandas df
+            data to process.
+        cols : list(str)
+            columns to load.
+
+        Returns
+        -------
+        dict
+            output dict: keys=(note,col), val=interp1d(night,col).
+
+        """
+
+        from scipy.interpolate import interp1d
+        grp = pd.DataFrame(tt)
+        field = grp['note'].unique()
+
+        dictOut = {}
+        for vv in cols:
+            ddict = {}
+            for b in 'ugrizy':
+                idx = grp['filter'] == b
+                sel = grp[idx]
+                # first rescale nights to start with the first night
+                min_night = sel['night'].min()
+                sel.loc[:, 'night'] -= min_night-1
+                ddict[b] = interp1d(sel['night'], sel[vv],
+                                    bounds_error=False, fill_value=0.)
+            dictOut[vv] = ddict
+
+        return dict(zip(field, [dictOut]))
 
     def makeFake_sqs(self, config):
         """ Generate Fake observations
@@ -231,7 +309,7 @@ class GenerateFakeObservations:
         Single_Exposure_Time = {}
         for il, season in enumerate(config['seasons']):
             m5 = dict(zip(bands, config['m5'][season]))
-            mjd_min = config['MJD_min']+il * \
+            mjd_min = config['MJDmin']+il * \
                 (config['season_length'][season]+inter_season_gap)
             mjd_max = mjd_min+config['season_length'][season]
             n_visits = config['Nvisits'][season]
@@ -264,7 +342,7 @@ class GenerateFakeObservations:
                     myarr = rf.append_fields(myarr, [self.seeingEffCol, self.seeingGeomCol], [
                         [seeingEff[band]]*nvals, [seeingGeom[band]]*nvals])
                     myarr = rf.append_fields(myarr, self.visitTime, [
-                                             Nvisits[band]*Single_Exposure_Time[band]]*nvals)
+                        Nvisits[band]*Single_Exposure_Time[band]]*nvals)
                     myarr = rf.append_fields(myarr, ['airmass', 'sky', 'moonPhase'], [
                         [airmass[band]]*nvals, [sky[band]]*nvals, [moonphase[band]]*nvals])
                     rtot.append(myarr)
@@ -293,6 +371,11 @@ class GenerateFakeObservations:
 
         res = rf.append_fields(res, 'observationId',
                                np.random.randint(10*len(res), size=len(res)))
+
+        MJD_min = np.min(res['observationStartMJD'])
+        nights = list(map(int, res['observationStartMJD']-MJD_min+1))
+
+        res = rf.append_fields(res, 'night', nights)
 
         return res
 
@@ -337,15 +420,17 @@ class GenerateFakeObservations:
         sky = dict(zip(bands, config['sky']))
         moonphase = dict(zip(bands, config['moonphase']))
         """
-        inter_season_gap = 300.
+        inter_season_gap = 100.
         RA = config['RA']
         Dec = config['Dec']
         rotTelPos = config['rotTelPos']
         rtot = []
+        print(config)
         # for season in range(1, config['nseasons']+1):
         for il, season in enumerate(config['seasons']):
             # mjd_min = config['MJD_min'] + float(season-1)*inter_season_gap
-            mjd_min = config['MJDmin'][il]
+            mjd_min = config['MJDmin']+(season-1) * \
+                (config['seasonLength'][il]+inter_season_gap)
             mjd_max = mjd_min+config['seasonLength'][il]
 
             for i, band in enumerate(bands):
@@ -364,9 +449,9 @@ class GenerateFakeObservations:
                                                  self.filterCol,
                                                  self.rotTelPosCol],
                                          [[RA]*nvals,
-                                          [Dec]*nvals,
-                                          [band]*nvals,
-                                          [rotTelPos]*nvals])
+                                         [Dec]*nvals,
+                                         [band]*nvals,
+                                         [rotTelPos]*nvals])
                 myarr = rf.append_fields(myarr,
                                          [self.m5Col,
                                           self.nexpCol,
@@ -396,6 +481,11 @@ class GenerateFakeObservations:
         res = rf.append_fields(res, 'observationId',
                                np.random.randint(10*len(res), size=len(res)))
 
+        MJD_min = np.min(res['observationStartMJD'])
+        nights = list(map(int, res['observationStartMJD']-MJD_min+1))
+
+        res = rf.append_fields(res, 'night', nights)
+
         # before moon impact: get the total number of visits per band
 
         Nvisits = {}
@@ -407,6 +497,13 @@ class GenerateFakeObservations:
         res = self.moonImpact(config, res)
 
         res = self.moonCompensate(config, res, Nvisits)
+
+        ll = ['fiveSigmaDepth', 'airmass', 'filter',
+              'season', 'night', 'visitExposureTime']
+        print('before', res[ll])
+        res = self.estimate_obs_conditions(res)
+
+        print('after', res[ll])
 
         return res
 
@@ -514,6 +611,48 @@ class GenerateFakeObservations:
         # plot_test(sel_main)
 
         return sel_main
+
+    def estimate_obs_conditions(self, res):
+        """
+        Method to estimate obs conditions (m5, airmass...) from inpur scv file
+
+        Parameters
+        ----------
+        res : array
+            data to process.
+
+        Returns
+        -------
+        resfi : array
+            processed data.
+
+        """
+
+        if not self.obs_from_simu:
+            return res
+
+        bands = np.unique(res['filter'])
+
+        resfi = None
+        for b in bands:
+            idx = res['filter'] == b
+            sel = np.copy(res[idx])
+            for key, vals in self.obs_conditions.items():
+                vv = vals[b](sel['night'])
+                #sel = rf.append_fields(sel, key, vv)
+                sel[key] = vals[b](sel['night'])
+            if resfi is None:
+                resfi = sel
+            else:
+                resfi = np.concatenate((resfi, sel))
+
+        # coadd m5 if necessary
+
+        if 'fiveSigmaDepth' in resfi.dtype.names:
+            resfi['fiveSigmaDepth'] += 1.25 * \
+                np.log10(resfi['visitExposureTime']/30.)
+
+        return resfi
 
     def makeFake_from_simu(self, config):
         """ Generate Fake observations
