@@ -1,6 +1,9 @@
 ## config file for observation
 config_obs input/sim_to_simu_test/combi_obs.csv str #config file for obs
 
+## fieldName (to be set as 'note' in the file)
+field DD:COSMOS str # field
+
 ## config file for simu+fit scheme
 config_simu input/sim_to_simu_test/combi_simufit.csv str #config file for simu
 
