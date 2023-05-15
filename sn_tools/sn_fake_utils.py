@@ -178,8 +178,9 @@ class GenerateFakeObservations:
         self.obs_from_simu = config['obsFromSimu']
         self.obs_conditions = {}
         if self.obs_from_simu:
+            seasons = config['seasons']
             self.obs_conditions = self.load_observing_conditions(
-                config['obsCondFile'])[config['field']]
+                config['obsCondFile'], seasons)[config['field']]
 
         # now make fake obs
         res = None
@@ -188,7 +189,7 @@ class GenerateFakeObservations:
             """
             if config['m5File'] == 'NoData':
                 res = self.makeFake(config)
-            
+
             else:
                 res = self.makeFake_from_simu(config)
             """
@@ -201,7 +202,8 @@ class GenerateFakeObservations:
 
         self.Observations = res
 
-    def load_observing_conditions(self, csvFile, cols=['fiveSigmaDepth', 'airmass']):
+    def load_observing_conditions(self, csvFile, seasons=[1],
+                                  cols=['fiveSigmaDepth', 'airmass']):
         """
         Method to load obs condition file
 
@@ -209,6 +211,8 @@ class GenerateFakeObservations:
         ----------
         csvFile : str
             name of the files to load.
+        seasons: list(int)
+            List of seasons to consider. The default is [1].
         cols : list(str), optional
             list of cols to load. The default is ['fiveSigmaDepth'].
 
@@ -228,12 +232,37 @@ class GenerateFakeObservations:
         for note in notes:
             idx = obs_cond['note'] == note
             sel = obs_cond[idx]
-            dd = self.make_obs_interp(sel, cols)
+            self.print_median_values(sel)
+            dd = self.make_obs_interp(sel, cols, seasons)
             dictfi.update(dd)
 
         return dictfi
 
-    def make_obs_interp(self, tt, cols):
+    def print_median_values(self, data, cols=['fiveSigmaDepth', 'airmass']):
+        """
+        Method to print median obs conditions
+
+        Parameters
+        ----------
+        data : array
+            Data to process.
+        cols : list(str), optional
+            List of columns to print. The default is ['fiveSigmaDepth','airmass'].
+
+        Returns
+        -------
+        None.
+
+        """
+        vv = ['note', 'season', 'filter']
+
+        df = data.groupby(vv)[
+            cols].median().reset_index()
+
+        vv += cols
+        print(df[vv])
+
+    def make_obs_interp(self, tt, cols, seasons):
         """
         Method to load obs conditions, interpolate and make a dict
 
@@ -243,6 +272,8 @@ class GenerateFakeObservations:
             data to process.
         cols : list(str)
             columns to load.
+        seasons: list(int)
+            list of seasons.
 
         Returns
         -------
@@ -258,14 +289,18 @@ class GenerateFakeObservations:
         dictOut = {}
         for vv in cols:
             ddict = {}
-            for b in 'ugrizy':
-                idx = grp['filter'] == b
-                sel = grp[idx]
-                # first rescale nights to start with the first night
-                min_night = sel['night'].min()
-                sel.loc[:, 'night'] -= min_night-1
-                ddict[b] = interp1d(sel['night'], sel[vv],
-                                    bounds_error=False, fill_value=0.)
+            for seas in seasons:
+                ida = grp['season'] == seas
+                sela = grp[ida]
+                ddict[seas] = {}
+                for b in 'ugrizy':
+                    idx = grp['filter'] == b
+                    sel = grp[idx]
+                    # first rescale nights to start with the first night
+                    min_night = sel['night'].min()
+                    sel.loc[:, 'night'] -= min_night-1
+                    ddict[seas][b] = interp1d(sel['night'], sel[vv],
+                                              bounds_error=False, fill_value=0.)
             dictOut[vv] = ddict
 
         return dict(zip(field, [dictOut]))
@@ -401,7 +436,11 @@ class GenerateFakeObservations:
         shift_days = dict(
             zip(bands, [config['shiftDays']*io for io in range(len(bands))]))
         # m5 = dict(zip(bands, config['m5']))
-        m5 = config['m5']
+        m5_dict = {}
+        for b in bands:
+            dd = config['m5'][b].split(',')
+            m5_dict[b] = list(map(float, dd))
+        print('alors', m5_dict)
         Nvisits = config['Nvisits']
         Exposure_Time = config['ExposureTime']
         seeingEff = config['seeingEff']
@@ -426,19 +465,24 @@ class GenerateFakeObservations:
         rotTelPos = config['rotTelPos']
         rtot = []
         print(config)
+
         # for season in range(1, config['nseasons']+1):
         for il, season in enumerate(config['seasons']):
             # mjd_min = config['MJD_min'] + float(season-1)*inter_season_gap
+            if len(config['seasonLength']) == 1:
+                seasonLength = config['seasonLength'][0]
+            else:
+                seasonLength = config['seasonLength'][il]
             mjd_min = config['MJDmin']+(season-1) * \
-                (config['seasonLength'][il]+inter_season_gap)
-            mjd_max = mjd_min+config['seasonLength'][il]
+                (seasonLength+inter_season_gap)
+            mjd_max = mjd_min+seasonLength
 
             for i, band in enumerate(bands):
                 mjd = np.arange(mjd_min, mjd_max+cadence[band], cadence[band])
                 # if mjd_max not in mjd:
                 #    mjd = np.append(mjd, mjd_max)
                 mjd += shift_days[band]
-                m5_coadded = self.m5coadd(m5[band],
+                m5_coadded = self.m5coadd(m5_dict[band][il],
                                           Nvisits[band],
                                           Exposure_Time[band])
 
@@ -500,10 +544,8 @@ class GenerateFakeObservations:
 
         ll = ['fiveSigmaDepth', 'airmass', 'filter',
               'season', 'night', 'visitExposureTime']
-        print('before', res[ll])
-        res = self.estimate_obs_conditions(res)
 
-        print('after', res[ll])
+        res = self.estimate_obs_conditions(res)
 
         return res
 
@@ -590,7 +632,11 @@ class GenerateFakeObservations:
                  'seeingEff', 'seeingGeom', 'airmass', 'm5']
         dict_var = {}
         for vv in vvals:
-            dict_var[vv] = config[vv]['u']
+            if vv != 'fiveSigmaDepth':
+                dict_var[vv] = config[vv]['u']
+            else:
+                tt = config[vv]['u'].split(',')
+                dict_var[vv] = list(map(float, tt))
 
         dict_var['numExposures'] = dict_var.pop('Nvisits')
         dict_var['visitExposureTime'] = dict_var.pop('ExposureTime')
@@ -634,17 +680,22 @@ class GenerateFakeObservations:
         bands = np.unique(res['filter'])
 
         resfi = None
-        for b in bands:
-            idx = res['filter'] == b
-            sel = np.copy(res[idx])
-            for key, vals in self.obs_conditions.items():
-                vv = vals[b](sel['night'])
-                #sel = rf.append_fields(sel, key, vv)
-                sel[key] = vals[b](sel['night'])
-            if resfi is None:
-                resfi = sel
-            else:
-                resfi = np.concatenate((resfi, sel))
+        seasons = np.unique(res['season'])
+        for seas in seasons:
+            idx = res['season'] == seas
+            sela = res[idx]
+            for b in bands:
+                idx = sela['filter'] == b
+                sel = np.copy(sela[idx])
+                for key, vals in self.obs_conditions.items():
+                    # vv = vals[b](sel['night'])
+                    # sel = rf.append_fields(sel, key, vv)
+                    sel[key] = vals[seas][b](sel['night'])
+                    print('aooo', seas, b, np.median(sel[key]))
+                if resfi is None:
+                    resfi = sel
+                else:
+                    resfi = np.concatenate((resfi, sel))
 
         # coadd m5 if necessary
 

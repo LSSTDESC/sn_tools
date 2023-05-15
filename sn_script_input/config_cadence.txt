@@ -25,12 +25,12 @@ obsCondFile m5_night.csv str # Observing condition file
 obsFromSimu 0 int # to take obs. cond. from obsCondFile
 
 ## m5 per band
-m5 u 23.48 float #u 5-sigma depth values
-m5 g 24.26 float #g 5-sigma depth values
-m5 r 23.87 float #r 5-sigma depth values
-m5 i 23.46 float #i 5-sigma depth values
-m5 z 22.76 float #z 5-sigma depth values
-m5 y 22.02 float #y 5-sigma depth values
+m5 u '23.48' str #u 5-sigma depth values
+m5 g '24.26' str #g 5-sigma depth values
+m5 r '23.87' str #r 5-sigma depth values
+m5 i '23.46' str #i 5-sigma depth values
+m5 z '22.76' str #z 5-sigma depth values
+m5 y '22.02' str #y 5-sigma depth values
 
 ## number of visits per band
 Nvisits u 10 int #Nvisits u
