@@ -436,11 +436,15 @@ class GenerateFakeObservations:
         shift_days = dict(
             zip(bands, [config['shiftDays']*io for io in range(len(bands))]))
         # m5 = dict(zip(bands, config['m5']))
+        seasons = config['seasons']
         m5_dict = {}
         for b in bands:
             dd = config['m5'][b].split(',')
             m5_dict[b] = list(map(float, dd))
+            if len(dd) == 1:
+                m5_dict[b] = m5_dict[b]*len(seasons)
         print('alors', m5_dict)
+
         Nvisits = config['Nvisits']
         Exposure_Time = config['ExposureTime']
         seeingEff = config['seeingEff']
@@ -631,28 +635,41 @@ class GenerateFakeObservations:
         vvals = ['Nvisits', 'ExposureTime',
                  'seeingEff', 'seeingGeom', 'airmass', 'm5']
         dict_var = {}
+
+        seasons = np.unique(sel_drop['season'])
         for vv in vvals:
-            if vv != 'fiveSigmaDepth':
+            if vv != 'm5':
                 dict_var[vv] = config[vv]['u']
             else:
                 tt = config[vv]['u'].split(',')
                 dict_var[vv] = list(map(float, tt))
+                if len(tt) == 1:
+                    dict_var[vv] = dict_var[vv]*len(seasons)
 
-        dict_var['numExposures'] = dict_var.pop('Nvisits')
-        dict_var['visitExposureTime'] = dict_var.pop('ExposureTime')
-        dict_var['seeingFwhmEff'] = dict_var.pop('seeingEff')
-        dict_var['seeingFwhmGeom'] = dict_var.pop('seeingGeom')
-        dict_var['filter'] = 'u'
-        dict_var['fiveSigmaDepth'] = dict_var['m5'] + \
-            1.25*np.log10(dict_var['numExposures'])
+        selu = None
+        for io, seas in enumerate(seasons):
+            dictb = {}
+            idx = sel_drop['season'] == seas
+            selb = sel_drop[idx]
 
-        del dict_var['m5']
+            dictb['numExposures'] = dict_var['Nvisits']
+            dictb['visitExposureTime'] = dict_var['ExposureTime']
+            dictb['seeingFwhmEff'] = dict_var['seeingEff']
+            dictb['seeingFwhmGeom'] = dict_var['seeingGeom']
+            dictb['filter'] = 'u'
+            dictb['fiveSigmaDepth'] = dict_var['m5'][io] + \
+                1.25*np.log10(dictb['numExposures'])
 
-        for key, vals in dict_var.items():
-            # sel_drop = drop_add(sel_drop, key, [vals]*len(sel_drop))
-            sel_drop[key] = [vals]*len(sel_drop)
+            for key, vals in dictb.items():
+                # sel_drop = drop_add(sel_drop, key, [vals]*len(sel_drop))
+                selb[key] = [vals]*len(selb)
 
-        sel_main = np.concatenate((sel_main, sel_drop))
+            if selu is None:
+                selu = selb
+            else:
+                selu = np.concatenate((selu, selb))
+
+        sel_main = np.concatenate((sel_main, selu))
 
         # plot_test(sel_main)
 
