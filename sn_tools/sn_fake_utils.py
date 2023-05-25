@@ -408,6 +408,7 @@ class GenerateFakeObservations:
                                np.random.randint(10*len(res), size=len(res)))
 
         MJD_min = np.min(res['observationStartMJD'])
+        MJD_min = config['MJDmin']
         nights = list(map(int, res['observationStartMJD']-MJD_min+1))
 
         res = rf.append_fields(res, 'night', nights)
@@ -530,6 +531,7 @@ class GenerateFakeObservations:
                                np.random.randint(10*len(res), size=len(res)))
 
         MJD_min = np.min(res['observationStartMJD'])
+        MJD_min = config['MJDmin']
         nights = list(map(int, res['observationStartMJD']-MJD_min+1))
 
         res = rf.append_fields(res, 'night', nights)
