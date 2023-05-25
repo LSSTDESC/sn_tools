@@ -614,8 +614,10 @@ class FP2pixels:
         if self.fieldType == 'DD':
             idx = np.in1d(observations['note'], fieldName)
             observations = observations[idx]
-            return self.select_zone(observations, RAmin, RAmax,
-                                    self.RACol, DecCol=self.DecCol)
+            return observations
+
+            # return self.select_zone(observations, RAmin, RAmax,
+            #                        self.RACol, DecCol=self.DecCol)
 
         if self.fieldType == 'WFD':
             return self.select_zone(observations, RAmin, RAmax,
