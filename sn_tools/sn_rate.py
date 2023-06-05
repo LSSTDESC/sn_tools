@@ -351,7 +351,8 @@ class NSN:
         self.rateSN = SN_Rate(H0=self.H0, Om0=self.Om0,
                               min_rf_phase=self.min_rf_phase, max_rf_phase=self.max_rf_phase)
 
-    def __call__(self, zmin, zmax, dz, season_length, survey_area, account_for_edges=True, scale_factor=1):
+    def __call__(self, zmin, zmax, dz, season_length, survey_area,
+                 account_for_edges=True, scale_factor=1):
         """
         Method to estimate the number of supernovae
 
