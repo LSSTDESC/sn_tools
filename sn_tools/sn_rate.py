@@ -257,6 +257,13 @@ class SN_Rate:
             return self.PerrettRate(z)
         if self.rate == 'Dilday':
             return self.DildayRate(z)
+        if self.rate == 'combined':
+            ra, erra = self.RipocheRate(z)
+            rb, errb = self.PerrettRate(z)
+            rc, errc = self.DildayRate(z)
+            rat = (ra+rb+rc)/3.
+            err_rat = 0.
+            return rat, err_rat
         """
         if self.rate == 'Flat':
             return self.flat_rate(z)
