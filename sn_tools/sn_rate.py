@@ -178,11 +178,13 @@ class SN_Rate:
         rate : float
         error_rate : float
         """
+
         rate = 1.53e-4*0.343
         expn = 2.14
         my_z = np.copy(z)
         my_z[my_z > 1.] = 1.
         rate_sn = rate * np.power((1+my_z)/1.5, expn)
+        print(rate_sn)
         return rate_sn, 0.2*rate_sn
 
     def PerrettRate(self, z):
@@ -198,11 +200,13 @@ class SN_Rate:
         rate : float
         error_rate : float
         """
+
         rate = 0.17E-4
         expn = 2.11
         err_rate = 0.03E-4
         err_expn = 0.28
         my_z = np.copy(z)
+        my_z[z > 1.] = 1.
         rate_sn = rate * np.power(1+my_z, expn)
         err_rate_sn = np.power(1+my_z, 2.*expn)*np.power(err_rate, 2.)
         err_rate_sn += np.power(rate_sn*np.log(1+my_z)*err_expn, 2.)
@@ -211,6 +215,7 @@ class SN_Rate:
 
     def DildayRate(self, z):
         """The Dilday rate according to
+        B. Dilday et al. Astrophys.J.682:262-282,2008
 
          Parameters
         --------------
@@ -251,18 +256,26 @@ class SN_Rate:
         rate : float
         error_rate : float
         """
-        if self.rate == 'Ripoche':
-            return self.RipocheRate(z)
-        if self.rate == 'Perrett':
-            return self.PerrettRate(z)
-        if self.rate == 'Dilday':
-            return self.DildayRate(z)
+        if self.rate != 'combined':
+            res, err = eval('self.{}Rate(z)'.format(self.rate))
+            return res, err
         if self.rate == 'combined':
-            ra, erra = self.RipocheRate(z)
-            rb, errb = self.PerrettRate(z)
-            rc, errc = self.DildayRate(z)
-            rat = (ra+rb+rc)/3.
-            err_rat = 0.
+            nsn = {}
+            w_nsn = {}
+            for rate in ['Ripoche', 'Perrett']:
+                res, err = eval('self.{}Rate(z)'.format(rate))
+                nsn[rate] = res
+                w_nsn[rate] = 1./err**2
+
+            rat = 0
+            wtot = 0
+            for key, vals in nsn.items():
+                rat += vals*w_nsn[key]
+                wtot += w_nsn[key]
+
+            rat /= wtot
+            err_rat = 1./np.sqrt(wtot)
+
             return rat, err_rat
         """
         if self.rate == 'Flat':
