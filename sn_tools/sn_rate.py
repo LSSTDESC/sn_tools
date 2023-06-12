@@ -184,7 +184,6 @@ class SN_Rate:
         my_z = np.copy(z)
         my_z[my_z > 1.] = 1.
         rate_sn = rate * np.power((1+my_z)/1.5, expn)
-        print(rate_sn)
         return rate_sn, 0.2*rate_sn
 
     def PerrettRate(self, z):
