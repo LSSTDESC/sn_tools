@@ -348,6 +348,8 @@ class NSN:
 
     Parameters
     ---------------
+    rate: str, opt
+      SN rate. The default is Perrett
     H0: float, opt
       Hubble cte (default: 70)
     Om0: float, opt
@@ -359,7 +361,7 @@ class NSN:
 
     """
 
-    def __init__(self, H0=70., Om0=0.3,
+    def __init__(self, rate='Perrett', H0=70., Om0=0.3,
                  min_rf_phase=-15., max_rf_phase=30.):
 
         self.H0 = H0
@@ -367,7 +369,7 @@ class NSN:
         self.min_rf_phase = min_rf_phase
         self.max_rf_phase = max_rf_phase
 
-        self.rateSN = SN_Rate(H0=self.H0, Om0=self.Om0,
+        self.rateSN = SN_Rate(rate=rate, H0=self.H0, Om0=self.Om0,
                               min_rf_phase=self.min_rf_phase, max_rf_phase=self.max_rf_phase)
 
     def __call__(self, zmin, zmax, dz, season_length, survey_area,
