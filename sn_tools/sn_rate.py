@@ -237,6 +237,39 @@ class SN_Rate:
         err_rate_sn = rate_sn*np.log(1+my_z)*err_expn
         return rate_sn, err_rate_sn
 
+    def HounsellRate(self, z):
+        """
+        Hounsell rate according to 
+        The Astrophysical Journal, Volume 867, Issue 1, article id. 23, 34
+
+        Parameters
+        ----------
+        z : float(s)
+            redshift.
+
+        Returns
+        -------
+        rate_sn : float
+            sn rate.
+        err_rate_sn: float
+            sn rate error.
+
+        """
+
+        rate_z_1 = 2.5e-5
+        expn_z_1 = 1.5
+        rate_z_1_3 = 9.7e-5
+        expn_z_1_3 = -0.5
+
+        my_z = np.copy(z)
+        idx = my_z < 1
+        rate_sn_z_1 = rate_z_1 * np.power(1+my_z[idx], expn_z_1)
+        rate_sn_z_1_3 = rate_z_1_3 * np.power(1+my_z[~idx], expn_z_1_3)
+        rate_sn = np.concatenate((rate_sn_z_1, rate_sn_z_1_3))
+        err_rate_sn = 0.2*rate_sn
+
+        return rate_sn, err_rate_sn
+
     """
     def flat_rate(self, z):
         return 1., 0.1
@@ -261,7 +294,7 @@ class SN_Rate:
         if self.rate == 'combined':
             nsn = {}
             w_nsn = {}
-            for rate in ['Ripoche', 'Perrett']:
+            for rate in ['Ripoche', 'Perrett', 'Hounsell']:
                 res, err = eval('self.{}Rate(z)'.format(rate))
                 nsn[rate] = res
                 w_nsn[rate] = 1./err**2
