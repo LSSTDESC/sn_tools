@@ -1024,10 +1024,10 @@ class Read_LightCurve:
             pass
 
         return tab
-    
+
     def get_all_data(self):
-        
-        paths = self.get_path() 
+
+        paths = self.get_path()
         paths = list(filter(lambda s: not ('meta_columns' in s), paths))
         metaTot = Table()
         for pp in paths:
@@ -1035,12 +1035,13 @@ class Read_LightCurve:
             metadata = metaTable.meta
             lcDir = metadata['lc_dir']
             lcName = metadata['lc_fileName']
-            metaTable.add_column(lcDir,name='lc_dir')
-            metaTable.add_column(lcName,name='lc_fileName')
-            metaTot = vstack([metaTot,metaTable])
+            metaTable.add_column(lcDir, name='lc_dir')
+            metaTable.add_column(lcName, name='lc_fileName')
+            metaTot = vstack([metaTot, metaTable])
 
         return metaTot
-    
+
+
 def get_meta(prodID, metaDir):
     """
     function to grab metadata from prodID and metaDir
@@ -1069,7 +1070,7 @@ def get_meta(prodID, metaDir):
         metaName = fi.split('/')[-1]
         meta = Read_LightCurve(file_name=metaName, inputDir=metaDir)
         metaTot = meta.get_all_data()
-        metaTable = vstack([metaTable,metaTot], metadata_conflicts='silent')
+        metaTable = vstack([metaTable, metaTot], metadata_conflicts='silent')
     return metaTable
 
 
