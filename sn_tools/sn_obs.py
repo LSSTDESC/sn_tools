@@ -2255,9 +2255,12 @@ class ProcessPixels:
             # print('running',len(resdict[metric.name]))
 
         # concatenate the results
+        """
         for key in self.resfi.keys():
+            print(key, type(resdict[key]))
             if resdict[key] is not None:
                 self.resfi[key] = pd.concat((self.resfi[key], resdict[key]))
+        """
 
     def dump(self, ipoint, isave):
         """
