@@ -265,7 +265,9 @@ class GenerateSample:
 
     """
 
-    def __init__(self, sn_parameters, cosmo_parameters, mjdCol='mjd', seasonCol='season', filterCol='filter', area=9.6, dirFiles='reference_files', web_path=''):
+    def __init__(self, sn_parameters, cosmo_parameters, mjdCol='mjd',
+                 seasonCol='season', filterCol='filter', area=9.6,
+                 dirFiles='reference_files', web_path=''):
         self.dirFiles = dirFiles
         self.params = sn_parameters
 
@@ -341,7 +343,8 @@ class GenerateSample:
         if len(r) > 0:
             names = ['z', 'x1', 'color', 'daymax',
                      'epsilon_x0', 'epsilon_x1', 'epsilon_color',
-                     'epsilon_daymax', 'minRFphase', 'maxRFphase', 'minRFphaseQual', 'maxRFphaseQual']
+                     'epsilon_daymax', 'minRFphase', 'maxRFphase',
+                     'minRFphaseQual', 'maxRFphaseQual']
             types = ['f8']*len(names)
             # params = np.zeros(len(r), dtype=list(zip(names, types)))
             params = np.asarray(r, dtype=list(zip(names, types)))
@@ -627,7 +630,8 @@ class SimuParameters:
             self.sigma_param['color'] = sn_parameters['modelPar']['colorsigma']
 
         self.web_path = web_path
-        if 'modelPar' in self.params.keys() and self.params['modelPar']['nameFile'] != 'none':
+        if 'modelPar' in self.params.keys() and \
+                self.params['modelPar']['nameFile'] != 'none':
             self.modelParDist = self.getDist()
 
         self.mjdCol = mjdCol
