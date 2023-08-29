@@ -297,7 +297,7 @@ class SN_Rate:
         """
 
         eta_Ia = 1.02e-4
-        err_eta_Ia = 0.27
+        err_eta_Ia = 0.27e-4
 
         age_universe = self.astropy_cosmo.age(z).value
 
