@@ -405,7 +405,7 @@ class GenerateSample:
             if zmin < 1.e-6:
                 zmin = 0.01
             # print(zmin, zmax, duration, self.area)
-            zz, rate, err_rate, nsn, err_nsn = self.sn_rate(
+            zz, rate, err_rate, nsn, err_nsn, age_univ = self.sn_rate(
                 zmin=zmin, zmax=zmax,
                 duration=duration,
                 survey_area=self.area,
@@ -847,7 +847,7 @@ class SimuParameters:
                 zmin = 0.01
 
             # print(zmin, zmax, duration, self.area)
-            zz, rate, err_rate, nsn, err_nsn = self.sn_rate(
+            zz, rate, err_rate, nsn, err_nsn, age_univ = self.sn_rate(
                 zmin=zmin, zmax=zmax,
                 duration=duration,
                 survey_area=self.area,
