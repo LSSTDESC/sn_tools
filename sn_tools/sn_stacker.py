@@ -51,6 +51,13 @@ class CoaddStacker:
         visitExposureTime: visit exposure time (sum per night)
 
         """
+
+        # clean the list if necessary
+
+        for vv in self.col_median:
+            if vv not in simData.dtype.names:
+                self.col_median.remove(vv)
+
         if 'note' in simData.dtype.names:
             simData = rf.drop_fields(simData, 'note')
         if cols_present:
