@@ -919,7 +919,7 @@ def pixelate(data, nside, RACol='RA', DecCol='Dec'):
     return res
 
 
-def season(obs, season_gap=40., mjdCol='observationStartMJD'):
+def season(obs, season_gap=50., mjdCol='observationStartMJD'):
     """
     Function to estimate seasons
 
