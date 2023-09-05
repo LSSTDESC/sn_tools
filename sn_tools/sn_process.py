@@ -494,15 +494,17 @@ class FP2pixels:
         for fieldName in self.fieldNames:
             obs = self.select_obs(observations, [fieldName], RAmin, RAmax)
             # add season here
-            obs = season(obs)
-            # select obs corresponding to seasons
-            if seasons == '-1' or seasons == -1:
-                these_seasons = np.unique(obs['season'])
-            else:
-                these_seasons = self.load_season(seasons)
+            if fieldName != 'WFD':
+                obs = season(obs)
+                # select obs corresponding to seasons
+                if seasons == '-1' or seasons == -1:
+                    these_seasons = np.unique(obs['season'])
+                else:
+                    these_seasons = self.load_season(seasons)
 
-            idx = np.in1d(obs['season'], these_seasons)
-            obs = obs[idx]
+                idx = np.in1d(obs['season'], these_seasons)
+                obs = obs[idx]
+
             # print('there man', len(obs), these_seasons)
             if len(obs) > 0:
                 if self.obs is None:
