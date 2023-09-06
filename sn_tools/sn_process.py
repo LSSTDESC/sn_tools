@@ -493,6 +493,7 @@ class FP2pixels:
         self.obs = None
         for fieldName in self.fieldNames:
             obs = self.select_obs(observations, [fieldName], RAmin, RAmax)
+            """
             # add season here
             if fieldName != 'WFD':
                 obs = season(obs)
@@ -504,6 +505,7 @@ class FP2pixels:
 
                 idx = np.in1d(obs['season'], these_seasons)
                 obs = obs[idx]
+            """
 
             # print('there man', len(obs), these_seasons)
             if len(obs) > 0:
@@ -533,7 +535,7 @@ class FP2pixels:
             list of seasons to process
 
         """
-        print('hello man', seasons)
+
         if '-' not in seasons or seasons[0] == '-':
             season = list(map(int, seasons.split(',')))
         else:
@@ -551,6 +553,10 @@ class FP2pixels:
             obs = self.obs
 
         pixels = self.get_pixels_field(obs)
+
+        if self.healpixIDs:
+            idx = pixels['healpixID'].isin(self.healpixIDs)
+            pixels = pixels[idx]
 
         # re-select data to avoid having data too far from pixels
         pixRA_min = pixels['pixRA'].min()
@@ -577,10 +583,13 @@ class FP2pixels:
         #      self.RACol, self.DecCol, self.telrot, self.nproc)
         time_ref = time.time()
         from sn_tools.sn_obs import DataToPixels
+        nproc_p = self.nproc_pixels
+        if self.healpixIDs:
+            nproc_p = np.min([nproc_p, len(self.healpixIDs)])
         datapixels = DataToPixels(
             self.nside, self.project_FP, self.VRO_FP,
             RACol=self.RACol, DecCol=self.DecCol,
-            telrot=self.telrot, nproc=self.nproc_pixels)
+            telrot=self.telrot, nproc=nproc_p)
 
         pixels = datapixels(obs, pixels, display=self.display)
 
@@ -1036,8 +1045,8 @@ class Process(FP2pixels):
             fig, ax = plt.subplots()
             fig.suptitle('pixel coord.')
             ax.plot(pixels['pixRA'], pixels['pixDec'], 'r*')
-            # ax.plot(observations[self.RACol],
-            #        observations[self.DecCol], 'ko', mfc='None')
+            ax.plot(observations[self.RACol],
+                    observations[self.DecCol], 'ko', mfc='None')
             ax.set_xlabel('pixRA [deg]')
             ax.set_ylabel('pixDec [deg]')
             plt.show()
@@ -1067,7 +1076,10 @@ class Process(FP2pixels):
         params['pixelmap'] = pixels
         params_multi = np.unique(pixels['healpixID'])
         nprocb = min(self.nproc, len(params_multi))
-        multiproc(params_multi, params, self.process_metric, nprocb)
+        if not self.display:
+            multiproc(params_multi, params, self.process_metric, nprocb)
+        else:
+            self.process_metric(params_multi, params)
 
         """
         eval('multiproc(params_multi, params, self.process_metric_{}, nprocb)'.format(
@@ -1111,6 +1123,7 @@ class Process(FP2pixels):
         if self.display:
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots()
+            fig.suptitle('Observation and pixels')
             ax.plot(observations[self.RACol],
                     observations[self.DecCol], 'ko', mfc='None')
             ax.plot(pixelmap['pixRA'], pixelmap['pixDec'], 'r*')
