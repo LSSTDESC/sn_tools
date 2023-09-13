@@ -725,13 +725,15 @@ class GenerateFakeObservations:
                     dict_var[vv] = dict_var[vv]*len(seasons)
 
         selu = None
+
         for io, seas in enumerate(seasons):
             dictb = {}
             idx = sel_drop['season'] == seas
             selb = sel_drop[idx]
 
             dictb['numExposures'] = dict_var['Nvisits']
-            dictb['visitExposureTime'] = dict_var['ExposureTime']
+            dictb['visitExposureTime'] = dict_var['ExposureTime'] * \
+                dict_var['Nvisits']
             dictb['seeingFwhmEff'] = dict_var['seeingEff']
             dictb['seeingFwhmGeom'] = dict_var['seeingGeom']
             dictb['filter'] = 'u'
