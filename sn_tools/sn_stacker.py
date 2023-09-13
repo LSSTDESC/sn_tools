@@ -87,9 +87,14 @@ class CoaddStacker:
         keymeans = [self.mjdCol, self.RACol, self.DecCol, self.m5Col]
         """
 
+        """
         exptime_single = \
             df.groupby(['filter'])[self.exptimeCol].mean().to_frame(
                 name='exptime_single').reset_index()
+        """
+        bands = 'ugrizy'
+        exptime_single = pd.DataFrame(list(bands), columns=['filter'])
+        exptime_single['exptime_single'] = 30.
         groups = df.groupby(keygroup)
         listref = df.columns
         tt = self.get_vals(listref, self.col_sum, groups, np.sum)
