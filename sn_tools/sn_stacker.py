@@ -11,23 +11,24 @@ class CoaddStacker:
     Class to coadd observations per night
     """
 
-    def __init__(self, col_sum=['numExposures', 'visitTime',
-                                'visitExposureTime'],
+    def __init__(self, col_sum=['numExposures', 'visitTime'],
                  col_mean=['observationStartMJD', 'fieldRA', 'fieldDec',
-                           'fiveSigmaDepth', 'pixRA', 'pixDec',
+                           'pixRA', 'pixDec',
                            'healpixID', 'season'],
                  col_median=['airmass', 'sky', 'moonPhase',
                              'seeingFwhmEff', 'seeingFwhmGeom'],
-                 col_group=['filter', 'night'],
-                 col_coadd=['fiveSigmaDepth', 'visitExposureTime']):
+                 col_group=['note', 'filter', 'night', 'visitExposureTime'],
+                 col_coadd='fiveSigmaDepth',
+                 col_visit='visitExposureTime'):
 
         self.col_sum = col_sum
         self.col_mean = col_mean
         self.col_median = col_median
         self.col_coadd = col_coadd
         self.col_group = col_group
-        self.visitTimeCol = col_sum[1]
-        self.exptimeCol = col_coadd[1]
+        self.col_visit = col_visit
+
+        # self.exptimeCol = col_coadd[1]
 
     def _run(self, simData, cols_present=False):
         """Main run method
@@ -53,73 +54,113 @@ class CoaddStacker:
         """
 
         # clean the list if necessary
+        names = simData.dtype.names
+        col_sum = list(set(self.col_sum) & set(names))
+        col_median = list(set(self.col_median) & set(names))
+        col_mean = list(set(self.col_mean) & set(names))
 
-        for vv in self.col_median:
-            if vv not in simData.dtype.names:
-                self.col_median.remove(vv)
-
-        if 'note' in simData.dtype.names:
-            simData = rf.drop_fields(simData, 'note')
         if cols_present:
             # Column already present in data;
             # assume it is correct and does not need recalculating.
             return simData
+
         self.dtype = simData.dtype
 
-        if self.visitTimeCol not in simData.dtype.names:
+        if self.col_visit not in simData.dtype.names:
             simData = rf.append_fields(
                 simData, self.visitTimeCol, [999.]*len(simData))
 
-        r = []
-
-        # print(type(simData))
         df = pd.DataFrame(np.copy(simData))
 
-        # print(df)
-        # time_ref = time.time()
+        df[self.col_visit] = df[self.col_visit].astype(int)
 
-        #keygroup = [self.filterCol, self.nightCol]
-        keygroup = self.col_group
-        """
-        keysums =  [self.numExposuresCol,self.visitExposureTimeCol]
-        if self.visitTimeCol in simData.dtype.names:
-            keysums += [self.visitTimeCol]
-        keymeans = [self.mjdCol, self.RACol, self.DecCol, self.m5Col]
-        """
-
-        """
-        exptime_single = \
-            df.groupby(['filter'])[self.exptimeCol].mean().to_frame(
-                name='exptime_single').reset_index()
-        """
-        bands = 'ugrizy'
-        exptime_single = pd.DataFrame(list(bands), columns=['filter'])
-        exptime_single['exptime_single'] = 30.
-        groups = df.groupby(keygroup)
+        groups = df.groupby(self.col_group)
         listref = df.columns
-        tt = self.get_vals(listref, self.col_sum, groups, np.sum)
-        vv = self.get_vals(listref, self.col_mean, groups, np.mean)
-        if not vv.empty:
-            tt = tt.merge(vv, left_on=['night', 'filter'],
-                          right_on=['night', 'filter'])
+        # get sum values
+        tt = groups[col_sum].sum().reset_index()
+        tta = groups[col_mean].mean().reset_index()
+        ttb = groups[col_median].median().reset_index()
+        ttc = groups.apply(lambda x: self.coadd_m5(x)).reset_index()
+        ttd = groups.apply(lambda x: self.sum_colvisit(x)).reset_index()
 
-        # vv = self.get_vals_b(listref, self.col_median,
-        #                     df, keygroup, 'median')
-        vv = df.groupby(keygroup)[self.col_median].apply(
-            lambda x: x.median()).reset_index()
+        tt = self.merge_it(tt, tta)
+        tt = self.merge_it(tt, ttb)
+        tt = self.merge_it(tt, ttc)
+        tt = self.merge_it(tt, ttd)
 
-        if not vv.empty:
-            tt = tt.merge(vv, left_on=['night', 'filter'],
-                          right_on=['night', 'filter'])
+        tt = tt[tt.columns.drop(list(tt.filter(regex='level')))]
 
-        tt = tt.merge(exptime_single, left_on=['filter'], right_on=['filter'])
-        tt = tt.sort_values(by=['night'])
-        tt.loc[:, self.col_coadd[0]] += 1.25 * \
-            np.log10(tt[self.col_coadd[1]]/tt['exptime_single'])
+        tt = tt.drop(columns=[self.col_visit])
+        tt = tt.rename(columns={'{}_sum'.format(
+            self.col_visit): self.col_visit})
 
         return tt.to_records(index=False)
 
-    def get_vals(self, listref, cols, group, op):
+    def sum_colvisit(self, grp):
+        """
+        Method to get the sum of col_visit
+
+        Parameters
+        ----------
+        grp : pandas df
+            Data to process.
+
+        Returns
+        -------
+        pandas df
+            Processed data.
+
+        """
+
+        res = grp[self.col_visit].sum()
+
+        return pd.DataFrame({'{}_sum'.format(self.col_visit): [res]})
+
+    def merge_it(self, data, datb):
+        """
+        Method to merge pandas df
+
+        Parameters
+        ----------
+        data : pandas df
+            first df to merge.
+        datb : pandas df
+            second df to merge.
+
+        Returns
+        -------
+        data : pandas df
+            Merged df.
+
+        """
+
+        if not datb.empty:
+            data = data.merge(datb, left_on=self.col_group,
+                              right_on=self.col_group)
+
+        return data
+
+    def coadd_m5(self, grp):
+        """
+        Method to estimate coadded m5
+
+        Parameters
+        ----------
+        grp : pandas df
+            Data to process.
+
+        Returns
+        -------
+        pandas df
+            Data with coadded m5.
+
+        """
+
+        res = 1.25*np.log10(np.sum(10**(0.8*grp[self.col_coadd])))
+
+        return pd.DataFrame({self.col_coadd: [res]})
+
+    def get_vals_deprecated(self, listref, cols, group, op):
         """
         Method to estimate a set of value using op
 
@@ -146,7 +187,7 @@ class CoaddStacker:
 
         return res
 
-    def get_vals_b(self, listref, cols, df, keygroup, op):
+    def get_vals_b_deprecated(self, listref, cols, df, keygroup, op):
         """
         Method to estimate a set of value using op
 
@@ -224,7 +265,7 @@ class CoaddStacker:
         # print('done here',r)
         return r
 
-    def m5_coadd(self, m5):
+    def m5_coadd_deprecated(self, m5):
         """ Method to coadd m5 values
 
         .. math::
@@ -257,7 +298,7 @@ class CoaddStacker:
 
         return -2.5*np.log10(flux_tot)
 
-    def m5_coadd_grp(self, grp):
+    def m5_coadd_grp_deprecated(self, grp):
         """ Method to coadd m5 values
 
         .. math::
