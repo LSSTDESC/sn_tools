@@ -63,9 +63,10 @@ class FakeObservations:
 
     """
 
-    def __init__(self, dict_config):
+    def __init__(self, dict_config, shift_obsId=1):
 
         self.dd = dict_config
+        self.shift_obsId = shift_obsId
 
         # transform input conf dict
         self.transform_fakes()
@@ -111,7 +112,8 @@ class FakeObservations:
 
         """
 
-        mygen = GenerateFakeObservations(self.dd).Observations
+        mygen = GenerateFakeObservations(
+            self.dd, shift_obsId=self.shift_obsId).Observations
         # add a night column
 
         # add pixRA, pixDex, healpixID columns
@@ -159,7 +161,7 @@ class GenerateFakeObservations:
                  seasonCol='season', seeingEffCol='seeingFwhmEff',
                  seeingGeomCol='seeingFwhmGeom',
                  visitTime='visitTime', rotTelPosCol='rotTelPos',
-                 sequences=False):
+                 sequences=False, shift_obsId=1):
 
         # config = yaml.load(open(config_filename))
         self.mjdCol = mjdCol
@@ -174,6 +176,7 @@ class GenerateFakeObservations:
         self.seeingGeomCol = seeingGeomCol
         self.visitTime = visitTime
         self.rotTelPosCol = rotTelPosCol
+        self.shift_obsId = shift_obsId
 
         self.obs_from_simu = config['obsFromSimu']
         self.obs_conditions = {}
@@ -506,6 +509,108 @@ class GenerateFakeObservations:
         accessible through self.Observations
 
         """
+        bands = config['bands']
+        cadence = config['cadence']
+
+        shift_days = dict(
+            zip(bands, [config['shiftDays']*io for io in range(len(bands))]))
+
+        inter_season_gap = 100.
+
+        res = None
+
+        for il, season in enumerate(config['seasons']):
+            # mjd_min = config['MJD_min'] + float(season-1)*inter_season_gap
+            if len(config['seasonLength']) == 1:
+                seasonLength = config['seasonLength'][0]
+            else:
+                seasonLength = config['seasonLength'][il]
+            mjd_min = config['MJDmin']+(season-1) * \
+                (seasonLength+inter_season_gap)
+            mjd_max = mjd_min+seasonLength
+
+            for i, band in enumerate(bands):
+                mjds = np.arange(mjd_min, mjd_max+cadence[band], cadence[band])
+                # if mjd_max not in mjd:
+                #    mjd = np.append(mjd, mjd_max)
+                mjds += shift_days[band]
+                for mjd in mjds:
+                    resa = self.generate_mjd_band(mjd, band, season, config)
+                    if res is None:
+                        res = resa
+                    else:
+                        res = np.concatenate((res, resa))
+
+        # add u-band from moon
+        res = self.add_u_Moon(config, res)
+
+        # add nights
+        MJD_min = np.min(res['observationStartMJD'])
+        MJD_min = config['MJDmin']
+        nights = list(map(int, res['observationStartMJD']-MJD_min+1))
+
+        res = rf.append_fields(res, 'night', nights)
+
+        # add a unique obsId
+        size = len(res)
+        imin = self.shift_obsId
+        obsId = range(imin, imin+size)
+        res = rf.append_fields(res, 'observationId', obsId)
+
+        self.shift_obsId = len(res)
+
+        print(res)
+        print(test)
+
+        return res
+
+    def generate_mjd_band(self, mjd, band, season, config):
+
+        # get the number of visits
+        nvisits = config['Nvisits'][band]
+        config['filter'] = band
+        expTime = 30.  # exposure time in sec
+        expTime_day = expTime/(3600.*24*365)
+
+        # build mjds corresponding to this night
+
+        mjds = np.arange(mjd, mjd+nvisits*expTime_day, expTime_day)
+        myarr = np.array(mjds, dtype=[(self.mjdCol, 'f8')])
+
+        assert(len(myarr) == nvisits)
+
+        # build observables
+        vars = [self.RACol, self.DecCol, self.filterCol, self.rotTelPosCol]
+
+        for vv in vars:
+            myarr = rf.append_fields(myarr, vv, [config[vv]]*nvisits)
+
+        varsb = [self.m5Col, self.nexpCol, self.exptimeCol]
+        varsb += [self.seeingEffCol, self.seeingGeomCol]
+        varsb += ['airmass', 'sky', 'moonphase']
+
+        for vv in varsb:
+            myarr = rf.append_fields(myarr, vv, [config[vv][band]]*nvisits)
+
+        myarr = rf.append_fields(myarr, self.seasonCol, [season]*nvisits)
+
+        return myarr
+
+    def makeFake_deprecated(self, config):
+        """ Generate Fake observations
+
+        Parameters
+        ---------------
+        config : dict
+           dict of parameters (config file)
+
+        Returns
+        -----------
+        recordarray of observations with the fields:
+        MJD, RA, Dec, band,m5,Nexp, ExpTime, Season
+        accessible through self.Observations
+
+        """
 
         bands = config['bands']
         # cadence = dict(zip(bands, config['cadence']))
@@ -661,6 +766,103 @@ class GenerateFakeObservations:
 
         res = np.concatenate((selb, sel))
         return res
+
+    def add_u_Moon(self, config, res):
+        """
+        Method to add u-obs and remove u <-> filter obs.
+
+        Parameters
+        ----------
+        config : dict
+            config parameters.
+        res : numpy array
+            array of obs.
+
+        Returns
+        -------
+        numpy array
+            array with u-obs if moonPhase_u >= 0.
+
+        """
+
+        moonPhase_u = config['moonPhaseu']
+
+        if moonPhase_u < 0:
+            return res
+
+        import ephem
+        # estimate moonPhase
+        r = []
+        for mjd in res['observationStartMJD']:
+            moon = ephem.Moon(mjd2djd(mjd))
+            r.append((moon.phase))
+
+        # print(r)
+
+        # remove moonPhase field from res
+
+        res = rf.drop_fields(res, 'moonPhase')
+
+        # and replace this moonPhase col by estimation
+        res = rf.append_fields(res, 'moonPhase', r)
+
+        # remove x-band observations to be replaced by u-band obs
+        idx = res['moonPhase'] <= moonPhase_u
+        idx &= res['filter'] == config['moonswapFilter']
+        sel_drop = np.copy(res[idx])
+
+        sel_main = np.copy(res[~idx])
+
+        nvisits_u = config['Nvisits']['u']
+        print('hello', len(sel_drop), nvisits_u)
+        print(test)
+
+        # drop filter field and replace by u-obs
+
+        vvals = ['Nvisits', 'ExposureTime',
+                 'seeingEff', 'seeingGeom', 'airmass', 'm5']
+        dict_var = {}
+
+        seasons = np.unique(sel_drop['season'])
+        for vv in vvals:
+            if vv != 'm5':
+                dict_var[vv] = config[vv]['u']
+            else:
+                tt = config[vv]['u'].split(',')
+                dict_var[vv] = list(map(float, tt))
+                if len(tt) == 1:
+                    dict_var[vv] = dict_var[vv]*len(seasons)
+
+        selu = None
+
+        for io, seas in enumerate(seasons):
+            dictb = {}
+            idx = sel_drop['season'] == seas
+            selb = sel_drop[idx]
+
+            dictb['numExposures'] = dict_var['Nvisits']
+            dictb['visitExposureTime'] = dict_var['ExposureTime'] * \
+                dict_var['Nvisits']
+            dictb['seeingFwhmEff'] = dict_var['seeingEff']
+            dictb['seeingFwhmGeom'] = dict_var['seeingGeom']
+            dictb['filter'] = 'u'
+            dictb['fiveSigmaDepth'] = dict_var['m5'][io] + \
+                1.25*np.log10(dictb['numExposures'])
+
+            for key, vals in dictb.items():
+                # sel_drop = drop_add(sel_drop, key, [vals]*len(sel_drop))
+                selb[key] = [vals]*len(selb)
+
+            if selu is None:
+                selu = selb
+            else:
+                selu = np.concatenate((selu, selb))
+
+        sel_main = np.concatenate((sel_main, selu))
+
+        # plot_test(sel_main)
+
+        return sel_main
 
     def moonImpact(self, config, res):
         """

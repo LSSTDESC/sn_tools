@@ -24,13 +24,13 @@ cadence y 1. float # cadence y band
 obsCondFile m5_night.csv str # Observing condition file
 obsFromSimu 0 int # to take obs. cond. from obsCondFile
 
-## m5 per band
-m5 u 23.48 str #u 5-sigma depth values
-m5 g 24.26 str #g 5-sigma depth values
-m5 r 23.87 str #r 5-sigma depth values
-m5 i 23.46 str #i 5-sigma depth values
-m5 z 22.76 str #z 5-sigma depth values
-m5 y 22.02 str #y 5-sigma depth values
+## fiveSigmaDepth per band
+fiveSigmaDepth u 23.48 str #u 5-sigma depth values
+fiveSigmaDepth g 24.26 str #g 5-sigma depth values
+fiveSigmaDepth r 23.87 str #r 5-sigma depth values
+fiveSigmaDepth i 23.46 str #i 5-sigma depth values
+fiveSigmaDepth z 22.76 str #z 5-sigma depth values
+fiveSigmaDepth y 22.02 str #y 5-sigma depth values
 
 ## number of visits per band
 Nvisits u 10 int #Nvisits u
@@ -41,30 +41,38 @@ Nvisits z 26 int #Nvisits z
 Nvisits y 20 int #Nvisits y
 
 ## Single visit exposure time
-ExposureTime u  30. float #single visit exp time u-band
-ExposureTime g  30. float #single visit exp time g-band
-ExposureTime r  30. float #single visit exp time r-band
-ExposureTime i  30. float #single visit exp time i-band
-ExposureTime z  30. float #single visit exp time z-band
-ExposureTime y  30. float #single visit exp time y-band
+visitExposureTime u  30. float #single visit exp time u-band
+visitExposureTime g  30. float #single visit exp time g-band
+visitExposureTime r  30. float #single visit exp time r-band
+visitExposureTime i  30. float #single visit exp time i-band
+visitExposureTime z  30. float #single visit exp time z-band
+visitExposureTime y  30. float #single visit exp time y-band
+
+## numExposures
+numExposures u  2 int #single visit exp time u-band
+numExposures g  2 int #single visit exp time g-band
+numExposures r  2 int #single visit exp time r-band
+numExposures i  2 int #single visit exp time i-band
+numExposures z  2 int #single visit exp time z-band
+numExposures y  2 int #single visit exp time y-band
 
 ##shift between visits per band per day
 shiftDays 0.0069444 float #in days: 10./(24.*60.)
 
 ##seeing
-seeingEff u 0.90 float # seeingEff u-band
-seeingEff g 0.87 float # seeingEff g-band
-seeingEff r 0.83 float # seeingEff r-band
-seeingEff i 0.80  float # seeingEff i-band
-seeingEff z 0.78 float # seeingEff z-band
-seeingEff y 0.76 float # seeingEff y-band
+seeingFwhmEff u 0.90 float # seeingFwhmEff u-band
+seeingFwhmEff g 0.87 float # seeingFwhmEff g-band
+seeingFwhmEff r 0.83 float # seeingFwhmEff r-band
+seeingFwhmEff i 0.80  float # seeingFwhmEff i-band
+seeingFwhmEff z 0.78 float # seeingFwhmEff z-band
+seeingFwhmEff y 0.76 float # seeingFwhmEff y-band
 
-seeingGeom u 0.90 float # seeingGeom u-band
-seeingGeom g 0.87 float # seeingGeom g-band
-seeingGeom r 0.83 float # seeingGeom r-band
-seeingGeom i 0.80  float # seeingGeom i-band
-seeingGeom z 0.78 float # seeingGeom z-band
-seeingGeom y 0.76 float # seeingGeom y-band
+seeingFwhmGeom u 0.90 float # seeingFwhmGeom u-band
+seeingFwhmGeom g 0.87 float # seeingFwhmGeom g-band
+seeingFwhmGeom r 0.83 float # seeingFwhmGeom r-band
+seeingFwhmGeom i 0.80  float # seeingFwhmGeom i-band
+seeingFwhmGeom z 0.78 float # seeingFwhmGeom z-band
+seeingFwhmGeom y 0.76 float # seeingFwhmGeom y-band
 
 ##airmass
 airmass u 1.2 float #airmass u-band
