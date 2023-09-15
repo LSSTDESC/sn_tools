@@ -92,11 +92,12 @@ sky y 1.2 float #sky y-band
 
 
 ## moonPhase
-moonphase g 0.5 float #moonphase g-band
-moonphase r 0.5 float #moonphase r-band
-moonphase i 0.5 float #moonphase i-band
-moonphase z 0.5 float #moonphase z-band
-moonphase y 0.5 float #moonphase y-band
+moonPhase u 0.5 float #moonPhase u-band
+moonPhase g 0.5 float #moonPhase g-band
+moonPhase r 0.5 float #moonPhase r-band
+moonPhase i 0.5 float #moonPhase i-band
+moonPhase z 0.5 float #moonPhase z-band
+moonPhase y 0.5 float #moonPhase y-band
 moonPhaseu 20. float #max moon phase for u-obs
 moonswapFilter y str #filter to be replaced by when no moon
 mooncompensate 0 int # to compensate for moon effects
