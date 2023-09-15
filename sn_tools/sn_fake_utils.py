@@ -539,10 +539,11 @@ class GenerateFakeObservations:
                 mjds += shift_days[band]
                 for mjd in mjds:
                     resa = self.generate_mjd_band(mjd, band, season, config)
-                    if res is None:
-                        res = resa
-                    else:
-                        res = np.concatenate((res, resa))
+                    if resa is not None:
+                        if res is None:
+                            res = resa
+                        else:
+                            res = np.concatenate((res, resa))
 
         # add night col
         res = self.add_night(res, config['MJDmin'])
@@ -613,6 +614,10 @@ class GenerateFakeObservations:
 
         # get the number of visits
         nvisits = config['Nvisits'][band]
+
+        if nvisits == 0:
+            return None
+
         config['filter'] = band
         expTime = 30.  # exposure time in sec
         expTime_day = expTime/(3600.*24*365)
@@ -854,17 +859,25 @@ class GenerateFakeObservations:
         sel_main = np.copy(res[~idx])
 
         # get mjd dropped
-        mjds = sel_drop.groupby(['night'])['observationStartMJD'].min()
+        if len(sel_drop) > 0:
+            mjds = sel_drop.groupby(['night'])['observationStartMJD'].min()
+        else:
+            mjds = pd.DataFrame(sel_main).groupby(['night'])[
+                'observationStartMJD'].max()
 
         # build u observations from this
         res_u = None
+
         for mjd in mjds:
             resa = self.generate_mjd_band(mjd, 'u', season, config)
-            if res_u is None:
-                res_u = resa
-            else:
-                res_u = np.concatenate((res_u, resa))
+            if resa is not None:
+                if res_u is None:
+                    res_u = resa
+                else:
+                    res_u = np.concatenate((res_u, resa))
 
+        if res_u is None:
+            print('ll', config)
         # remove the night col before merging
         sel_main = rf.drop_fields(sel_main, 'night')
         # remove season columns
