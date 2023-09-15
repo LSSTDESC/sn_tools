@@ -112,13 +112,16 @@ class FakeObservations:
 
         """
 
-        mygen = GenerateFakeObservations(
-            self.dd, shift_obsId=self.shift_obsId).Observations
+        mygen = GenerateFakeObservations(self.dd, shift_obsId=self.shift_obsId)
+
+        obs = mygen.Observations
+
+        self.shift_obsId = mygen.shift_obsId
         # add a night column
 
         # add pixRA, pixDex, healpixID columns
         for vv in ['pixRA', 'pixDec', 'healpixID']:
-            mygen = rf.append_fields(mygen, vv, [0.]*len(mygen))
+            obs = rf.append_fields(obs, vv, [0.]*len(obs))
 
         # add Ra, Dec,
         # mygen = rf.append_fields(mygen, 'Ra', mygen['fieldRA'])
@@ -134,7 +137,7 @@ class FakeObservations:
         """
 
         # print(mygen)
-        return mygen
+        return obs
 
 
 class GenerateFakeObservations:
@@ -541,15 +544,11 @@ class GenerateFakeObservations:
                     else:
                         res = np.concatenate((res, resa))
 
+        # add night col
+        res = self.add_night(res, config['MJDmin'])
+
         # add u-band from moon
-        res = self.add_u_Moon(config, res)
-
-        # add nights
-        MJD_min = np.min(res['observationStartMJD'])
-        MJD_min = config['MJDmin']
-        nights = list(map(int, res['observationStartMJD']-MJD_min+1))
-
-        res = rf.append_fields(res, 'night', nights)
+        res = self.add_u_Moon(config, res, season)
 
         # add a unique obsId
         size = len(res)
@@ -557,14 +556,60 @@ class GenerateFakeObservations:
         obsId = range(imin, imin+size)
         res = rf.append_fields(res, 'observationId', obsId)
 
-        self.shift_obsId = len(res)
+        self.shift_obsId += len(res)
 
-        print(res)
-        print(test)
+        # print(np.min(res['observationId']), np.max(res['observationId']))
+
+        return res
+
+    def add_night(self, res, MJD_min):
+        """
+        Method to add the night number
+
+        Parameters
+        ----------
+        res : numpy array
+            Data to process.
+        MJD_min : float
+            MJD Survey start.
+
+        Returns
+        -------
+        res : numpy array
+            Original data plus night col..
+
+        """
+
+        # add nights
+        # MJD_min = np.min(res['observationStartMJD'])
+        # MJD_min = config['MJDmin']
+        nights = list(map(int, res['observationStartMJD']-MJD_min+1))
+
+        res = rf.append_fields(res, 'night', nights)
 
         return res
 
     def generate_mjd_band(self, mjd, band, season, config):
+        """
+        Method to generate obs per band
+
+        Parameters
+        ----------
+        mjd : list(float)
+            MJD list to start from.
+        band : str
+            band to consider.
+        season : int
+            Season.
+        config : dict
+            OS configuration (input params).
+
+        Returns
+        -------
+        myarr : numpy array
+            Generated observation.
+
+        """
 
         # get the number of visits
         nvisits = config['Nvisits'][band]
@@ -577,22 +622,29 @@ class GenerateFakeObservations:
         mjds = np.arange(mjd, mjd+nvisits*expTime_day, expTime_day)
         myarr = np.array(mjds, dtype=[(self.mjdCol, 'f8')])
 
+        idiff = len(myarr)-nvisits
+        if idiff > 0:
+            myarr = myarr[:-idiff]
+
         assert(len(myarr) == nvisits)
 
         # build observables
         vars = [self.RACol, self.DecCol, self.filterCol, self.rotTelPosCol]
 
         for vv in vars:
-            myarr = rf.append_fields(myarr, vv, [config[vv]]*nvisits)
+            myarr = rf.append_fields(
+                myarr, vv, [config[vv]]*nvisits, usemask=False)
 
         varsb = [self.m5Col, self.nexpCol, self.exptimeCol]
         varsb += [self.seeingEffCol, self.seeingGeomCol]
-        varsb += ['airmass', 'sky', 'moonphase']
+        varsb += ['airmass', 'sky', 'moonPhase']
 
         for vv in varsb:
-            myarr = rf.append_fields(myarr, vv, [config[vv][band]]*nvisits)
+            myarr = rf.append_fields(
+                myarr, vv, [config[vv][band]]*nvisits, usemask=False)
 
-        myarr = rf.append_fields(myarr, self.seasonCol, [season]*nvisits)
+        myarr = rf.append_fields(myarr, self.seasonCol, [
+                                 season]*nvisits, usemask=False)
 
         return myarr
 
@@ -767,7 +819,7 @@ class GenerateFakeObservations:
         res = np.concatenate((selb, sel))
         return res
 
-    def add_u_Moon(self, config, res):
+    def add_u_Moon(self, config, res, season):
         """
         Method to add u-obs and remove u <-> filter obs.
 
@@ -777,6 +829,8 @@ class GenerateFakeObservations:
             config parameters.
         res : numpy array
             array of obs.
+        season: int
+         season of observation
 
         Returns
         -------
@@ -790,31 +844,60 @@ class GenerateFakeObservations:
         if moonPhase_u < 0:
             return res
 
-        import ephem
-        # estimate moonPhase
-        r = []
-        for mjd in res['observationStartMJD']:
-            moon = ephem.Moon(mjd2djd(mjd))
-            r.append((moon.phase))
-
-        # print(r)
-
-        # remove moonPhase field from res
-
-        res = rf.drop_fields(res, 'moonPhase')
-
-        # and replace this moonPhase col by estimation
-        res = rf.append_fields(res, 'moonPhase', r)
+        res = self.get_moonPhase(res)
 
         # remove x-band observations to be replaced by u-band obs
         idx = res['moonPhase'] <= moonPhase_u
         idx &= res['filter'] == config['moonswapFilter']
-        sel_drop = np.copy(res[idx])
+        sel_drop = pd.DataFrame(np.copy(res[idx]))
 
         sel_main = np.copy(res[~idx])
 
-        nvisits_u = config['Nvisits']['u']
-        print('hello', len(sel_drop), nvisits_u)
+        # get mjd dropped
+        mjds = sel_drop.groupby(['night'])['observationStartMJD'].min()
+
+        # build u observations from this
+        res_u = None
+        for mjd in mjds:
+            resa = self.generate_mjd_band(mjd, 'u', season, config)
+            if res_u is None:
+                res_u = resa
+            else:
+                res_u = np.concatenate((res_u, resa))
+
+        # remove the night col before merging
+        sel_main = rf.drop_fields(sel_main, 'night')
+        # remove season columns
+        sel_main = rf.drop_fields(sel_main, 'season')
+        res_u = rf.drop_fields(res_u, 'season')
+
+        resfi = np.concatenate((np.copy(sel_main), np.copy(res_u)))
+        """
+        # resfi = np.column_stack((np.copy(sel_main), np.copy(res_u)))
+
+        vv = 'moonPhase'
+        print('allo', sel_main[vv], len(sel_main))
+        print('allib', res_u[vv], len(res_u))
+        print('allic', resfi[vv], len(resfi))
+
+        print(sel_main.dtype)
+        print(res_u.dtype)
+
+        print(test)
+        """
+        # add night col
+        resfi = self.add_night(resfi, config['MJDmin'])
+
+        # reshuffle mjds to get a coherent view
+
+        resi = self.reshuffle_mjds(resfi)
+
+        # restimate (correct) moonPhase values
+        resi = self.get_moonPhase(resi)
+
+        # self.check_os(resi, config)
+
+        return resi
         print(test)
 
         # drop filter field and replace by u-obs
@@ -863,6 +946,181 @@ class GenerateFakeObservations:
         # plot_test(sel_main)
 
         return sel_main
+
+    def get_moonPhase(self, res, var='moonPhase'):
+        """
+        Method to estimate the Moon phase
+
+        Parameters
+        ----------
+        res : array
+            Data to process.
+        var : str, optional
+            Moon phase column name. The default is 'moonPhase'.
+
+        Returns
+        -------
+        res : TYPE
+            DESCRIPTION.
+
+        """
+
+        import ephem
+        # estimate moonPhase
+        r = []
+        for mjd in res['observationStartMJD']:
+            moon = ephem.Moon(mjd2djd(mjd))
+            r.append((moon.phase))
+
+        # print(r))
+
+        # remove moonPhase field from res
+
+        if var in res.dtype.names:
+            res = rf.drop_fields(res, var)
+
+        # and replace this moonPhase col by estimation
+        res = rf.append_fields(res, var, r)
+
+        return res
+
+    def reshuffle_mjds(self, data):
+        """
+        Method to reshuffle mjds
+
+        Parameters
+        ----------
+        data : numpy array
+            Data to process.
+
+        Returns
+        -------
+        numpy array
+            Original array with resuffled mjds.
+
+        """
+
+        df = pd.DataFrame(np.copy(data))
+
+        dfb = df.groupby(['night']).apply(
+            lambda x: self.update_mjd(x)).reset_index()
+
+        return dfb.to_records(index=False)
+
+    def update_mjd(self, grp):
+        """
+        Method to update mjds
+
+        Parameters
+        ----------
+        grp : pandas df
+            Data to process.
+
+        Returns
+        -------
+        grp : pandas df
+            Original df with modified mjds.
+
+        """
+
+        vv = 'observationStartMJD'
+        mjd_min = grp[vv].min()
+        shift = 34.  # 34 sec between obs.
+        shift /= (3600*24*365)
+        nvisits = len(grp)
+        mjd_max = mjd_min+nvisits*shift
+
+        mjds = np.arange(mjd_min, mjd_max, shift)
+
+        if len(mjds) > nvisits:
+            idiff = len(mjds)-nvisits
+            mjds = mjds[:-idiff]
+
+        n_mjds = len(mjds)
+
+        assert(n_mjds == nvisits)
+
+        grp['observationStartMJD'] = mjds
+
+        return grp
+
+    def check_os(self, data, config):
+        """
+        Metho to check OS
+
+        Parameters
+        ----------
+        data : numpy array
+            Array of observations.
+        config : dict
+            Configuration.
+
+        Returns
+        -------
+        None.
+
+        """
+
+        df = pd.DataFrame(np.copy(data))
+        # check season of obs.
+        season_ref = config['seasons']
+        season_obs = df['season'].unique()
+
+        print(season_ref, season_obs)
+
+        # check cadence of observation (per band)
+        cadence_ref = config['cadence']
+        dfa = df.groupby(['night', 'filter'])[
+            'observationStartMJD'].median().reset_index()
+        dfb = dfa.groupby(['filter']).apply(lambda x: pd.DataFrame(
+            {'cadence_mean': [np.mean(x['night'].diff())],
+             'cadence_rms': [np.std(x['night'].diff())]})).reset_index()
+
+        print(cadence_ref, dfb)
+
+        # check number of visits per obs night
+        nvisits_ref = config['Nvisits']
+        dfa = df.groupby(['night', 'filter']).size(
+        ).reset_index(name='Nvisits')
+        dfa = dfa.groupby(['filter']).apply(lambda x: pd.DataFrame(
+            {'Nvisits_mean': [x['Nvisits'].mean()],
+             'Nvisits_rms': [x['Nvisits'].std()]}))
+
+        print(nvisits_ref, dfa)
+
+        # check the fraction of the number of nights with moonPhase<0.2 per band
+        moonPhase_cut = config['moonPhaseu']
+        dfa = df.groupby(['night', 'filter']).size(
+        ).reset_index(name='Nvisits')
+        idx = df['moonPhase'] <= moonPhase_cut
+        dfb = df[idx].groupby(['night', 'filter']).size(
+        ).reset_index(name='Nvisits_moon')
+        dfa = dfa.groupby(['filter']).size(
+        ).reset_index(name='Nnight')
+        dfb = dfb.groupby(['filter']).size().reset_index(name='Nnight_moon')
+        dfa = dfa.merge(dfb, how='outer', left_on=[
+            'filter'], right_on=['filter'])
+        dfa = dfa.fillna(0.)
+        print(dfa)
+
+        # check median 5-sigma depths
+        vv = 'fiveSigmaDepth'
+        m5_ref = config[vv]
+        dfa = df.groupby(['filter'])[vv].median()
+
+        print(m5_ref, dfa)
+
+        vv = 'observationStartMJD'
+        # check cadence per night: 34 sec between obs?
+        dfa = df.groupby(['night']).apply(lambda x: pd.DataFrame(
+            {'cadence_mean': [np.mean(x[vv].diff())],
+             'cadence_rms': [np.std(x[vv].diff())]})).reset_index()
+
+        factor = 3600.*24*365
+        dfa['cadence_mean'] *= factor
+        dfa['cadence_rms'] *= factor
+
+        print(dfa)
 
     def moonImpact(self, config, res):
         """
