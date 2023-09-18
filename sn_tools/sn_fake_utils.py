@@ -63,10 +63,11 @@ class FakeObservations:
 
     """
 
-    def __init__(self, dict_config, shift_obsId=1):
+    def __init__(self, dict_config, shift_obsId=1, obs_conditions={}):
 
         self.dd = dict_config
         self.shift_obsId = shift_obsId
+        self.obs_conditions = obs_conditions
 
         # transform input conf dict
         self.transform_fakes()
@@ -112,7 +113,8 @@ class FakeObservations:
 
         """
 
-        mygen = GenerateFakeObservations(self.dd, shift_obsId=self.shift_obsId)
+        mygen = GenerateFakeObservations(self.dd, shift_obsId=self.shift_obsId,
+                                         obs_conditions=self.obs_conditions)
 
         obs = mygen.Observations
 
@@ -164,7 +166,7 @@ class GenerateFakeObservations:
                  seasonCol='season', seeingEffCol='seeingFwhmEff',
                  seeingGeomCol='seeingFwhmGeom',
                  visitTime='visitTime', rotTelPosCol='rotTelPos',
-                 sequences=False, shift_obsId=1):
+                 sequences=False, shift_obsId=1, obs_conditions={}):
 
         # config = yaml.load(open(config_filename))
         self.mjdCol = mjdCol
@@ -182,15 +184,17 @@ class GenerateFakeObservations:
         self.shift_obsId = shift_obsId
 
         self.obs_from_simu = config['obsFromSimu']
-        self.obs_conditions = {}
+        self.obs_conditions = obs_conditions
 
+        """
         if self.obs_from_simu:
             # seasons = config['seasons']
             self.obs_conditions, self.mjd_min = \
                 self.load_observing_conditions(
                     config['obsCondFile'])
             self.obs_conditions = self.obs_conditions[config['field']]
-            """
+        """
+        """
             # [config['field']]
             print('obs conditions', self.obs_conditions)
             print(self.mjd_min)
@@ -200,10 +204,19 @@ class GenerateFakeObservations:
         # now make fake obs
         res = None
         if not sequences:
+            res = self.makeFake(config)
+            """
+            idx = res['filter'] == 'g'
+            print(res[idx]['fiveSigmaDepth'])
+
+            print(test)
+            """
+            """
             if not self.obs_from_simu:
-                res = self.makeFake(config)
+                
             else:
                 res = self.makeFake_from_simu(config)
+            """
             """
             if config['m5File'] == 'NoData':
                 res = self.makeFake(config)
@@ -258,14 +271,30 @@ class GenerateFakeObservations:
 
         return dictfi, mjd_min
 
-    def get_mjd_min(self, data):
+    def get_mjd_min(self, data, col_mjd='observationStartMJD'):
+        """
+        Method to get the min MJD per season.
+
+        Parameters
+        ----------
+        data : pandas df
+            Data to process.
+        col_mjd : str, optional
+            Column of interest. The default is 'observationStartMJD'.
+
+        Returns
+        -------
+        ddict : dict
+            Dict with mjd_min (key=season, val=min_mjd.
+
+        """
 
         ddict = {}
         seasons = np.unique(data['season'])
         for seas in seasons:
             idx = data['season'] == seas
             selb = data[idx]
-            ddict[seas] = selb['mjd'].min()
+            ddict[seas] = selb[col_mjd].min()
 
         return ddict
 
@@ -316,6 +345,7 @@ class GenerateFakeObservations:
         field = grp['note'].unique()
 
         dictOut = {}
+        col_mjd = 'observationStartMJD'
         for vv in cols:
             ddict = {}
             seasons = np.unique(grp['season'])
@@ -332,11 +362,11 @@ class GenerateFakeObservations:
                         min_night = sel['night'].min()
                         sel.loc[:, 'night'] -= min_night-1
                         """
-                        ddict[seas][b] = interp1d(sel['mjd'], sel[vv],
+                        ddict[seas][b] = interp1d(sel[col_mjd], sel[vv],
                                                   bounds_error=False,
                                                   fill_value=sel[vv].median())
                 else:
-                    ddict[seas] = interp1d(sel['mjd'], sel[vv],
+                    ddict[seas] = interp1d(sel[col_mjd], sel[vv],
                                            bounds_error=False,
                                            fill_value=0.)
 
@@ -560,6 +590,8 @@ class GenerateFakeObservations:
         self.shift_obsId += len(res)
 
         # print(np.min(res['observationId']), np.max(res['observationId']))
+
+        res = self.estimate_obs_conditions(res)
 
         return res
 
@@ -877,18 +909,19 @@ class GenerateFakeObservations:
                     res_u = np.concatenate((res_u, resa))
 
         if res_u is None:
-            print('ll', config)
+            print('Problem here: no u-band')
+
         # remove the night col before merging
         sel_main = rf.drop_fields(sel_main, 'night')
         # remove season columns
-        sel_main = rf.drop_fields(sel_main, 'season')
-        res_u = rf.drop_fields(res_u, 'season')
+        # sel_main = rf.drop_fields(sel_main, 'season')
+        # res_u = rf.drop_fields(res_u, 'season')
 
-        resfi = np.concatenate((np.copy(sel_main), np.copy(res_u)))
+        #resfi = np.concatenate((np.copy(sel_main), np.copy(res_u)))
+        resfi = rf.stack_arrays((sel_main, res_u))
+
         """
-        # resfi = np.column_stack((np.copy(sel_main), np.copy(res_u)))
-
-        vv = 'moonPhase'
+        vv = 'season'
         print('allo', sel_main[vv], len(sel_main))
         print('allib', res_u[vv], len(res_u))
         print('allic', resfi[vv], len(resfi))
@@ -898,6 +931,7 @@ class GenerateFakeObservations:
 
         print(test)
         """
+
         # add night col
         resfi = self.add_night(resfi, config['MJDmin'])
 
@@ -1263,16 +1297,11 @@ class GenerateFakeObservations:
                         sel[key] = vals[seas][b](sel['observationStartMJD'])
                     else:
                         sel[key] = vals[seas](sel['observationStartMJD'])
+
                 if resfi is None:
                     resfi = sel
                 else:
                     resfi = np.concatenate((resfi, sel))
-
-        # coadd m5 if necessary
-
-        if 'fiveSigmaDepth' in resfi.dtype.names:
-            resfi['fiveSigmaDepth'] += 1.25 * \
-                np.log10(resfi['visitExposureTime']/30.)
 
         return resfi
 
@@ -1552,3 +1581,122 @@ def plot_test(sel_main, xvar, xlabel, yvar, ylabel, bands):
     ax.set_ylabel(ylabel)
 
     plt.show()
+
+
+def load_observing_conditions(csvFile,
+                              cols=['fiveSigmaDepth', 'airmass', 'night']):
+    """
+    Function to load obs condition file
+
+    Parameters
+    ----------
+    csvFile : str
+        name of the files to load.
+    seasons: list(int)
+        List of seasons to consider. The default is [1].
+    cols : list(str), optional
+        list of cols to load. The default is ['fiveSigmaDepth'].
+
+    Returns
+    -------
+    dictfi : dict
+        obs conditions (interpolator).
+
+    """
+
+    # read csv file as pandas df
+    obs_cond = pd.read_csv(csvFile, comment='#')
+
+    #
+    notes = obs_cond['note'].unique()
+    dictfi = {}
+    mjd_min = {}
+    for note in notes:
+        idx = obs_cond['note'] == note
+        sel = obs_cond[idx]
+        dd = make_obs_interp(sel, cols)
+        dictfi.update(dd)
+        mjd_min[note] = get_mjd_min(sel)
+
+    return dictfi, mjd_min
+
+
+def make_obs_interp(tt, cols):
+    """
+    Method to load obs conditions, interpolate and make a dict
+
+    Parameters
+    ----------
+    grp : pandas df
+        data to process.
+    cols : list(str)
+        columns to load.
+
+    Returns
+    -------
+    dict
+        output dict: keys=(note,col), val=interp1d(night,col).
+
+    """
+
+    from scipy.interpolate import interp1d
+    grp = pd.DataFrame(tt)
+    field = grp['note'].unique()
+
+    dictOut = {}
+    col_mjd = 'observationStartMJD'
+    for vv in cols:
+        ddict = {}
+        seasons = np.unique(grp['season'])
+        for seas in seasons:
+            ida = grp['season'] == seas
+            sela = grp[ida]
+            ddict[seas] = {}
+            if vv != 'night':
+                for b in 'ugrizy':
+                    idx = grp['filter'] == b
+                    sel = grp[idx]
+                    """
+                    # first rescale nights to start with the first night
+                    min_night = sel['night'].min()
+                    sel.loc[:, 'night'] -= min_night-1
+                    """
+                    ddict[seas][b] = interp1d(sel[col_mjd], sel[vv],
+                                              bounds_error=False,
+                                              fill_value=sel[vv].median())
+            else:
+                ddict[seas] = interp1d(sel[col_mjd], sel[vv],
+                                       bounds_error=False,
+                                       fill_value=0.)
+
+        dictOut[vv] = ddict
+
+    return dict(zip(field, [dictOut]))
+
+
+def get_mjd_min(data, col_mjd='observationStartMJD'):
+    """
+    Function to get the min MJD per season.
+
+    Parameters
+    ----------
+    data : pandas df
+        Data to process.
+    col_mjd : str, optional
+        Column of interest. The default is 'observationStartMJD'.
+
+    Returns
+    -------
+    ddict : dict
+        Dict with mjd_min (key=season, val=min_mjd.
+
+    """
+
+    ddict = {}
+    seasons = np.unique(data['season'])
+    for seas in seasons:
+        idx = data['season'] == seas
+        selb = data[idx]
+        ddict[seas] = selb[col_mjd].min()
+
+    return ddict
