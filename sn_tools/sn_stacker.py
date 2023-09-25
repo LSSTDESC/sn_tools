@@ -74,19 +74,26 @@ class CoaddStacker:
 
         df[self.col_visit] = df[self.col_visit].astype(int)
 
-        groups = df.groupby(self.col_group)
+        #groups = df.groupby(self.col_group)
         listref = df.columns
         # get sum values
+        """
         tt = groups[col_sum].sum().reset_index()
         tta = groups[col_mean].mean().reset_index()
         ttb = groups[col_median].median().reset_index()
-        ttc = groups.apply(lambda x: self.coadd_m5(x)).reset_index()
-        ttd = groups.apply(lambda x: self.sum_colvisit(x)).reset_index()
+        ttc = groups.apply(
+            lambda x: self.coadd_m5(x)).reset_index()
+        ttd = groups.apply(
+            lambda x: self.sum_colvisit(x)).reset_index()
 
         tt = self.merge_it(tt, tta)
         tt = self.merge_it(tt, ttb)
         tt = self.merge_it(tt, ttc)
         tt = self.merge_it(tt, ttd)
+        """
+
+        tt = df.groupby(self.col_group).apply(
+            lambda x: self.stackIt_all(x)).reset_index()
 
         tt = tt[tt.columns.drop(list(tt.filter(regex='level')))]
 
@@ -95,6 +102,45 @@ class CoaddStacker:
             self.col_visit): self.col_visit})
 
         return tt.to_records(index=False)
+
+    def stackIt_all(self, grp):
+        """
+        Method to estimate all quantities for coadd
+
+        Parameters
+        ----------
+        grp : pandas df
+            data to process.
+
+        Returns
+        -------
+        df : pandas df
+            coadded values.
+
+        """
+
+        dictout = {}
+
+        for col in self.col_sum:
+            dictout[col] = [grp[col].sum()]
+
+        for col in self.col_mean:
+            dictout[col] = [grp[col].mean()]
+
+        for col in self.col_median:
+            dictout[col] = [grp[col].median()]
+
+        res = 1.25*np.log10(np.sum(10**(0.8*grp[self.col_coadd])))
+
+        dictout[self.col_coadd] = [res]
+
+        res = grp[self.col_visit].sum()
+
+        dictout['{}_sum'.format(self.col_visit)] = [res]
+
+        df = pd.DataFrame.from_dict(dictout)
+
+        return df
 
     def sum_colvisit(self, grp):
         """
