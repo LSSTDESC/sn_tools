@@ -919,7 +919,7 @@ def pixelate(data, nside, RACol='RA', DecCol='Dec'):
     return res
 
 
-def season(obs, season_gap=50., mjdCol='observationStartMJD'):
+def season(obs, season_gap=50., mjdCol='observationStartMJD', force_calc=False):
     """
     Function to estimate seasons
 
@@ -938,8 +938,14 @@ def season(obs, season_gap=50., mjdCol='observationStartMJD'):
 
     """
 
+    col = 'season'
+    if force_calc:
+        col = 'season'
+        if col in obs.dtype.names:
+            obs = rf.drop_fields(obs, col)
+
     # check wether season has already been estimated
-    if 'season' in obs.dtype.names:
+    if col in obs.dtype.names:
         return obs
 
     obs.sort(order=mjdCol)
@@ -2124,6 +2130,7 @@ class ProcessPixels:
             ipix += 1
             idf = pixels['healpixID'] == vv
             selpix = pixels[idf]
+
             dataPixels = self.getData(data, selpix)
             # print(vv, len(dataPixels))
             if len(dataPixels) < 5:
@@ -2250,8 +2257,12 @@ class ProcessPixels:
         if len(dataPixel) <= 5:
             return
         for metric in self.metricList:
+            """
             resdict[metric.name] = metric.run(
                 season(dataPixel.to_records(index=False)), imulti=self.num)
+            """
+            resdict[metric.name] = metric.run(
+                dataPixel.to_records(index=False), imulti=self.num)
             # print('running',len(resdict[metric.name]))
 
         # concatenate the results
