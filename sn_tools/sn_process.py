@@ -2,7 +2,7 @@
 from sn_tools.sn_obs import renameFields, patchObs
 from sn_tools.sn_obs import ProcessPixels
 from sn_tools.sn_io import colName
-from sn_tools.sn_obs import getObservations, get_obs, season
+from sn_tools.sn_obs import getObservations, get_obs
 from sn_tools.sn_obs import ebv_pixels
 from sn_tools.sn_utils import multiproc
 import time
