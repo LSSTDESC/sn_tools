@@ -93,7 +93,7 @@ class CoaddStacker:
         """
 
         tt = df.groupby(self.col_group).apply(
-            lambda x: self.stackIt_all(x)).reset_index()
+            lambda x: self.stackIt_all(x, col_sum, col_mean, col_median)).reset_index()
 
         tt = tt[tt.columns.drop(list(tt.filter(regex='level')))]
 
@@ -103,7 +103,7 @@ class CoaddStacker:
 
         return tt.to_records(index=False)
 
-    def stackIt_all(self, grp):
+    def stackIt_all(self, grp, col_sum, col_mean, col_median):
         """
         Method to estimate all quantities for coadd
 
@@ -111,6 +111,12 @@ class CoaddStacker:
         ----------
         grp : pandas df
             data to process.
+        col_sum : list(str)
+                List of columns to estimate the sum.
+        col_mean : list(str)
+                List of columns to estimate the mean.
+        col_median : list(str)
+                List of columns to estimate the median.
 
         Returns
         -------
@@ -121,13 +127,13 @@ class CoaddStacker:
 
         dictout = {}
 
-        for col in self.col_sum:
+        for col in col_sum:
             dictout[col] = [grp[col].sum()]
 
-        for col in self.col_mean:
+        for col in col_mean:
             dictout[col] = [grp[col].mean()]
 
-        for col in self.col_median:
+        for col in col_median:
             dictout[col] = [grp[col].median()]
 
         res = 1.25*np.log10(np.sum(10**(0.8*grp[self.col_coadd])))
