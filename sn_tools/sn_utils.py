@@ -127,6 +127,19 @@ def gather_results(resultdict):
         def concat(a, b):
             return a+b
 
+    if isinstance(first_value, tuple):
+        restot = ([], [])
+        tlength = len(first_value)
+        restot = tuple([] for _ in range(tlength))
+
+        def concat(a, b):
+            bo = []
+            for i in range(tlength):
+                bo.append(a[i]+b[i])
+
+            myres = tuple(bo[i] for _ in range(tlength))
+            return myres
+
     if restot is None:
         print('Sorry to bother you but: unknown data type', type(first_value))
         print('Supported types', supported_types)
