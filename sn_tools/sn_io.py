@@ -643,7 +643,7 @@ class Read_Sqlite:
         return d
 
 
-def check_get_file(web_server, fDir, fName):
+def check_get_file(web_server, fDir, fName, fnewDir=None):
     """
     Function checking if a file is available
     If not, grab it from a web server
@@ -663,8 +663,10 @@ def check_get_file(web_server, fDir, fName):
         return
 
     path = '{}/{}/{}'.format(web_server, fDir, fName)
+    if fnewDir is None:
+        fnewDir = fDir
     cmd = 'wget --no-clobber --no-verbose {} --directory-prefix {}'.format(
-        path, fDir)
+        path, fnewDir)
     os.system(cmd)
 
 
