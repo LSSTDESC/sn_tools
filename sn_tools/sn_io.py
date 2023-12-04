@@ -288,10 +288,6 @@ def loopStack_params(namelist,
         tab = loadFile(fname, objtype)
 
         if objtype == 'pandasDataFrame':
-            if 'correct_cols' in params.keys():
-                ccols = params['correct_cols']
-                for key, vals in ccols.items():
-                    tab[key] = vals
             res = pd.concat([res, tab], sort=False)
         if objtype == 'astropyTable':
             res = vstack([res, tab])
