@@ -258,7 +258,9 @@ def loadFile(filename, objtype='pandasDataFrame'):
             return None
 
 
-def loopStack_params(namelist, params=dict(zip(['objtype'], ['pandasDataFrame'])), j=0, output_q=None):
+def loopStack_params(namelist,
+                     params=dict(zip(['objtype'], ['pandasDataFrame'])),
+                     j=0, output_q=None):
     """
     Function to load a file according to the type of data it contains
 
@@ -286,6 +288,10 @@ def loopStack_params(namelist, params=dict(zip(['objtype'], ['pandasDataFrame'])
         tab = loadFile(fname, objtype)
 
         if objtype == 'pandasDataFrame':
+            if 'correct_cols' in params.keys():
+                ccols = params['correct_cols']
+                for key, vals in ccols.items():
+                    tab[key] = vals
             res = pd.concat([res, tab], sort=False)
         if objtype == 'astropyTable':
             res = vstack([res, tab])
