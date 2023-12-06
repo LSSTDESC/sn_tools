@@ -51,6 +51,7 @@ class BatchIt:
         self.dict_batch['--cpus-per-task'] = n
         self.options.append('--profile=task')
         self.options.append('--acctg-freq=task=15')
+        self.options.append('--partition=lsst,htc')
         self.conda_activate = conda_activate
         # create output dirs if necessary
         self.checkDirs(logDir, scriptDir)
