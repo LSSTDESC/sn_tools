@@ -9,7 +9,7 @@ class BatchIt:
 
     def __init__(self, logDir='logs', scriptDir='scripts',
                  processName='test_batch',
-                 account='lsst', L='sps', time='20:00:00', mem='40G', n=8,
+                 account='lsst', L='sps', time='20:00:00', mem='50G', n=8,
                  conda_activate=True):
         """
         general class to use the batch system
