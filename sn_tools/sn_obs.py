@@ -2169,7 +2169,7 @@ class ProcessPixels:
             self.dump(ip, isave)
             ipix = -1
 
-        # self.finish()
+        self.finish()
 
     def finish(self):
         """
@@ -2179,6 +2179,8 @@ class ProcessPixels:
         """
         for metric in self.metricList:
             if metric.name == 'simulation':
+                metric.finish()
+            if metric.name == 'sim_info_fit':
                 metric.finish()
 
     def getData(self, data, selpix):
