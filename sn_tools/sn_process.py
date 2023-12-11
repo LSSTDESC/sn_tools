@@ -342,7 +342,8 @@ class Process_deprecated:
             #      'RA', 'Dec', 'radius_RA', 'radius_Dec']])
             # get the pixels
             pixels = datapixels(observations, pointing['RA'], pointing['Dec'],
-                                pointing['radius_RA'], pointing['radius_Dec'], self.remove_dithering, display=False)
+                                pointing['radius_RA'], pointing['radius_Dec'],
+                                self.remove_dithering, display=False)
 
             if pixels is None:
                 if output_q is not None:
@@ -451,7 +452,7 @@ class Process_deprecated:
 class FP2pixels:
 
     def __init__(self, dbDir='', dbName='', dbExtens='',
-                 fieldType='', fieldName='', nside=128,
+                 fieldType='', fieldName='', lookup_ddf='', nside=128,
                  RAmin=0., RAmax=360.,
                  Decmin=-80., Decmax=80,
                  pixelmap_dir='', npixels=0, nproc_pixels=1,
@@ -480,8 +481,7 @@ class FP2pixels:
 
         assert(self.RAmin <= self.RAmax)
 
-        observations = get_obs(fieldType, dbDir,
-                               dbName, dbExtens)
+        observations = get_obs(fieldType, dbDir, dbName, dbExtens, lookup_ddf)
 
         names = observations.dtype.names
         self.RACol = colName(names, ['fieldRA', 'RA', 'Ra'])
@@ -984,7 +984,8 @@ class Process(FP2pixels):
     """
 
     def __init__(self, dbDir='', dbName='', dbExtens='',
-                 fieldType='', fieldName='', nside=128,
+                 fieldType='', fieldName='', lookup_ddf='',
+                 nside=128,
                  RAmin=0., RAmax=360.,
                  Decmin=-80., Decmax=80,
                  saveData=False, remove_dithering=False,
@@ -993,7 +994,7 @@ class Process(FP2pixels):
                  VRO_FP='circular', project_FP='gnomonic', telrot=0.,
                  radius=4., pixelList='None', display=False, **kwargs):
         super().__init__(dbDir, dbName, dbExtens,
-                         fieldType, fieldName, nside,
+                         fieldType, fieldName, lookup_ddf, nside,
                          RAmin, RAmax,
                          Decmin, Decmax,
                          pixelmap_dir, npixels, nproc_pixels,

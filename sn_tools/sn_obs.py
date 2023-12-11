@@ -3847,7 +3847,7 @@ def getDD_from_note(observations, nside, RACol, DecCol, fieldName=''):
     return None
 
 
-def renameDDF(obser,
+def renameDDF(obser, lookup_ddf='',
               torep=dict(zip(['ECDFS', 'EDFS, a', 'EDFS, b',
                               'EDFS_a', 'EDFS_b', 'XMM_LSS'], [
                   'CDFS', 'EDFSa', 'EDFSb', 'EDFSa', 'EDFSb', 'XMM-LSS']))):
@@ -3871,17 +3871,29 @@ def renameDDF(obser,
          data with 'note' column replaced
 
     """
-
+    """
     obser['note'] = np.char.replace(obser['note'], 'DD:', '')
     bb = obser['note']
 
     for key, vals in torep.items():
         idx = np.in1d(bb, [key])
         bb[idx] = vals
+    """
+    import pandas as pd
+
+    bb = obser['note']
+
+    lookup = pd.read_csv(lookup_ddf, comment='#')
+    for i, row in lookup.iterrows():
+        key = row['simuName']
+        vals = row['DDName']
+        idx = np.in1d(bb, [key])
+        bb[idx] = vals
 
     obser['note'] = bb
 
     # print('jjjj', len(obser))
+
     return obser
 
 
@@ -3947,7 +3959,7 @@ def load_obs(dbDir, dbName, dbExtens):
     return rec
 
 
-def get_obs(fieldType, dbDir, dbName, dbExtens):
+def get_obs(fieldType, dbDir, dbName, dbExtens, lookup_ddf=''):
     """
     function to load data depending on fieldType
 
@@ -3970,6 +3982,11 @@ def get_obs(fieldType, dbDir, dbName, dbExtens):
     """
     # loading all obs here
     observations = load_obs(dbDir, dbName, dbExtens)
+    lsst_start = np.min(observations['observationStartMJD'])
+
+    # add lsst_start to observations
+    observations = rf.append_fields(
+        observations, 'lsst_start', [lsst_start]*len(observations))
 
     if 'note' in observations.dtype.names and fieldType != 'Fake':
         ido = np.core.defchararray.find(
@@ -3980,7 +3997,7 @@ def get_obs(fieldType, dbDir, dbName, dbExtens):
             if fieldType == 'WFD':
                 return observations[ies]
             if fieldType == 'DD':
-                return renameDDF(observations[~ies])
+                return renameDDF(observations[~ies], lookup_ddf)
     else:
         return observations
 
