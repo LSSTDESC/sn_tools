@@ -566,7 +566,7 @@ class FP2pixels:
 
         obs = self.select_zone(obs, pixRA_min, pixRA_max,
                                self.RACol, pixDec_min, pixDec_max,
-                               self.DecCol, 5.)
+                               self.DecCol, 8.)
 
         if self.display:
             import matplotlib.pyplot as plt
