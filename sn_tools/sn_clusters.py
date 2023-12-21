@@ -312,64 +312,22 @@ def anaClusters(nclusters, data, points, clus, labels, x_name, y_name):
 
     Returns
     -----------
-    env: numpy record array
-      summary of cluster infos:
-      clusid, fieldId, RA, Dec, width_RA, width_Dec,
-      area, dbName, fieldName, Nvisits, Nvisits_all,
-      Nvisits_u, Nvisits_g, Nvisits_r, Nvisits_i,
-      Nvisits_z, Nvisits_y
+
     dfcluster: pandas df
-      for each data point considered: RA,Dec,fieldName,clusId
+      for each data point considered: X,Y,clusId
 
     """
 
-    rcluster = pd.DataFrame()
     dfcluster = pd.DataFrame()
-    datacluster = pd.DataFrame()
+
     for io in range(nclusters):
 
-        RA = points[clus == io, 0]
-        Dec = points[clus == io, 1]
-        dfclus = pd.DataFrame({x_name: RA, y_name: Dec})
+        X = points[clus == io, 0]
+        Y = points[clus == io, 1]
+        dfclus = pd.DataFrame({x_name: X, y_name: Y})
         # ax.scatter(RA,Dec, s=10, c=color[io])
-        indx = np.where(labels == io)[0]
-        sel_obs = data[indx]
-        Nvisits = getVisitsBand(sel_obs)
 
-        min_RA = np.min(RA)
-        max_RA = np.max(RA)
-        min_Dec = np.min(Dec)
-        max_Dec = np.max(Dec)
-        mean_RA = np.mean(RA)
-        mean_Dec = np.mean(Dec)
-        area = np.pi*(max_RA-min_RA)*(max_Dec-min_Dec)/4.
-        # idx, fieldName = getName(self.fields, mean_RA)
-
-        datacluster_loc = pd.DataFrame(np.copy(sel_obs))
-        #datacluster_loc.loc[:, 'fieldName'] = fieldName
-        datacluster_loc.loc[:, 'clusId'] = int(io)
-        datacluster_loc.loc[:, x_name] = mean_RA
-        datacluster_loc.loc[:, y_name] = mean_Dec
-        datacluster = pd.concat([datacluster, datacluster_loc], sort=False)
-
-        # dfclus.loc[:, 'fieldName'] = fieldName
         dfclus.loc[:, 'clusId'] = int(io)
         dfcluster = pd.concat([dfcluster, dfclus], sort=False)
 
-        rclus = pd.DataFrame(columns=['clusid'])
-        rclus.loc[0] = int(io)
-        rclus.loc[:, x_name] = mean_RA
-        rclus.loc[:, y_name] = mean_Dec
-        rclus.loc[:, 'width_RA'] = max_RA-min_RA
-        rclus.loc[:, 'width_Dec'] = max_Dec-min_Dec
-        rclus.loc[:, 'area'] = area
-        # rclus.loc[:, 'dbName'] = self.dbName
-        # rclus.loc[:, 'fieldName'] = fieldName
-        rclus.loc[:, 'Nvisits'] = int(Nvisits['all'])
-
-        for key, vals in Nvisits.items():
-            rclus.loc[:, 'Nvisits_{}'.format(key)] = int(vals)
-
-        rcluster = pd.concat((rcluster, rclus))
-
-    return rcluster, dfcluster, datacluster
+    return dfcluster
