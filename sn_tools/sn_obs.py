@@ -2133,8 +2133,9 @@ class ProcessPixels:
 
             dataPixels = self.getData(data, selpix)
             # print(vv, len(dataPixels))
-            if len(dataPixels) < 5:
+            if len(dataPixels) < 11:
                 continue
+            #print('pixel', vv)
             # print('got datapixels', time.time()-time_ref, selpix)
             # dataPixels = data.iloc[selpix['index'].tolist()].copy()
             """
