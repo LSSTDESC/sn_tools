@@ -744,6 +744,8 @@ class SimuParameters:
         duration = daymax-daymin
         pars = self.zdist(duration)
 
+        print('z dist', pars)
+
         if pars is None:
             return pars
         # add daymax, which is z-dependent (boundaries effects)
@@ -837,8 +839,17 @@ class SimuParameters:
 
         """
         ztype = self.params['z']['type']
+        zmin_simu = self.params['z']['minsimu']
+        zmax_simu = self.params['z']['maxsimu']
         zmin = self.params['z']['min']
         zmax = self.params['z']['max']
+
+        if zmin < zmin_simu:
+            print('pb here zmin and zmin_simu')
+
+        if zmax > zmax_simu:
+            print('pb here zmax and zmax_simu')
+
         zstep = self.params['z']['step']
         NSN_factor = self.params['NSNfactor']
         NSN_absolute = self.params['NSNabsolute']
@@ -861,7 +872,7 @@ class SimuParameters:
 
             # print(zmin, zmax, duration, self.area)
             zz, rate, err_rate, nsn, err_nsn, age_univ = self.sn_rate(
-                zmin=zmin, zmax=zmax,
+                zmin=zmin_simu, zmax=zmax_simu,
                 duration=duration,
                 survey_area=self.area,
                 account_for_edges=True, dz=1.e-5)
@@ -885,6 +896,11 @@ class SimuParameters:
                 # weight_z = 1
 
             zvals = np.random.choice(zz, N_SN, p=weight_z)
+
+            # apply z-selection
+            idx = zvals >= zmin
+            idx &= zvals <= zmax
+            zvals = zvals[idx]
 
         return pd.DataFrame(zvals, columns=['z'])
 
