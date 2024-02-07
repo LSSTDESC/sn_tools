@@ -744,8 +744,6 @@ class SimuParameters:
         duration = daymax-daymin
         pars = self.zdist(duration)
 
-        print('z dist', pars)
-
         if pars is None:
             return pars
         # add daymax, which is z-dependent (boundaries effects)
