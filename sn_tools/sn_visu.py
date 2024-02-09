@@ -1145,8 +1145,8 @@ def get_map(nside) -> pd.DataFrame:
     vec = hp.pix2ang(nside, range(npixels), nest=True, lonlat=True)
 
     map_pixel = pd.DataFrame(range(npixels), columns=['healpixID'])
-    map_pixel['pix_RA'] = vec[0]
-    map_pixel['pix_Dec'] = vec[1]
+    map_pixel['pixRA'] = vec[0]
+    map_pixel['pixDec'] = vec[1]
     map_pixel['weight'] = 1
 
     return map_pixel
