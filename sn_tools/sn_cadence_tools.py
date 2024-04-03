@@ -1766,10 +1766,10 @@ class Survey_time:
         rr.append('\hline')
 
         for vv in rtot:
-            # dbName = '_'.join(vv[0].split('_')[:-1])
-            # dbName = dbName.replace('_', '\_')
+            # dbNameb = '_'.join(vv[0].split('_')
+            dbNameb = vv[0].replace('_', '\_')
             rr.append('{} & {} & {} & {} & {} & {} \\\\'.format(
-                vv[0], vv[1], vv[2], vv[3], vv[4], vv[5]))
+                dbNameb, vv[1], vv[2], vv[3], vv[4], vv[5]))
 
         rr += get_end_table(tab='{table}')
 
