@@ -1651,6 +1651,7 @@ class Survey_time:
         for i, row in conf.iterrows():
             dfa = self.process_OS(row['dbName'])
             dfa['dbName'] = row['dbName']
+            dfa['dbNamePlot'] = row['dbNamePlot']
             df = pd.concat((df, dfa))
             # break
 
@@ -1734,7 +1735,8 @@ class Survey_time:
         for dbName in sel_y2['dbName'].unique():
             idxa = sel_y2['dbName'] == dbName
             sela = sel_y2[idxa]
-            r = [dbName]
+            dbNameb = sela['dbNamePlot'].values[0]
+            r = [dbNameb]
             for vv in ['COSMOS', 'ELAISS1']:
                 rr = self.get_vals(sela, vv)
                 r += rr
@@ -1764,10 +1766,10 @@ class Survey_time:
         rr.append('\hline')
 
         for vv in rtot:
-            dbName = '_'.join(vv[0].split('_')[:-1])
-            dbName = dbName.replace('_', '\_')
+            # dbName = '_'.join(vv[0].split('_')[:-1])
+            # dbName = dbName.replace('_', '\_')
             rr.append('{} & {} & {} & {} & {} & {} \\\\'.format(
-                dbName, vv[1], vv[2], vv[3], vv[4], vv[5]))
+                vv[0], vv[1], vv[2], vv[3], vv[4], vv[5]))
 
         rr += get_end_table(tab='{table}')
 
