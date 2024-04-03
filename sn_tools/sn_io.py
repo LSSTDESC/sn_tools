@@ -1103,3 +1103,87 @@ def load_SN(SNDir, SNFile):
     SN = loopStack([path], 'astropyTable')
 
     return SN
+
+
+def get_beg_table(tab='{table*}', fontsize='',
+                  caption='{test}',
+                  label='{tab:test}', tabcols='{l|c|c|c}'):
+    """
+    Function to get the first lines(decl) of latex table
+
+    Parameters
+    ----------
+    tab : str, optional
+     Table type. The default is '{table*}'.
+    caption : str, optional
+        Table caption. The default is '{test}'.
+    label : str, optional
+        Table label. The default is '{tab:test}'.
+    tabcols : str, optional
+        Table columns. The default is '{l|c|c|c}'.
+
+    Returns
+    -------
+    r : list(str)
+        List for latex decl of a Table.
+
+    """
+
+    r = ['\\begin'+tab+'[!htbp]']
+    if fontsize != '':
+        r += [fontsize]
+    r += ['\\begin{center}']
+    r += ['\caption{} \label{}'.format(caption, label)]
+    # r += ['\\begin{tabular}{l|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c}']
+    r += ['\\begin{tabular}'+tabcols]
+    r += ['\hline']
+    r += ['\hline']
+    r += [' & & & \\\\']
+    return r
+
+
+def get_end_table(tab='{table*}'):
+    """
+    Function to get latex last lines for table end of decl.
+
+    Parameters
+    ----------
+    tab : str, optional
+        Table type. The default is '{table*}'.
+
+    Returns
+    -------
+    r : list(str)
+        out data.
+
+    """
+
+    r = ['\hline']
+    r += ['\end{tabular}']
+    r += ['\end{center}']
+    r += ['\end'+tab]
+
+    return r
+
+
+def dumpIt(fName, lines):
+    """
+    Function to dump in a file
+
+    Parameters
+    ----------
+    fName : str
+        output file name.
+    lines : list(str)
+        Data to dump.
+
+    Returns
+    -------
+    None.
+
+    """
+
+    with open(fName, 'a') as f:
+        for line in lines:
+            f.write(line)
+            f.write('\n')
