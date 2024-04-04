@@ -1349,7 +1349,8 @@ class Survey_depth:
         df = self.process_OS_depths()
 
         # dump in file
-        self.print_latex_depth(df)
+        # self.print_latex_depth(df)
+        self.print_latex_depth_two(df)
 
     def process_OS_depths(self):
         """
@@ -1468,6 +1469,32 @@ class Survey_depth:
             dbNameb = sel['dbNamePlot'].unique()[0]
             self.print_latex_depth_os(sel, dbName, io, dbNameb)
 
+    def print_latex_depth_two(self, df):
+        """
+        Method to print results
+
+        Parameters
+        ----------
+        df : pandas df
+            Data to print.
+
+        Returns
+        -------
+        None.
+
+        """
+
+        dbNames = df['dbName'].unique()
+
+        for io, dbName in enumerate(dbNames):
+            idx = df['dbName'] == dbName
+            sel = df[idx]
+            dbNameb = sel['dbNamePlot'].unique()[0]
+            self.print_latex_depth_os_single(sel, dbName, io, dbNameb)
+            self.print_latex_depth_os_single(
+                sel, dbName, io, dbNameb, 'nv',
+                'total number of visits $N_v$ per band', varn='$N_v$')
+
     def print_latex_depth_os(self, df, dbName, io, dbNameb):
         """
         Method to print os results
@@ -1505,28 +1532,30 @@ class Survey_depth:
         caption = '{'+caption+'}'
         label = 'tab:total_depth_{}'.format(io)
         label = '{'+label+'}'
-        r = get_beg_table(fontsize='\\tiny', caption=caption, label=label)
+        r = get_beg_table(tab='{table}', tabcols='{l|c|c|c}',
+                          fontsize='\\tiny',
+                          caption=caption, label=label, center=True)
         rr = ' & '
         pp = 'Field & '
         seas_max = 10
         # for seas in df['season'].unique():
         for seas in [1]:
-            pp += 'season & $m_5$ &$N_v$'
+            pp += 'season & $m_5$ & $N_v$'
             bb = '/'.join(bands)
-            rr += ' & {} & {}'.format(bb, bb)
+            rr += ' & {}'.format(bb)
             rr += ' \\\\'
             pp += ' \\\\'
             """
-            if seas < seas_max:
-                rr += ' & '
-                pp += ' & '
-            else:
-                rr += ' \\\\'
-                pp += ' \\\\'
-            """
+           if seas < seas_max:
+               rr += ' & '
+               pp += ' & '
+           else:
+               rr += ' \\\\'
+               pp += ' \\\\'
+           """
             r += [pp]
             r += [rr]
-            r += [' & & & \\\\']
+            r += [' & & \\\\']
             r += ['\hline']
         for fi in fields:
             idx = df['note'] == fi
@@ -1539,8 +1568,107 @@ class Survey_depth:
                     tt = '{} & {}'.format(trans_ddf[fi], vv)
                 r += [tt]
             r += ['\hline']
-        r += get_end_table()
+        r += get_end_table(tab='{table}', center=True)
+        r.append('\\newpage')
+        r.append('\\vspace*{20cm}')
+        r.append('\\newpage')
+        """
+       r.append('\newpage')
+       r.append('\vspace*{20cm}')
+       r.append('\newpage')
+       """
+        # dump in file
+        """
+       for vv in r:
+           print(vv)
+       """
 
+        dumpIt(self.outName, r)
+
+    def print_latex_depth_os_single(self, df, dbName, io, dbNameb,
+                                    var='m5',
+                                    forcap='coadded \\fivesig~depth per band',
+                                    varn='$m_5$'):
+        """
+        Method to print os results
+
+        Parameters
+        ----------
+        df : pandas df
+            Data to print.
+        dbName : str
+            OS to process.
+        io : int
+            tag for label.
+        dbNameb : str
+            OS name to use for printing.
+
+        Returns
+        -------
+        None.
+
+        """
+
+        tta = ['DD:COSMOS', 'DD:ELAISS1', 'DD:XMM_LSS',
+               'DD:ECDFS', 'DD:EDFS_a', 'DD:EDFS_b']
+        ttb = ['\cosmos', '\elais', '\\xmm', '\cdfs', '\\adfa', '\\adfb']
+        trans_ddf = dict(zip(tta, ttb))
+
+        fields = df['note'].unique()
+
+        bands = list('ugrizy')
+        dbNameb = dbNameb.split('_')
+        dbNameb = '\_'.join(dbNameb)
+        # caption = '{} strategy: coadded \\fivesig~depth and total number of visits $N_v$ per band.'.format(
+        #    dbNameb)
+
+        caption = '{} strategy: {}.'.format(dbNameb, forcap)
+        caption = '{'+caption+'}'
+        label = 'tab:total_depth_{}_{}'.format(var, io)
+        label = '{'+label+'}'
+        r = get_beg_table(tab='{table}', tabcols='{l|c|c}',
+                          fontsize='\\tiny',
+                          caption=caption, label=label, center=True)
+        rr = ' & '
+        pp = 'Field & '
+        seas_max = 10
+        # for seas in df['season'].unique():
+        for seas in [1]:
+            pp += 'season & '+varn
+            bb = '/'.join(bands)
+            rr += ' & {}'.format(bb)
+            rr += ' \\\\'
+            pp += ' \\\\'
+            """
+            if seas < seas_max:
+                rr += ' & '
+                pp += ' & '
+            else:
+                rr += ' \\\\'
+                pp += ' \\\\'
+            """
+            r += [pp]
+            r += [rr]
+            r += [' & & \\\\']
+            r += ['\hline']
+        for fi in fields:
+            idx = df['note'] == fi
+            selb = df[idx]
+            ll = self.print_latex_depth_field_single(selb, var=var)
+            for io, vv in enumerate(ll):
+                if io != 5:
+                    tt = ' & {}'.format(vv)
+                else:
+                    tt = '{} & {}'.format(trans_ddf[fi], vv)
+                r += [tt]
+            r += ['\hline']
+        r += get_end_table(tab='{table}', center=True)
+        # r.append('\\newpage')
+        """
+        r.append('\newpage')
+        r.append('\vspace*{20cm}')
+        r.append('\newpage')
+        """
         # dump in file
         """
         for vv in r:
@@ -1570,6 +1698,8 @@ class Survey_depth:
         r = []
         seasons = range(1, 12, 1)
         seas_tt = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '2-10']
+        # seasons = range(1, 11, 1)
+        # seas_tt = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
         trans_seas = dict(zip(seasons, seas_tt))
 
         for seas in data['season'].unique():
@@ -1588,6 +1718,62 @@ class Survey_depth:
             nv_tot = '/'.join(nv)
 
             rr = '{} & {} & {}'.format(trans_seas[seas], m5_tot, nv_tot)
+
+            rr += '\\\\'
+            r.append(rr)
+            """
+            if seas != 10:
+                rr += ' & '
+            else:
+                rr += ' \\\\'
+            """
+        return r
+
+    def print_latex_depth_field_single(self, data, bands='ugrizy', var='m5'):
+        """
+        Method to print field results in latex mode
+
+        Parameters
+        ----------
+        data : pandas df
+            Data to print.
+        bands : str, optional
+            List of bands to consider. The default is 'ugrizy'.
+
+        Returns
+        -------
+        r : list(str)
+            Result to be printed.
+
+        """
+
+        r = []
+        seasons = range(1, 12, 1)
+        seas_tt = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '2-10']
+        # seasons = range(1, 11, 1)
+        # seas_tt = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
+        trans_seas = dict(zip(seasons, seas_tt))
+
+        for seas in data['season'].unique():
+            idx = data['season'] == seas
+            sel = data[idx]
+            m5 = []
+            nv = []
+            for b in list(bands):
+                idxb = sel['filter'] == b
+                selb = sel[idxb]
+                mm5 = selb['m5'].values[0]
+                nvv = selb['nvisits'].values[0]
+                m5.append('{}'.format(np.round(mm5, 1)))
+                nv.append('{}'.format(int(nvv)))
+            m5_tot = '/'.join(m5)
+            nv_tot = '/'.join(nv)
+
+            # rr = '{} & {} & {}'.format(trans_seas[seas], m5_tot, nv_tot)
+            gg = m5_tot
+            if var == 'nv':
+                gg = nv_tot
+            rr = '{} & {}'.format(trans_seas[seas], gg)
             rr += '\\\\'
             r.append(rr)
             """

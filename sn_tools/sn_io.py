@@ -1107,7 +1107,7 @@ def load_SN(SNDir, SNFile):
 
 def get_beg_table(tab='{table*}', fontsize='',
                   caption='{test}',
-                  label='{tab:test}', tabcols='{l|c|c|c}'):
+                  label='{tab:test}', tabcols='{l|c|c|c}', center=True):
     """
     Function to get the first lines(decl) of latex table
 
@@ -1121,6 +1121,8 @@ def get_beg_table(tab='{table*}', fontsize='',
         Table label. The default is '{tab:test}'.
     tabcols : str, optional
         Table columns. The default is '{l|c|c|c}'.
+    center : bool, optional
+        To center the table. The default is True.
 
     Returns
     -------
@@ -1129,27 +1131,33 @@ def get_beg_table(tab='{table*}', fontsize='',
 
     """
 
-    r = ['\\begin'+tab+'[!htbp]']
+    # r = ['\\begin'+tab+'[!htbp]']
+    r = ['\\begin'+tab+'[!tbp]']
     if fontsize != '':
         r += [fontsize]
-    r += ['\\begin{center}']
+    if center:
+        r += ['\\begin{center}']
     r += ['\caption{} \label{}'.format(caption, label)]
     # r += ['\\begin{tabular}{l|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c}']
     r += ['\\begin{tabular}'+tabcols]
     r += ['\hline']
     r += ['\hline']
-    r += [' & & & \\\\']
+    nv = len(tabcols.split('|'))
+    va = ' '.join(['&']*(nv-1))
+    r += [va+' \\\\']
     return r
 
 
-def get_end_table(tab='{table*}'):
+def get_end_table(tab='{table*}', center=True):
     """
     Function to get latex last lines for table end of decl.
 
     Parameters
     ----------
     tab : str, optional
-        Table type. The default is '{table*}'.
+        Table type. The default is '{table*}'.    
+    center : bool, optional
+        To center the table. The default is True.
 
     Returns
     -------
@@ -1160,7 +1168,8 @@ def get_end_table(tab='{table*}'):
 
     r = ['\hline']
     r += ['\end{tabular}']
-    r += ['\end{center}']
+    if center:
+        r += ['\end{center}']
     r += ['\end'+tab]
 
     return r
