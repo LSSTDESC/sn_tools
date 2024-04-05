@@ -1348,9 +1348,12 @@ class Survey_depth:
         # process the data
         df = self.process_OS_depths()
 
+        idx = df['note'].isin(['DD:COSMOS', 'DD:ECDFS'])
+        df = df[idx]
         # dump in file
+        self.print_latex_depth_one_table(df)
         # self.print_latex_depth(df)
-        self.print_latex_depth_two(df)
+        # self.print_latex_depth_two(df)
 
     def process_OS_depths(self):
         """
@@ -1469,6 +1472,80 @@ class Survey_depth:
             dbNameb = sel['dbNamePlot'].unique()[0]
             self.print_latex_depth_os(sel, dbName, io, dbNameb)
 
+    def print_latex_depth_one_table(self, df):
+        """
+        Method to print results
+
+        Parameters
+        ----------
+        df : pandas df
+            Data to print.
+
+        Returns
+        -------
+        None.
+
+        """
+        tta = ['DD:COSMOS', 'DD:ELAISS1', 'DD:XMM_LSS',
+               'DD:ECDFS', 'DD:EDFS_a', 'DD:EDFS_b']
+        ttb = ['\cosmos', '\elais', '\\xmm', '\cdfs', '\\adfa', '\\adfb']
+        fty = ['UDF', 'DF', 'UDF', 'DF', 'DF', 'DF']
+        trans_ddf = dict(zip(tta, ttb))
+        trans_ddfb = dict(zip(tta, fty))
+        dbNames = df['dbName'].unique()
+        bands = list('ugrizy')
+
+        caption = 'Coadded \\fivesig~depth and total number of visits $N_v$ per band.'
+
+        caption = '{'+caption+'}'
+        label = 'tab:depth'
+        label = '{'+label+'}'
+        r = get_beg_table(tab='{table*}', tabcols='{l|l|c|c|c}',
+                          fontsize='\\tiny',
+                          caption=caption, label=label, center=True)
+        rr = ' & & '
+        pp = 'Strategy & Field & '
+        pp += 'season & $m_5$ & $N_v$'
+        bb = '/'.join(bands)
+        rr += ' & {} & {}'.format(bb, bb)
+        rr += ' \\\\'
+        pp += ' \\\\'
+
+        r += [pp]
+        r += [rr]
+        r += [' & & & & \\\\']
+        r += ['\hline']
+        for io, dbName in enumerate(dbNames):
+            idx = df['dbName'] == dbName
+            sel = df[idx]
+            dbNameb = sel['dbNamePlot'].unique()[0]
+            dbNameb = dbNameb.replace('_', '\_')
+            fields = sel['note'].unique()
+            idb = 0
+            for ifi, field in enumerate(fields):
+                idxb = sel['note'] == field
+                selb = sel[idxb]
+                rb = self.print_latex_depth_field(selb)
+                vva = ' & {} & {}'.format(trans_ddfb[field], rb[0])
+                r += [vva]
+                vvb = ' & & {}'.format(rb[10])
+                if idb == 0:
+                    vvb = '{} {}'.format(dbNameb, vvb)
+                    idb = 1
+                r += [vvb]
+                if ifi == 1:
+                    r += ['\\hline']
+                else:
+                    r += ['\\cline{2-5}']
+            # r += ['\\hline']
+
+        print(r)
+        r += get_end_table(tab='{table*}', center=True)
+
+        # dump in file
+
+        dumpIt(self.outName, r)
+
     def print_latex_depth_two(self, df):
         """
         Method to print results
@@ -1519,7 +1596,9 @@ class Survey_depth:
         tta = ['DD:COSMOS', 'DD:ELAISS1', 'DD:XMM_LSS',
                'DD:ECDFS', 'DD:EDFS_a', 'DD:EDFS_b']
         ttb = ['\cosmos', '\elais', '\\xmm', '\cdfs', '\\adfa', '\\adfb']
+        fty = ['UDF', 'DF', 'UDF', 'DF', 'DF', 'DF']
         trans_ddf = dict(zip(tta, ttb))
+        trans_ddfb = dict(zip(tta, fty))
 
         fields = df['note'].unique()
 
@@ -1532,7 +1611,7 @@ class Survey_depth:
         caption = '{'+caption+'}'
         label = 'tab:total_depth_{}'.format(io)
         label = '{'+label+'}'
-        r = get_beg_table(tab='{table}', tabcols='{l|c|c|c}',
+        r = get_beg_table(tab='{table*}', tabcols='{l|c|c|c}',
                           fontsize='\\tiny',
                           caption=caption, label=label, center=True)
         rr = ' & '
@@ -1561,17 +1640,26 @@ class Survey_depth:
             idx = df['note'] == fi
             selb = df[idx]
             ll = self.print_latex_depth_field(selb)
+            """
             for io, vv in enumerate(ll):
                 if io != 5:
                     tt = ' & {}'.format(vv)
                 else:
                     tt = '{} & {}'.format(trans_ddf[fi], vv)
                 r += [tt]
+            """
+            for io, vv in enumerate(ll):
+                tt = ''
+                if io == 10:
+                    tt = ' & {}'.format(vv)
+                else:
+                    if io == 0:
+                        tt = '{} & {}'.format(trans_ddfb[fi], vv)
+                if tt != '':
+                    r += [tt]
             r += ['\hline']
-        r += get_end_table(tab='{table}', center=True)
-        r.append('\\newpage')
-        r.append('\\vspace*{20cm}')
-        r.append('\\newpage')
+        r += get_end_table(tab='{table*}', center=True)
+
         """
        r.append('\newpage')
        r.append('\vspace*{20cm}')
@@ -1612,7 +1700,9 @@ class Survey_depth:
         tta = ['DD:COSMOS', 'DD:ELAISS1', 'DD:XMM_LSS',
                'DD:ECDFS', 'DD:EDFS_a', 'DD:EDFS_b']
         ttb = ['\cosmos', '\elais', '\\xmm', '\cdfs', '\\adfa', '\\adfb']
+        fty = ['UDF', 'DF', 'UDF', 'DF', 'DF', 'DF']
         trans_ddf = dict(zip(tta, ttb))
+        trans_ddfb = dict(zip(tta, fty))
 
         fields = df['note'].unique()
 
@@ -1655,11 +1745,20 @@ class Survey_depth:
             idx = df['note'] == fi
             selb = df[idx]
             ll = self.print_latex_depth_field_single(selb, var=var)
+            """
             for io, vv in enumerate(ll):
                 if io != 5:
                     tt = ' & {}'.format(vv)
                 else:
                     tt = '{} & {}'.format(trans_ddf[fi], vv)
+                r += [tt]
+            """
+            for io, vv in enumerate(ll):
+                if io == 11:
+                    tt = ' & {}'.format(vv)
+                else:
+                    if io == 0:
+                        tt = '{} & {}'.format(trans_ddf[fi], vv)
                 r += [tt]
             r += ['\hline']
         r += get_end_table(tab='{table}', center=True)
@@ -1936,6 +2035,74 @@ class Survey_time:
         # print(rtot)
 
         rr = []
+        caption = '{Exposure times (in hours) for seasons 2-10.}'
+        # caption += ' $\Phi_{Moon}$ is the Moon phase.}'
+        rr = get_beg_table(tab='{table}',
+                           caption=caption,
+                           label='{tab:exptime_1}',
+                           tabcols='{l|c|c|c}')
+        rr.append(' &  \multicolumn{2}{|c|}{nightly} & \\\\')
+        rr.append('Strategy & UDF & DF & survey \\\\')
+        # rr.append(' & $\Phi_{Moon}\leq 20\\%$ & $\Phi_{Moon} > 20\\%$ \
+        #     & $\Phi_{Moon}\leq 20\\%$ & $\Phi_{Moon} > 20\\% $& \\\\')
+        # rr.append(' & $\Phi_{Moon}$ & $\Phi_{Moon}$ \
+        #      & $\Phi_{Moon}$ & $\Phi_{Moon}$& \\\\')
+        # rr.append(' & $\leq 20\\%$ & $> 20\\%$ \
+        #      & $\leq 20\\%$ & $> 20\\% $& \\\\')
+        rr.append('\hline')
+
+        for vv in rtot:
+            # dbNameb = '_'.join(vv[0].split('_')
+            dbNameb = vv[0].replace('_', '\_')
+            rr.append('{} & {} & {} & {} \\\\'.format(
+                dbNameb, vv[2], vv[4], vv[5]))
+        rr.append('\\hline')
+        rr += get_end_table(tab='{table}')
+
+        # dump data
+        dumpIt(self.outName, rr)
+
+    def print_survey_time_orig(self, df):
+        """
+        Method to print(dump) results
+
+        Parameters
+        ----------
+        df : pandas df
+            Data to dump.
+
+        Returns
+        -------
+        None.
+
+        """
+
+        # udf
+        idx = df['season'] == 2
+        sel_y2 = df[idx]
+
+        idd = df['season'] == 10
+        sel_all = df[idd]
+
+        rtot = []
+        for dbName in sel_y2['dbName'].unique():
+            idxa = sel_y2['dbName'] == dbName
+            sela = sel_y2[idxa]
+            dbNameb = sela['dbNamePlot'].values[0]
+            r = [dbNameb]
+            for vv in ['COSMOS', 'ELAISS1']:
+                rr = self.get_vals(sela, vv)
+                r += rr
+            # rtot.append(r)
+            idf = sel_all['dbName'] == dbName
+            r_all = sel_all[idf]['expTime_sum'].mean()
+            r_all = np.round(r_all/3600., 1)
+            r.append(r_all)
+            rtot.append(r)
+            # break
+        # print(rtot)
+
+        rr = []
         caption = '{Exposure times (in hours) for seasons 2-10.'
         caption += ' $\Phi_{Moon}$ is the Moon phase.}'
         rr = get_beg_table(tab='{table}',
@@ -1946,9 +2113,12 @@ class Survey_time:
         rr.append(
             'Strategy & \multicolumn{2}{|c|}{UDF} & \
                 \multicolumn{2}{|c|}{DF} & survey \\\\')
-        rr.append(' & $\Phi_{Moon}\leq 20\\%$ & $\Phi_{Moon} > 20\\%$ \
-              & $\Phi_{Moon}\leq 20\\%$ & $\Phi_{Moon} > 20\\% $& \\\\')
-
+        # rr.append(' & $\Phi_{Moon}\leq 20\\%$ & $\Phi_{Moon} > 20\\%$ \
+        #     & $\Phi_{Moon}\leq 20\\%$ & $\Phi_{Moon} > 20\\% $& \\\\')
+        rr.append(' & $\Phi_{Moon}$ & $\Phi_{Moon}$ \
+              & $\Phi_{Moon}$ & $\Phi_{Moon}$& \\\\')
+        rr.append(' & $\leq 20\\%$ & $> 20\\%$ \
+              & $\leq 20\\%$ & $> 20\\% $& \\\\')
         rr.append('\hline')
 
         for vv in rtot:

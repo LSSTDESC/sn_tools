@@ -1132,7 +1132,7 @@ def get_beg_table(tab='{table*}', fontsize='',
     """
 
     # r = ['\\begin'+tab+'[!htbp]']
-    r = ['\\begin'+tab+'[!tbp]']
+    r = ['\\begin'+tab+'[!htbp]']
     if fontsize != '':
         r += [fontsize]
     if center:
