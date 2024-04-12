@@ -1032,7 +1032,7 @@ class Read_LightCurve:
     def get_all_data(self):
 
         paths = self.get_path()
-        paths = list(filter(lambda s: not ('meta_columns' in s), paths))
+        paths = list(filter(lambda s: not ('table' in s), paths))
         metaTot = Table()
         for pp in paths:
             metaTable = self.get_table(path=pp)
