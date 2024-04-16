@@ -11,7 +11,7 @@ from scipy.interpolate import interp1d
 import numpy.lib.recfunctions as rf
 import sqlite3
 import logging
-from collections import MutableMapping
+from collections.abc import MutableMapping
 
 
 def append(metricTot, sel):
