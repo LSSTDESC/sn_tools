@@ -921,7 +921,7 @@ class SimuParameters:
 
         """
 
-        assert('z' in pars.columns)
+        assert ('z' in pars.columns)
 
         daymaxtype = self.params['daymax']['type']
         daymaxstep = self.params['daymax']['step']
@@ -973,7 +973,7 @@ class SimuParameters:
 
         """
 
-        assert((pname == 'x1') or (pname == 'color'))
+        assert ((pname == 'x1') or (pname == 'color'))
 
         ptype = self.params[pname]['type']
         pmin = self.params[pname]['min']
@@ -2578,3 +2578,40 @@ def get_colName(obs, what=['fieldRA', 'RA']):
 
     return list(filter_object)
     """
+
+
+def n_z(data, var='z', bins=np.arange(0.005, 0.11, 0.01),
+        norm_factor=1, varname='nsn'):
+    """
+    Function to estimate n vs var bins.
+
+    Parameters
+    ----------
+    data : pandas df
+        Data to process.
+    var : str, optional
+        Variable of interest. The default is 'z'.
+    bins : array, optional
+        Bins. The default is np.arange(0.005, 0.11, 0.01).
+    norm_factor : float, optional
+        Normalization factor. The default is 1.
+    varname : str, optional
+        output varnam for n. The default is 'nsn'.
+
+    Returns
+    -------
+    df : pandas df
+        Output data.
+
+    """
+
+    group = data.groupby(pd.cut(data[var], bins))
+
+    _centers = (bins[:-1] + bins[1:])/2
+    _values = group[var].size()/norm_factor
+
+    df = pd.DataFrame(_centers, columns=[var])
+
+    df[varname] = list(_values)
+
+    return df
