@@ -90,7 +90,7 @@ class Process_deprecated:
         self.radius = radius
         self.healpixIDs = healpixIDs
 
-        assert(self.RAmin <= self.RAmax)
+        assert (self.RAmin <= self.RAmax)
 
         # loading observations
 
@@ -479,7 +479,7 @@ class FP2pixels:
         self.telrot = telrot
         self.display = display
 
-        assert(self.RAmin <= self.RAmax)
+        assert (self.RAmin <= self.RAmax)
 
         observations = get_obs(fieldType, dbDir, dbName, dbExtens, lookup_ddf)
 
@@ -1038,7 +1038,6 @@ class Process(FP2pixels):
             else:
                 pixels = super(Process, self).__call__(observations)
                 pixels['fieldName'] = field
-        # print('finished with pixels')
 
         # self.display = True
         if self.display:
@@ -1230,7 +1229,7 @@ class Process_old:
         self.telrot = telrot
         self.display = display
 
-        assert(self.RAmin <= self.RAmax)
+        assert (self.RAmin <= self.RAmax)
 
         observations = get_obs(fieldType, dbDir,
                                dbName, dbExtens)
