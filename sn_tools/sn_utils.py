@@ -628,7 +628,9 @@ class SimuParameters:
 
     def __init__(self, sn_parameters, cosmo_parameters,
                  mjdCol='mjd', seasonCol='season', filterCol='filter',
-                 area=9.6, web_path=''):
+                 area=9.6, web_path='',
+                 weights=dict(zip([0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1., 1.1],
+                                  [1000, 1000, 250, 100, 70]+[30]*2+[10]*5))):
 
         self.params = sn_parameters
 
@@ -661,6 +663,9 @@ class SimuParameters:
                                Om0=cosmo_parameters['Om'],
                                min_rf_phase=self.params['minRFphaseQual'],
                                max_rf_phase=self.params['maxRFphaseQual'])
+        from scipy.interpolate import interp1d
+        self.weights = interp1d(list(weights.keys()), list(weights.values()),
+                                bounds_error=False, fill_value=0.)
 
     def getDist(self):
         """ get (x1,color) distributions
@@ -873,34 +878,92 @@ class SimuParameters:
                 zmin=zmin_simu, zmax=zmax_simu,
                 duration=duration,
                 survey_area=self.area,
-                account_for_edges=True, dz=1.e-5)
+                account_for_edges=False, dz=1.e-5)
+
             # get number of supernovae
             N_SN = np.cumsum(nsn)[-1]
             N_SN *= NSN_factor
-            N_SN = int(N_SN)
-            weight_z = np.cumsum(nsn)/np.sum(np.cumsum(nsn))
+            N_SN = np.rint(N_SN)
+            #weight_z = np.cumsum(nsn)/np.sum(np.cumsum(nsn))
             if NSN_absolute > 0:
                 N_SN = NSN_absolute
                 weight_z = [1./len(zz)]*len(zz)
+                zvals = np.random.choice(zz, N_SN, p=weight_z)
+                df = pd.DataFrame(zvals, columns=['z'])
+                df['weight'] = 1.
+            else:
+                if N_SN < 1:
+                    return None
+                df = self.get_nsn_bin(nsn, zz,
+                                      zmin=zmin,
+                                      zmax=zmax,
+                                      NSN_factor=NSN_factor)
+                if len(df) == 0:
+                    return None
             # print('nsn from rate', zmin, zmax,
             #      duration, self.area, self.min_rf_phase_qual,
             # self.max_rf_phase_qual, N_SN, NSN_factor)
 
-            if N_SN < 0.5:
-                return None
+        return df
 
+    def get_nsn_bin(self, nsn, zz, zmin=0.01, zmax=0.8, NSN_factor=1, deltaz=0.02):
+        """
+        Method to estimate and generate z distrib per z-bin 
+
+        Parameters
+        ----------
+        nsn : array
+            nsn diff values.
+        zz : array
+            z diff values.
+        zmin: float, optional
+           zmin value for the survey. The default is 0.01
+        zmax : float, optional
+            zmax value for the survey. The default is 0.8.
+        NSN_factor : int, optional
+            nsn factor for production. The default is 1.
+        deltaz : float, optional
+            delta-z bin width. The default is 0.1.
+
+        Returns
+        -------
+        df : pandas df
+            z values and weights.
+
+        """
+
+        tt = np.cumsum(nsn)
+        df = pd.DataFrame()
+
+        if np.round(zmin, 2) == 0.01:
+            zmin = 0.
+        for ib, zbin in enumerate(np.arange(zmin, zmax, deltaz)):
+            zzmin = zbin
+            zzmax = zzmin+deltaz
+            idx = zz >= zzmin
+            idx &= zz < zzmax
+            vv = tt[idx]
+            N_SN_exp = (vv[-1]-vv[0])
+            NSN_factor = self.weights(zzmax)
+            N_SN = int(np.rint(N_SN_exp*NSN_factor))
             if N_SN < 1:
-                N_SN = 1
-                # weight_z = 1
+                continue
+            zzrand = zz[idx]
+            weight_z = np.cumsum(vv)/np.sum(np.cumsum(vv))
+            zvals = np.random.choice(zzrand, N_SN, p=weight_z).tolist()
+            dfa = pd.DataFrame(zvals, columns=['z'])
+            dfa['weight'] = 1./NSN_factor
+            df = pd.concat((df, dfa))
 
-            zvals = np.random.choice(zz, N_SN, p=weight_z)
+            #print('ttt', zzmin, zzmax, NSN_factor, len(dfa), N_SN_exp)
 
-            # apply z-selection
-            idx = zvals >= zmin
-            idx &= zvals <= zmax
-            zvals = zvals[idx]
-
-        return pd.DataFrame(zvals, columns=['z'])
+        """
+        import matplotlib.pyplot as plt
+        plt.hist(df['z'], histtype='step', bins=np.arange(
+            0.01, zmax+0.05, 0.05))
+        plt.show()
+        """
+        return df
 
     def daymaxdist(self, pars, daymin, daymax):
         """
