@@ -878,6 +878,86 @@ class SimuParameters:
                 zmin=zmin_simu, zmax=zmax_simu,
                 duration=duration,
                 survey_area=self.area,
+                account_for_edges=True, dz=1.e-5)
+            # get number of supernovae
+            N_SN = np.cumsum(nsn)[-1]
+            N_SN *= NSN_factor
+            N_SN = int(N_SN)
+            weight_z = np.cumsum(nsn)/np.sum(np.cumsum(nsn))
+            if NSN_absolute > 0:
+                N_SN = NSN_absolute
+                weight_z = [1./len(zz)]*len(zz)
+            # print('nsn from rate', zmin, zmax,
+            #      duration, self.area, self.min_rf_phase_qual,
+            # self.max_rf_phase_qual, N_SN, NSN_factor)
+
+            if N_SN < 0.5:
+                return None
+
+            if N_SN < 1:
+                N_SN = 1
+                # weight_z = 1
+
+            zvals = np.random.choice(zz, N_SN, p=weight_z)
+
+            # apply z-selection
+            idx = zvals >= zmin
+            idx &= zvals <= zmax
+            zvals = zvals[idx]
+
+        return pd.DataFrame(zvals, columns=['z'])
+
+    def zdist_new(self, duration):
+        """
+        Method to estimate the redshift distribution
+
+        Parameters
+        ---------------
+        duration: float
+          duration of the survey (season length)
+
+        Returns
+        -----------
+        pandas df with z distribution
+
+        """
+        ztype = self.params['z']['type']
+        zmin_simu = self.params['z']['minsimu']
+        zmax_simu = self.params['z']['maxsimu']
+        zmin = self.params['z']['min']
+        zmax = self.params['z']['max']
+
+        if zmin < zmin_simu:
+            print('pb here zmin and zmin_simu')
+
+        if zmax > zmax_simu:
+            print('pb here zmax and zmax_simu')
+
+        zstep = self.params['z']['step']
+        NSN_factor = self.params['NSNfactor']
+        NSN_absolute = self.params['NSNabsolute']
+
+        if ztype == 'unique':
+            zvals = [zmin]*NSN_absolute
+
+        if ztype == 'uniform':
+            zvals = np.arange(zmin, zmax+zstep, zstep)
+            if zvals[0] < 1.e-6:
+                zvals[0] = 0.01
+            zvals = zvals.tolist()
+            zvals *= NSN_absolute
+
+        if ztype == 'random':
+            # get sn rate for this z range
+
+            if zmin < 1.e-6:
+                zmin = 0.01
+
+            # print(zmin, zmax, duration, self.area)
+            zz, rate, err_rate, nsn, err_nsn, age_univ = self.sn_rate(
+                zmin=zmin_simu, zmax=zmax_simu,
+                duration=duration,
+                survey_area=self.area,
                 account_for_edges=False, dz=1.e-5)
 
             # get number of supernovae
