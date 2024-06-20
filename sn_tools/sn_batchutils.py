@@ -49,6 +49,7 @@ class BatchIt:
         self.dict_batch['--time'] = time
         self.dict_batch['--mem'] = mem
         self.dict_batch['--cpus-per-task'] = n
+        self.dict_batch['--constraint'] = "el7|el9"
         self.options.append('--profile=task')
         self.options.append('--acctg-freq=task=15')
         self.options.append('--partition=lsst,htc')
