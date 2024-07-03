@@ -16,8 +16,8 @@ from shapely import affinity
 import os
 import glob
 import healpy as hp
-#import ffmpeg
-#import sys
+# import ffmpeg
+# import sys
 # matplotlib.use('agg')
 
 
@@ -385,13 +385,13 @@ class CadenceMovie:
             writer_type = 'ffmpeg'
             extension = 'mp4'
             """
-            #FFMpegWriter = manimation.writers['ffmpeg']
+            # FFMpegWriter = manimation.writers['ffmpeg']
             Writer = manimation.writers[writer_type]
             metadata = dict(title=title, artist='Matplotlib',
                             comment=title)
-            #writer = FFMpegWriter(fps=fps, metadata=metadata, bitrate=6000)
+            # writer = FFMpegWriter(fps=fps, metadata=metadata, bitrate=6000)
             writer = Writer(fps=fps, metadata=metadata, bitrate=6000)
-            #writer = anim.FFMpegWriter(fps=30, codec='hevc')
+            # writer = anim.FFMpegWriter(fps=30, codec='hevc')
             Name_mp4 = '{}.{}'.format(title, extension)
             print('name for saving', Name_mp4)
             with writer.saving(self.fig, Name_mp4, 250):
@@ -804,7 +804,7 @@ class MoviePixels:
 
         r = []
         # select data that night
-        #idx = data['night']==night
+        # idx = data['night']==night
 
         # use pandas df to ease estimation
         pix = pd.DataFrame(np.copy(data))
@@ -882,10 +882,10 @@ class MoviePixels:
             io = val['night_last'] > -1
             val.loc[io, 'deltaT'] = night-val.loc[io, 'night_last']
 
-        #fig, ax =plt.subplots(nrows=2,ncols=2,figsize=(15,12))
+        # fig, ax =plt.subplots(nrows=2,ncols=2,figsize=(15,12))
         fig = plt.figure(figsize=(15, 12))
         fig.subplots_adjust(top=0.99)
-        #fig.suptitle('{} - night {}'.format(self.dbName,int(night)))
+        # fig.suptitle('{} - night {}'.format(self.dbName,int(night)))
 
         """
         ax_a = fig.add_axes([0.4,0.25,0.5,0.5])
@@ -908,12 +908,12 @@ class MoviePixels:
         ax_c_2 = fig.add_axes([0.75, 0.80, 0.2, 0.2])
 
         # Plot: delta_T distribution
-        #axa = ax[0,1]
+        # axa = ax[0,1]
         self.plotHist(ax_d, pixels, ['gri', 'yz', 'all'])
         self.plotHist(ax_d_1, pixels, ['g', 'r', 'i'])
 
         # Plot: median delta_T vs night
-        #axa = ax[1,0]
+        # axa = ax[1,0]
         legy = 'Median $\Delta$T [$\Delta$T$\leq${} days]'.format(
             int(self.deltaT_cut))
         self.plotStat_night(ax_c, stat, 'deltaT_median',
@@ -929,7 +929,7 @@ class MoviePixels:
         self.plotStat_night(ax_b_1, stat, 'Npixels_observed',
                             legy, nopointings, ['g', 'r', 'i'], True)
         # print(pixels)
-        #idtest = pixels['healpixID'].isin([39143,39149,39154])
+        # idtest = pixels['healpixID'].isin([39143,39149,39154])
         # print('test',night,pixels[idtest])
 
         # plot obs area per night
@@ -940,7 +940,7 @@ class MoviePixels:
                             legy, nopointings, ['g', 'r', 'i'])
 
         # Plot: Mollview of deltaT for this night
-        #axa = ax[0,0]
+        # axa = ax[0,0]
         axa = ax_a
         plt.sca(axa)
 
@@ -976,7 +976,7 @@ class MoviePixels:
         xmax = np.max([np.max(pixels['deltaT']), 1])
 
         norm = plt.cm.colors.Normalize(xmin, xmax)
-        #cmap = plt.get_cmap('jet', int(xmax))
+        # cmap = plt.get_cmap('jet', int(xmax))
         n = int(xmax)+1
         n = 9
         from_list = matplotlib.colors.LinearSegmentedColormap.from_list
@@ -987,7 +987,7 @@ class MoviePixels:
         hpxmap = np.full(hpxmap.shape, -2)
         hpxmap[pixels['healpixID']] = pixels['deltaT'].astype(int)
 
-        #print('hello ',xmin,xmax)
+        # print('hello ',xmin,xmax)
 
         dd = '$\Delta$T = current night-last obs night (gri) [days]'
         hp.mollview(hpxmap, nest=True, cmap=cmap,
@@ -1042,7 +1042,7 @@ class MoviePixels:
         axa.set_ylabel('Number of entries', fontsize=12)
         axa.tick_params(axis='x', labelsize=12)
         axa.tick_params(axis='y', labelsize=12)
-        #axa.set_ylabel('Number of entries',rotation=270)
+        # axa.set_ylabel('Number of entries',rotation=270)
         # axa.yaxis.set_label_position("right")
         # axa.yaxis.tick_right()
 
@@ -1088,7 +1088,7 @@ class MoviePixels:
                 axa.plot([vv, vv], [ymin, ymax],
                          color='r', linestyle=(0, (1, 10)))
 
-        #axa.legend(loc='lower center', bbox_to_anchor=(0., -0.3),ncol=3,fontsize=10,frameon=False)
+        # axa.legend(loc='lower center', bbox_to_anchor=(0., -0.3),ncol=3,fontsize=10,frameon=False)
         if draw_legend:
             axa.legend(bbox_to_anchor=(-0.3, 0.7),
                        ncol=1, fontsize=12, frameon=False)
@@ -1100,7 +1100,7 @@ class MoviePixels:
         Method to make a movie from png files
         """
         dirFigs = self.plotDir
-        #ffmpeg_cmd = '../../ffmpeg/ffmpeg-4.3.1-i686-static/ffmpeg'
+        # ffmpeg_cmd = '../../ffmpeg/ffmpeg-4.3.1-i686-static/ffmpeg'
 
         cmd = '{} -r 2 -f image2 -s 1920x1080 -i {}/{}_%03d.jpg -vcodec libx264 -crf 25  -pix_fmt yuv420p {}/{}.mp4 -y'.format(
             self.ffmpeg_cmd, self.plotDir, self.dbName, self.movieDir, self.dbName)
@@ -1168,7 +1168,7 @@ def plot_pixels(data, rot=(0., 0., 0.)):
     """
 
     npixels = len(data)
-    hpxmap = np.zeros(npixels, dtype=np.float)
+    hpxmap = np.zeros(npixels, dtype=float)
     hpxmap = np.full(hpxmap.shape, 0.)
     hpxmap[data['healpixID']] += data['weight']
 
