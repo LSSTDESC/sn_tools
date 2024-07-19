@@ -958,13 +958,13 @@ class SimuParameters:
                 zmin=zmin_simu, zmax=zmax_simu,
                 duration=duration,
                 survey_area=self.area,
-                account_for_edges=False, dz=1.e-5)
+                account_for_edges=True, dz=1.e-5)
 
             # get number of supernovae
             N_SN = np.cumsum(nsn)[-1]
             N_SN *= NSN_factor
             N_SN = np.rint(N_SN)
-            #weight_z = np.cumsum(nsn)/np.sum(np.cumsum(nsn))
+            # weight_z = np.cumsum(nsn)/np.sum(np.cumsum(nsn))
             if NSN_absolute > 0:
                 N_SN = NSN_absolute
                 weight_z = [1./len(zz)]*len(zz)
@@ -1035,7 +1035,7 @@ class SimuParameters:
             dfa['weight'] = 1./NSN_factor
             df = pd.concat((df, dfa))
 
-            #print('ttt', zzmin, zzmax, NSN_factor, len(dfa), N_SN_exp)
+            # print('ttt', zzmin, zzmax, NSN_factor, len(dfa), N_SN_exp)
 
         """
         import matplotlib.pyplot as plt
