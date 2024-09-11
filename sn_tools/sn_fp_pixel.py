@@ -8,6 +8,7 @@ Created on Wed Sep 11 13:25:51 2024
 import numpy as np
 import pandas as pd
 from sn_tools.sn_obs import proj_gnomonic_plane
+import healpy as hp
 
 
 class FocalPlane:
@@ -346,7 +347,6 @@ class FocalPlane:
         # make super df
 
         df_super = self.fp.merge(df_pix, how='cross')
-        print(df_super)
         # select pixels inside FP
         idx = df_super['xpixel'] >= df_super['xmin']
         idx &= df_super['xpixel'] <= df_super['xmax']
@@ -354,7 +354,7 @@ class FocalPlane:
         idx &= df_super['ypixel'] <= df_super['ymax']
 
         res = pd.DataFrame(df_super[idx])
-
+        res['healpixID'] = res['healpixID'].astype(int)
         # delete df_super
         return res[self.ccols]
 
