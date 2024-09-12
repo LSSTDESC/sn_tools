@@ -2135,7 +2135,7 @@ class ProcessPixels:
             # print(vv, len(dataPixels))
             if len(dataPixels) < 11:
                 continue
-            #print('pixel', vv)
+            # print('pixel', vv)
             # print('got datapixels', time.time()-time_ref, selpix)
             # dataPixels = data.iloc[selpix['index'].tolist()].copy()
             """
@@ -2307,7 +2307,7 @@ class ProcessPixels:
             self.resfi[metric.name] = pd.DataFrame()
 
 
-class ProcessPixels_new:
+class ProcessPixels_new_deprecated:
     def __init__(self, metricList, ipoint, outDir='', dbName='', RACol='fieldRA', DecCol='fieldDec', rotTelCol='rotTelPos', project_FP='gnomonix', VRO_FP='circular', telrot=0, FoV=9.62, saveData=False, display=False):
         """
         class to process metrics on a set of data corresponding to pixels
@@ -3568,6 +3568,235 @@ class GetOverlap:
         return resrec
 
 
+class ProcessPixels_metric:
+    def __init__(self, metricList, ipoint, outDir='', dbName='',
+                 RACol='fieldRA', DecCol='fieldDec', saveData=False):
+        """
+        class to process metrics on a set of data corresponding to pixels
+
+        Parameters
+        --------------
+        metricList: list(metrics)
+          list of sn_metrics to process
+        ipoint: int
+         internal parameter
+        outDir: str, opt
+          output directory (default: '')
+        dbName: str,
+          observing strategy name (default: '')
+        RACol: str, opt
+          RA name (default: ='fieldRA')
+       DecCol: str, opt
+          Dec name (default: ='fieldDec')
+       saveData: bool,opt
+         to save the data (or not) (default: False)
+
+        """
+
+        self.metricList = metricList
+        self.RACol = RACol
+        self.DecCol = DecCol
+        self.saveData = saveData
+        self.outDir = outDir
+        self.dbName = dbName
+        self.num = ipoint
+
+        self.ipix = -1  # counter to estimate when to dump
+        self.isave = -1  # counter to estimate how many dumps
+
+    def clean(self):
+        """
+        Method to clean potential existing output files
+
+        """
+        for key, vals in self.resfi.items():
+            outName = '{}/{}_{}_{}.hdf5'.format(self.outDir,
+                                                self.dbName, key, self.num)
+            if os.path.exists(outName):
+                print('removing', outName)
+                os.system('rm {}'.format(outName))
+
+    def __call__(self, pixels_obs, observations, ip):
+        """
+        Main processing here
+
+        Parameters
+        --------------
+        pixels: pandas df
+          containing list of pixels (healpixID, pixRA, pixDec) with 
+          corresponding observations (self.RACol, self.DecCol)
+        observations: array
+           array of observations (from the scheduler)
+        ip: int,
+          internal parameter
+
+
+        """
+        # metric results are stored in a dict
+        self.resfi = {}
+        for metric in self.metricList:
+            self.resfi[metric.name] = pd.DataFrame()
+
+        # data will be save so clean the output directory first
+
+        if self.saveData:
+            self.clean()
+
+        data = pd.DataFrame(np.copy(observations))
+
+        # run the metrics on those pixels
+        self.ipix += 1
+
+        self.runMetrics(data)
+        # print('pixel processed', ipix, time.time()-time_ref)
+
+        if self.saveData and self.ipix >= 20:
+            # print('dumping intermed')
+            self.isave += 1
+            self.dump(ip, self.isave)
+            self.ipix = -1
+
+    def finish(self):
+        """
+        Method to save metadata for simulation
+
+
+        """
+        print('finishing', self.ipix, self.saveData)
+        if self.ipix >= 0 and self.saveData:
+            self.isave += 1
+            self.dump(self.ip, self.isave)
+            self.ipix = -1
+
+        for metric in self.metricList:
+            if metric.name == 'simulation':
+                metric.finish()
+            if metric.name == 'sim_info_fit':
+                metric.finish()
+
+    def getData(self, data, selpix):
+        """
+        Method to select data from a list
+
+        Parameters
+        ---------------
+        data: pandas df
+          observations to select; Should contain at least self.RACol and self.DecCol cols
+        selpix: pandas df
+          data used for selection. Should contain at least self.RACol and self.DecCol cols
+
+        Returns
+        ----------
+        dataPixel: pandas df of selected observations
+
+        """
+        # idfb = [((data[self.RACol] - lat)**2 + (data[self.DecCol] - lon)**2).idxmin() for index,lat, lon in selpix[[self.RACol,self.DecCol]].itertuples()]
+        dataPixel = pd.DataFrame()
+        dataset = pd.DataFrame(data)
+
+        """
+        dataset = dataset.round({self.RACol: 4, self.DecCol: 4})
+        ido = dataset[self.RACol].isin(selpix[self.RACol])
+        ido &= dataset[self.DecCol].isin(selpix[self.DecCol])
+        """
+
+        obsIds = self.getList(selpix)
+        # ido = dataset['observationId'].isin(selpix['observationId'])
+        ido = dataset['observationId'].isin(obsIds)
+
+        datasel = dataset[ido]
+
+        return datasel
+
+    @staticmethod
+    def getList(selpix, colName='observationIds'):
+        """
+        Transform columns of strs to list(int)
+
+        Parameters
+        ---------------
+        selpix: pandas df
+          data to process
+        colName: str, opt
+          name of the column to consider (default: observationIds)
+
+        Returns
+        -----------
+        List of values corresponding to colName (int)
+
+        """
+        obsIds = ''
+        for i, row in selpix.iterrows():
+            obsIds += '{},'.format(row[colName])
+
+        obsIds = list(filter(None, obsIds.split(',')))
+        obsIds = list(map(int, obsIds))
+
+        return obsIds
+
+    def runMetrics(self, dataPixel):
+        """
+        Method to run the metrics on the data
+
+        Parameters
+        --------------
+        dataPixel: array
+          set of data used as input to the metric
+
+        """
+
+        resdict = {}
+        # run the metrics on these data
+        if len(dataPixel) <= 5:
+            return
+        for metric in self.metricList:
+            """
+            resdict[metric.name] = metric.run(
+                season(dataPixel.to_records(index=False)), imulti=self.num)
+            """
+            resdict[metric.name] = metric.run(
+                dataPixel.to_records(index=False), imulti=self.num)
+            # print('running',len(resdict[metric.name]))
+
+        # concatenate the results
+        """
+        for key in self.resfi.keys():
+            print(key, type(resdict[key]))
+            if resdict[key] is not None:
+                self.resfi[key] = pd.concat((self.resfi[key], resdict[key]))
+        """
+
+    def dump(self, ipoint, isave):
+        """
+        Method to dump results in hdf5 file
+
+        Parameters
+        --------------
+        ipoint: int
+         internal parameter
+        isave: int
+          number of dumps for this file
+
+        """
+
+        for key, vals in self.resfi.items():
+            outName = '{}/{}_{}_{}.hdf5'.format(self.outDir,
+                                                self.dbName, key, self.num)
+            # print('dumping in dump', outName)
+            if vals is not None and not vals.empty:
+                # transform to astropy table to dump in hdf5 file
+                seas = '_'.join(map(str, np.unique(vals['season']).tolist()))
+                kkey = '{}'.format(int(vals['healpixID'].mean()))
+                tab = Table.from_pandas(vals)
+                keyhdf = 'metric_{}_{}_{}_{}_{}'.format(self.num, ipoint,
+                                                        isave, seas, kkey)
+                tab.write(outName, keyhdf, append=True, compression=True)
+
+        # reset the metric after dumping
+        for metric in self.metricList:
+            self.resfi[metric.name] = pd.DataFrame()
+
+
 class GetShape:
     """
     This class is deprecated
@@ -4095,6 +4324,7 @@ def ebv_pixels(healpix):
     ebvofMW = sfd(coords)
 
     res = pd.DataFrame(healpix[:, 0], columns=['healpixID'])
+    res['healpixID'] = res['healpixID'].astype(int)
     res['ebvofMW'] = ebvofMW
 
     return res

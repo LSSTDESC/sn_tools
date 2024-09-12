@@ -447,7 +447,8 @@ def get_window(data, RACol='fieldRA', DecCol='fieldDec',
     return RA_min, RA_max, Dec_min, Dec_max
 
 
-def get_xy_pixels(pointings, healpixID, pixRA, pixDec, nside=64):
+def get_xy_pixels(pointings, healpixID, pixRA, pixDec, nside=64,
+                  RACol='fieldRA', DecCol='fieldDec'):
     """
     Grab gnomonic projection of pixels around(RA,Dec)
 
@@ -459,6 +460,10 @@ def get_xy_pixels(pointings, healpixID, pixRA, pixDec, nside=64):
         Dec value.
     nside: int, opt.
         nside healpix value. The default is 64.
+    RACol : str, optional
+        RA colname. The default is 'fieldRA'.
+    DecCol : str, optional
+        Dec colname. The default is 'DecCol'.
 
     Returns
     -------
@@ -475,8 +480,8 @@ def get_xy_pixels(pointings, healpixID, pixRA, pixDec, nside=64):
     # convert data position in rad
     # pRA = np.median(sel_data['RA'])
     # pDec = np.median(sel_data['Dec'])
-    RA = pointings['fieldRA'].tolist()
-    Dec = pointings['fieldDec'].tolist()
+    RA = pointings[RACol].tolist()
+    Dec = pointings[DecCol].tolist()
 
     pRA_rad = np.deg2rad(RA)
     pDec_rad = np.deg2rad(Dec)
@@ -485,7 +490,7 @@ def get_xy_pixels(pointings, healpixID, pixRA, pixDec, nside=64):
     x, y = proj_gnomonic_plane(pRA_rad, pDec_rad, pixRA_rad, pixDec_rad)
 
     df = pd.DataFrame(x, columns=['xpixel_norot'])
-    #df['xpixel_norot'] = x
+    # df['xpixel_norot'] = x
     df['ypixel_norot'] = y
     df['healpixID'] = healpixID
     df['pixRA'] = pixRA
@@ -495,7 +500,7 @@ def get_xy_pixels(pointings, healpixID, pixRA, pixDec, nside=64):
 
     # pixel rotation here
     df['rotSkyPixel'] = -np.deg2rad(df['rotSkyPos'])
-    # df['rotSkyPixel'] = 0.
+    df['rotSkyPixel'] = 0.
     df['xpixel'] = np.cos(df['rotSkyPixel'])*df['xpixel_norot']
     df['xpixel'] -= np.sin(df['rotSkyPixel'])*df['ypixel_norot']
     df['ypixel'] = np.sin(df['rotSkyPixel'])*df['xpixel_norot']
@@ -577,7 +582,7 @@ def get_xy(RA, Dec, nside=64):
     x, y = proj_gnomonic_plane(pRA_rad, pDec_rad, pixRA_rad, pixDec_rad)
 
     df = pd.DataFrame(x, columns=['xpixel_norot'])
-    #df['xpixel_norot'] = x
+    # df['xpixel_norot'] = x
     df['ypixel_norot'] = y
     df['healpixID'] = healpixID
     df['pixRA'] = pixRA
