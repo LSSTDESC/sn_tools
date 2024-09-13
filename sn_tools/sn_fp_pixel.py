@@ -394,8 +394,6 @@ def get_pixels_in_window(nside, RA_min, RA_max, Dec_min, Dec_max):
     healpixIDs = hp.query_polygon(
         nside, np.array(xyzpoly).T, nest=True).tolist()
 
-    print(type(healpixIDs))
-
     # get pixel coordinates
     coords = hp.pix2ang(nside, healpixIDs, nest=True, lonlat=True)
     pixRA, pixDec = coords[0], coords[1]
@@ -495,12 +493,14 @@ def get_xy_pixels(pointings, healpixID, pixRA, pixDec, nside=64,
     df['healpixID'] = healpixID
     df['pixRA'] = pixRA
     df['pixDec'] = pixDec
-    for var in ['observationId', 'filter', 'rotSkyPos']:
+    ccols = ['observationId', 'filter', 'rotSkyPos']
+    ccols += ['fieldRA', 'fieldDec']
+    for var in ccols:
         df[var] = pointings[var]
 
     # pixel rotation here
     df['rotSkyPixel'] = -np.deg2rad(df['rotSkyPos'])
-    df['rotSkyPixel'] = 0.
+    # df['rotSkyPixel'] = 0.
     df['xpixel'] = np.cos(df['rotSkyPixel'])*df['xpixel_norot']
     df['xpixel'] -= np.sin(df['rotSkyPixel'])*df['ypixel_norot']
     df['ypixel'] = np.sin(df['rotSkyPixel'])*df['xpixel_norot']
@@ -617,7 +617,9 @@ def get_proj_data(sel_data, nside=64):
         dd = pd.DataFrame(x, columns=['xpixel_norot'])
         dd['ypixel_norot'] = y
         """
-        for var in ['observationId', 'filter', 'rotSkyPos']:
+        ccols = ['observationId', 'filter', 'rotSkyPos']
+        ccols += ['fieldRA', 'fieldDec']
+        for var in ccols:
             dd[var] = vv[var]
         df_pix = pd.concat((df_pix, dd))
 
@@ -630,3 +632,45 @@ def get_proj_data(sel_data, nside=64):
     df_pix['ypixel'] += np.cos(df_pix['rotSkyPixel'])*df_pix['ypixel_norot']
 
     return df_pix
+
+
+def get_data_window(pixRA, pixDec,
+                    data,
+                    RACol='fieldRA', DecCol='fieldDec',
+                    radius=np.sqrt(12/3.14156)):
+    """
+    Method to get data inside a window
+
+    Parameters
+    ----------
+    pixRA : float
+        RA mean window.
+    pixDec : float
+        Dec mean window.
+    data : array
+        data to process.
+    RACol : str, optional
+        RA col name. The default is 'fieldRA'.
+    DecCol : str, optional
+        Dec colname. The default is 'fieldDec'.
+    radius : float, optional
+        width of the window. The default is np.sqrt(12/3.14156).
+
+    Returns
+    -------
+    TYPE
+        DESCRIPTION.
+
+    """
+
+    RA_min = pixRA-radius
+    RA_max = pixRA+radius
+    Dec_min = pixDec-radius
+    Dec_max = pixDec+radius
+
+    idx = data[RACol] >= RA_min
+    idx &= data[RACol] <= RA_max
+    idx &= data[DecCol] >= Dec_min
+    idx &= data[DecCol] <= Dec_max
+
+    return data[idx]
