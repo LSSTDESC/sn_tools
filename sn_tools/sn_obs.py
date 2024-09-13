@@ -3662,7 +3662,6 @@ class ProcessPixels_metric:
 
 
         """
-        print('finishing', self.ipix, self.saveData)
         if self.ipix >= 0 and self.saveData:
             self.isave += 1
             self.dump(self.ip, self.isave)
