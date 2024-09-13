@@ -878,7 +878,7 @@ class SimuParameters:
                 zmin=zmin_simu, zmax=zmax_simu,
                 duration=duration,
                 survey_area=self.area,
-                account_for_edges=True, dz=1.e-5)
+                account_for_edges=False, dz=1.e-5)
             # get number of supernovae
             N_SN = np.cumsum(nsn)[-1]
             N_SN *= NSN_factor
