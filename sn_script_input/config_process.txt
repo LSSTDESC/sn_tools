@@ -30,3 +30,4 @@ DD_list COSMOS,CDFS,EDFS,ELAISS1,XMM-LSS str #list of DDFs
 fieldName COSMOS str #fieldName - for DD only
 ebvofMW_pixel -1.0 float #E(B-V) for pixel processing
 lookup_ddf input/simulation/lookup_ddf.csv str #DDF lookup table
+code new str#code to use (old/new)
