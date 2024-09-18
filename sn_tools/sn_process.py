@@ -622,8 +622,12 @@ class FP2pixels:
           fieldName to select
 
         """
+        noteCol = 'note'
+        if 'scheduler_note' in observations.dtype.names:
+            noteCol = 'scheduler_note'
+
         if self.fieldType == 'DD':
-            idx = np.in1d(observations['note'], fieldName)
+            idx = np.in1d(observations[noteCol], fieldName)
             observations = observations[idx]
             return observations
 
@@ -1026,16 +1030,23 @@ class Process(FP2pixels):
         # pixels = self.get_pixels_field(observations)
         # getting the pixels
         # print('getting pixels call')
+        noteCol = 'note'
+        if 'scheduler_note' in observations.dtype.names:
+            noteCol = 'scheduler_note'
 
         pixels = pd.DataFrame()
         for field in self.fieldNames:
             if self.fieldType == 'DD':
-                idx = observations['note'] == field
+                idx = observations[noteCol] == field
                 selobs = observations[idx]
                 ppix = super(Process, self).__call__(selobs)
                 ppix['fieldName'] = field
                 pixels = pd.concat((pixels, ppix))
             else:
+                """
+                print('there mannnn', self.fieldType, noteCol,
+                      np.unique(observations[noteCol]))
+                """
                 pixels = super(Process, self).__call__(observations)
                 pixels['fieldName'] = field
 
@@ -1262,8 +1273,13 @@ class Process_old:
           fieldName to select
 
         """
+        noteCol = 'note'
+
+        if 'scheduler_note' in observations.dtype.names:
+            noteCol = 'scheduler_note'
+
         if self.fieldType == 'DD':
-            idx = np.in1d(observations['note'], fieldName)
+            idx = np.in1d(observations[noteCol], fieldName)
             observations = observations[idx]
             return self.select_zone(observations, RAmin, RAmax, self.RACol, DecCol=self.DecCol)
 

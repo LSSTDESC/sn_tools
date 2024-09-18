@@ -112,11 +112,15 @@ def patchObs(observations, fieldType, fieldName,
     """
 
     # radius = 5.
+    noteCol = 'note'
+
+    if 'scheduler_note' in observations.dtype.names:
+        noteCol = 'scheduler_note'
 
     if fieldType == 'DD':
         # go faster with observations here
         fieldName = fieldName.split(',')
-        if 'note' in observations.dtype.names:
+        if noteCol in observations.dtype.names:
             observations = getDD_from_note(
                 observations, nside, RACol, DecCol, fieldName)
             patches = cluster_from_obs(observations, dbName, radius)
@@ -230,11 +234,15 @@ def patchObs_new(observations, fieldType, fieldName,
     """
 
     # radius = 5.
+    noteCol = 'note'
+
+    if 'scheduler_note' in observations.dtype.names:
+        noteCol = 'scheduler_note'
 
     if fieldType == 'DD':
         # go faster with observations here
         fieldName = fieldName.split(',')
-        if 'note' in observations.dtype.names:
+        if noteCol in observations.dtype.names:
             observations = getDD_from_note(
                 observations, nside, RACol, DecCol, fieldName)
 
@@ -3958,6 +3966,10 @@ def getFields(observations, fieldType='WFD', fieldIds=None,
 
     # this is for the WFD
 
+    noteCol = 'note'
+    if 'scheduler_note' in observations.dtype.names:
+        noteCol = 'scheduler_note'
+
     for pName in ['proposalId', 'survey_id']:
         if pName in observations.dtype.names:
 
@@ -3987,9 +3999,9 @@ def getFields(observations, fieldType='WFD', fieldIds=None,
 
                 # print(test)
 
-                if 'note' in observations.dtype.names:
+                if noteCol in observations.dtype.names:
                     ido = np.core.defchararray.find(
-                        observations['note'].astype(str), 'DD')
+                        observations[noteCol].astype(str), 'DD')
                     if ido.tolist():
                         ies = np.ma.asarray(
                             list(map(lambda st: False if st != -1 else True, ido)))
@@ -4020,7 +4032,7 @@ def getFields(observations, fieldType='WFD', fieldIds=None,
                         else:
                             obser = getFields_fromId(observations, [0])
 
-                        print('resultat fieldids', np.unique(obser['note']))
+                        print('resultat fieldids', np.unique(obser[noteCol]))
                         return pixelate(obser, nside, RACol=RACol,
                                         DecCol=DecCol)
 
@@ -4048,9 +4060,13 @@ def getFields(observations, fieldType='WFD', fieldIds=None,
 
 def getDD_from_note(observations, nside, RACol, DecCol, fieldName=''):
 
-    if 'note' in observations.dtype.names:
+    noteCol = 'note'
+    if 'scheduler_note' in observations.dtype.names:
+        noteCol = 'scheduler_note'
+
+    if noteCol in observations.dtype.names:
         ido = np.core.defchararray.find(
-            observations['note'].astype(str), 'DD')
+            observations[noteCol].astype(str), 'DD')
         if ido.tolist():
             ies = np.ma.asarray(
                 list(map(lambda st: False if st != -1 else True, ido)))
@@ -4059,8 +4075,8 @@ def getDD_from_note(observations, nside, RACol, DecCol, fieldName=''):
         if len(obser) == 0:
             return None
         # rename fields here
-        obser['note'] = np.char.replace(obser['note'], 'DD:', '')
-        bb = obser['note']
+        obser[noteCol] = np.char.replace(obser[noteCol], 'DD:', '')
+        bb = obser[noteCol]
         torep = dict(zip(['ECDFS', 'EDFS, a', 'EDFS, b', 'EDFS_a', 'EDFS_b', 'XMM_LSS'], [
             'CDFS', 'EDFSa', 'EDFSb', 'EDFSa', 'EDFSb', 'XMM-LSS']))
 
@@ -4068,10 +4084,10 @@ def getDD_from_note(observations, nside, RACol, DecCol, fieldName=''):
             idx = np.in1d(bb, [key])
             bb[idx] = vals
 
-        obser['note'] = bb
+        obser[noteCol] = bb
 
         if fieldName:
-            idx = np.in1d(obser['note'], fieldName)
+            idx = np.in1d(obser[noteCol], fieldName)
             obser = obser[idx]
 
         return pixelate(obser, nside, RACol=RACol, DecCol=DecCol)
@@ -4112,7 +4128,12 @@ def renameDDF(obser, lookup_ddf='',
     """
     import pandas as pd
 
-    bb = obser['note']
+    noteCol = 'note'
+
+    if 'scheduler_note' in obser.dtype.names:
+        noteCol = 'scheduler_note'
+
+    bb = obser[noteCol]
 
     lookup = pd.read_csv(lookup_ddf, comment='#')
     for i, row in lookup.iterrows():
@@ -4121,7 +4142,7 @@ def renameDDF(obser, lookup_ddf='',
         idx = np.in1d(bb, [key])
         bb[idx] = vals
 
-    obser['note'] = bb
+    obser[noteCol] = bb
 
     # print('jjjj', len(obser))
 
@@ -4131,9 +4152,15 @@ def renameDDF(obser, lookup_ddf='',
 def cluster_from_obs(obs, dbName, radius):
 
     cluster = pd.DataFrame()
-    fieldName = np.unique(obs['note'])
+
+    noteCol = 'note'
+
+    if 'scheduler_note' in obs.dtype.names:
+        noteCol = 'scheduler_note'
+
+    fieldName = np.unique(obs[noteCol])
     for io, field in enumerate(fieldName):
-        idx = obs['note'] == field
+        idx = obs[noteCol] == field
         sel_obs = obs[idx]
         dd = {}
         dd['clusid'] = io
@@ -4219,9 +4246,14 @@ def get_obs(fieldType, dbDir, dbName, dbExtens, lookup_ddf=''):
     observations = rf.append_fields(
         observations, 'lsst_start', [lsst_start]*len(observations))
 
-    if 'note' in observations.dtype.names and fieldType != 'Fake':
+    noteCol = 'note'
+
+    if 'scheduler_note' in observations.dtype.names:
+        noteCol = 'scheduler_note'
+
+    if noteCol in observations.dtype.names and fieldType != 'Fake':
         ido = np.core.defchararray.find(
-            observations['note'].astype(str), 'DD')
+            observations[noteCol].astype(str), 'DD')
         if ido.tolist():
             ies = np.ma.asarray(
                 list(map(lambda st: False if st != -1 else True, ido)))

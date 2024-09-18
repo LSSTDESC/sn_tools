@@ -335,8 +335,12 @@ class FP2pixels:
           fieldName to select
 
         """
+        noteCol = 'note'
+        if 'scheduler_note' in observations.dtype.names:
+            noteCol = 'scheduler_note'
+
         if self.fieldType == 'DD':
-            idx = np.in1d(observations['note'], fieldName)
+            idx = np.in1d(observations[noteCol], fieldName)
             observations = observations[idx]
             return observations
 
@@ -837,10 +841,13 @@ class Process(FP2pixels):
         # print('getting pixels call')
 
         print('in processit, getting pixels')
+        noteCol = 'note'
+        if 'scheduler_note' in observations.dtype.names:
+            noteCol = 'scheduler_note'
         pixels = pd.DataFrame()
         for field in self.fieldNames:
             if self.fieldType == 'DD':
-                idx = observations['note'] == field
+                idx = observations[noteCol] == field
                 selobs = observations[idx]
                 ppix = super(Process, self).__call__(selobs)
                 ppix['fieldName'] = field
