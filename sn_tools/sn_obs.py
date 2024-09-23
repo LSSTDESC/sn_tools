@@ -2191,6 +2191,8 @@ class ProcessPixels:
                 metric.finish()
             if metric.name == 'sim_info_fit':
                 metric.finish()
+            if metric.name == 'sn_obs_strat_pixels':
+                metric.finish()
 
     def getData(self, data, selpix):
         """
