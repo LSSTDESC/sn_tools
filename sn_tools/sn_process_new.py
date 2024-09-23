@@ -747,19 +747,36 @@ class Process(FP2pixels):
         # quick check
         # df_fp.check_fp(top_level='raft', low_level='ccd')
 
-        # instance for metric processing
-        inum = 1
-        procpix = ProcessPixels_metric(self.metricList, inum,
+        params = {}
+        params['FP'] = df_fp
+        if self.nproc > 1:
+            multiproc(self.pixels, params, self.process_multipix, self.nproc)
+        else:
+            self.process_multipix(self.pixels, params)
+
+    def process_multipix(self, pixels, params, j=0, output_q=None):
+        """
+        Method to process a set of pixels 
+
+        Returns
+        -------
+        None.
+
+        """
+
+        procpix = ProcessPixels_metric(self.metricList, j,
                                        outDir=self.outDir, dbName=self.dbName,
                                        saveData=self.saveData)
 
         # loop on pixels
         obsCol = 'observationId'
-
-        for i, pix in self.pixels.iterrows():
+        df_fp = params['FP']
+        print('pixels to process', len(pixels))
+        for i, pix in pixels.iterrows():
             print('processing pixel', pix['healpixID'])
             # gnomonic proj
             obs = np.copy(self.obs)
+            time_ref = time.time()
             """
             print('before', len(obs))
             self.plot_ra_dec(obs, pix['pixRA'],
@@ -774,15 +791,10 @@ class Process(FP2pixels):
                              pix['pixDec'], self.RACol, self.DecCol)
             print('after', len(obs))
             """
-            dd = get_xy_pixels(obs,
-                               pix['healpixID'],
-                               pix['pixRA'],
-                               pix['pixDec'],
-                               RACol=self.RACol, DecCol=self.DecCol)
-            # self.plot_pixels(dd)
-            # df_fp.plot_fp_pixels(dd)
-            # pixels in FP
-            pix_obs = df_fp.pix_to_obs(dd)
+            ppars = {}
+            ppars['pixel'] = pix
+            ppars['FP'] = df_fp
+            pix_obs = multiproc(obs, ppars, self.proj_pixel, 1)
             # get matching obsId
             obsIDs = pix_obs[obsCol].to_list()
             idx = np.in1d(obs[obsCol], obsIDs)
@@ -791,7 +803,6 @@ class Process(FP2pixels):
             pix_arr = pix_obs.to_records(index=False)
             pix_arr.sort(order=obsCol)
             pix_arr = rf.drop_fields(pix_arr, obsCol)
-
             for vv in pix_arr.dtype.names:
                 obs = rf.append_fields(obs, vv, pix_arr[vv].tolist())
 
@@ -804,11 +815,57 @@ class Process(FP2pixels):
             obs = obs_df.to_records(index=False)
             """
 
-            procpix(pix_obs, obs, inum)
-
+            procpix(pix_obs, obs, j)
+            print('processed', time.time()-time_ref)
         procpix.finish()
 
+        print('process done', j)
+        if output_q is not None:
+            return output_q.put({j: 1})
+        else:
+            return 1
+
+    def proj_pixel(self, obs, params, j=0, output_q=None):
+
+        pix = params['pixel']
+        df_fp = params['FP']
+        dd = get_xy_pixels(obs,
+                           pix['healpixID'],
+                           pix['pixRA'],
+                           pix['pixDec'],
+                           RACol=self.RACol, DecCol=self.DecCol)
+        # self.plot_pixels(dd)
+        # df_fp.plot_fp_pixels(dd)
+        # pixels in FP
+        pix_obs = df_fp.pix_to_obs(dd)
+
+        if output_q is not None:
+            return output_q.put({j: pix_obs})
+        else:
+            return pix_obs
+
     def plot_ra_dec(self, data, pixRA, pixDec, RACol, DecCol):
+        """
+        Method to plot (RA,Dec)
+
+        Parameters
+        ----------
+        data : pandas df
+            Data to process.
+        pixRA : float
+            pixel RA.
+        pixDec : float
+            pixel Dec.
+        RACol : str
+            RA colname.
+        DecCol : str
+            Dec colname.
+
+        Returns
+        -------
+        None.
+
+        """
 
         import matplotlib.pyplot as plt
         fig, ax = plt.subplots()
@@ -819,6 +876,19 @@ class Process(FP2pixels):
         plt.show()
 
     def plot_pixels(self, pp):
+        """
+        Method to plot pixels
+
+        Parameters
+        ----------
+        pp : array
+            Data to plot.
+
+        Returns
+        -------
+        None.
+
+        """
 
         import matplotlib.pyplot as plt
         fig, ax = plt.subplots()
