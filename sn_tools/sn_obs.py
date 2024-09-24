@@ -3674,9 +3674,7 @@ class ProcessPixels_metric:
             self.ipix = -1
 
         for metric in self.metricList:
-            if metric.name == 'simulation':
-                metric.finish()
-            if metric.name == 'sim_info_fit':
+            if hasattr(metric, 'finish'):
                 metric.finish()
 
     def getData(self, data, selpix):
