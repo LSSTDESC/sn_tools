@@ -16,6 +16,8 @@ import pandas as pd
 import glob
 import random
 import numpy.lib.recfunctions as rf
+from astropy.table import Table, vstack, Column
+import multiprocessing
 
 
 class FP2pixels:
@@ -747,14 +749,9 @@ class Process(FP2pixels):
         # quick check
         # df_fp.check_fp(top_level='raft', low_level='ccd')
 
-        params = {}
-        params['FP'] = df_fp
-        if self.nproc > 1:
-            multiproc(self.pixels, params, self.process_multipix, self.nproc)
-        else:
-            self.process_multipix(self.pixels, params)
+        self.process_multipix(self.pixels, df_fp)
 
-    def process_multipix(self, pixels, params, j=0, output_q=None):
+    def process_multipix(self, pixels, df_fp):
         """
         Method to process a set of pixels 
 
@@ -764,19 +761,19 @@ class Process(FP2pixels):
 
         """
 
-        procpix = ProcessPixels_metric(self.metricList, j,
+        procpix = ProcessPixels_metric(self.metricList, 0,
                                        outDir=self.outDir, dbName=self.dbName,
                                        saveData=self.saveData)
 
         # loop on pixels
         obsCol = 'observationId'
-        df_fp = params['FP']
+
         print('pixels to process', len(pixels))
         for i, pix in pixels.iterrows():
             print('processing pixel', pix['healpixID'])
             # gnomonic proj
-            obs = np.copy(self.obs)
             time_ref = time.time()
+            obs = np.copy(self.obs)
             """
             print('before', len(obs))
             self.plot_ra_dec(obs, pix['pixRA'],
@@ -794,41 +791,39 @@ class Process(FP2pixels):
             ppars = {}
             ppars['pixel'] = pix
             ppars['FP'] = df_fp
-            pix_obs = multiproc(obs, ppars, self.proj_pixel, 1)
-            # get matching obsId
-            obsIDs = pix_obs[obsCol].to_list()
-            idx = np.in1d(obs[obsCol], obsIDs)
-            obs = obs[idx]
-            obs.sort(order=obsCol)
-            pix_arr = pix_obs.to_records(index=False)
-            pix_arr.sort(order=obsCol)
-            pix_arr = rf.drop_fields(pix_arr, obsCol)
-            for vv in pix_arr.dtype.names:
-                obs = rf.append_fields(obs, vv, pix_arr[vv].tolist())
+            ppars['obsCol'] = obsCol
+            if len(obs) == 0:
+                continue
+            obs_pix = self.multiproc(obs, ppars, self.proj_pixel, self.nproc)
+            procpix(obs_pix)
 
-            """
-            obs_df = pd.DataFrame.from_records(obs[idx])
-            cols = [obsCol, 'healpixID', 'pixRA', 'pixDec']
-            pp = pix_obs[cols]
-            obs_df = obs_df.merge(
-                pp, left_on=['observationId'], right_on=['observationId'])
-            obs = obs_df.to_records(index=False)
-            """
-
-            procpix(pix_obs, obs, j)
-            print('processed', time.time()-time_ref)
         procpix.finish()
 
-        print('process done', j)
-        if output_q is not None:
-            return output_q.put({j: 1})
-        else:
-            return 1
-
     def proj_pixel(self, obs, params, j=0, output_q=None):
+        """
+        Method to get pixel proj
+
+        Parameters
+        ----------
+        obs : array
+            Observations.
+        params : dict
+            Parameters.
+        j : int, optional
+            internal tag for multiproc. The default is 0.
+        output_q : multiprocessing queue, optional
+            Where to put the results. The default is None.
+
+        Returns
+        -------
+        multiprocessing queue/df
+            Output.
+
+        """
 
         pix = params['pixel']
         df_fp = params['FP']
+        obsCol = params['obsCol']
         dd = get_xy_pixels(obs,
                            pix['healpixID'],
                            pix['pixRA'],
@@ -838,11 +833,21 @@ class Process(FP2pixels):
         # df_fp.plot_fp_pixels(dd)
         # pixels in FP
         pix_obs = df_fp.pix_to_obs(dd)
+        obsIDs = pix_obs[obsCol].to_list()
+        idx = np.in1d(obs[obsCol], obsIDs)
+        obs = obs[idx]
+        obs.sort(order=obsCol)
+        pix_arr = pix_obs.to_records(index=False)
+        pix_arr.sort(order=obsCol)
+        pix_arr = rf.drop_fields(pix_arr, obsCol)
+        for vv in pix_arr.dtype.names:
+            obs = rf.append_fields(
+                obs, vv, pix_arr[vv].tolist(), usemask=False)
 
         if output_q is not None:
-            return output_q.put({j: pix_obs})
+            return output_q.put({j: obs})
         else:
-            return pix_obs
+            return obs
 
     def plot_ra_dec(self, data, pixRA, pixDec, RACol, DecCol):
         """
@@ -894,6 +899,142 @@ class Process(FP2pixels):
         fig, ax = plt.subplots()
         ax.plot(pp['xpixel'], pp['fieldRA']-pp['pixRA'], 'k.')
         plt.show()
+
+    def multiproc(self, data, params, func, nproc):
+        """
+        Function to perform multiprocessing
+
+        Parameters
+        ---------------
+        data: array
+          data to process
+        params: dict
+          fixed parameters of func
+        func: function
+          function to apply for multiprocessing
+        nproc: int
+          number of processes
+
+        """
+        nproc = min([len(data), nproc])
+        # multiprocessing parameters
+        nz = len(data)
+        t = np.linspace(0, nz, nproc+1, dtype='int')
+        # print('multi', nz, t)
+        result_queue = multiprocessing.Queue()
+
+        procs = [multiprocessing.Process(name='Subprocess-'+str(j), target=func,
+                                         args=(data[t[j]:t[j+1]], params, j, result_queue))
+                 for j in range(nproc)]
+
+        for p in procs:
+            p.start()
+
+        resultdict = {}
+        # get the results in a dict
+
+        for i in range(nproc):
+            resultdict.update(result_queue.get())
+
+        for p in multiprocessing.active_children():
+            p.join()
+
+        restot = self.gather_results(resultdict)
+
+        return restot
+
+    def gather_results(self, resultdict):
+        """
+        Function to gather results of a directory
+
+        Parameters
+        ----------------
+        resultdict: dict
+          dictory of data
+
+        Returns
+        ----------
+        gathered results. The type is determined from resultdict.
+        Supported types: pd.core.frame.DataFrame, Table, np.ndarray,
+        np.recarray, int
+
+        """
+        supported_types = ['pd.core.frame.DataFrame', 'Table', 'np.ndarray',
+                           'np.recarray', 'int', 'dict']
+
+        # get outputtype here
+        first_value = None
+        for key, vals in resultdict.items():
+            if vals is not None:
+                first_value = vals
+                break
+
+        restot = None
+        if first_value is None:
+            return restot
+
+        if isinstance(first_value, pd.core.frame.DataFrame):
+            restot = pd.DataFrame()
+
+            def concat(a, b):
+                return pd.concat((a, b), sort=False)
+
+        if isinstance(first_value, Table):
+            restot = Table()
+
+            def concat(a, b):
+                return vstack([a, b])
+
+        if isinstance(first_value, np.ndarray) or isinstance(first_value, np.recarray):
+            restot = []
+
+            def concat(a, b):
+                if isinstance(a, list):
+                    return b
+                else:
+                    return np.concatenate((a, b))
+
+        if isinstance(first_value, int):
+            restot = 0
+
+            def concat(a, b):
+                return operator.add(a, b)
+
+        if isinstance(first_value, dict):
+            restot = {}
+
+            def concat(a, b):
+                return dict(a, **b)
+
+        if isinstance(first_value, list):
+            restot = []
+
+            def concat(a, b):
+                return a+b
+
+        if isinstance(first_value, tuple):
+            restot = ([], [])
+            tlength = len(first_value)
+            restot = tuple([] for _ in range(tlength))
+
+            def concat(a, b):
+                bo = []
+                for i in range(tlength):
+                    bo.append(a[i]+b[i])
+
+                myres = tuple(bo[i] for _ in range(tlength))
+                return myres
+
+        if restot is None:
+            print('Sorry to bother you but: unknown data type', type(first_value))
+            print('Supported types', supported_types)
+            return restot
+
+        # gather the results
+        for key, vals in resultdict.items():
+            restot = concat(restot, vals)
+
+        return restot
 
     def processIt_deprecated(self, observations):
         """
