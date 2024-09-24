@@ -3622,7 +3622,7 @@ class ProcessPixels_metric:
                 print('removing', outName)
                 os.system('rm {}'.format(outName))
 
-    def __call__(self, pixels_obs, observations, ip):
+    def __call__(self, observations, ip=0):
         """
         Main processing here
 
