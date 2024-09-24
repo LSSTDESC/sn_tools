@@ -16,6 +16,8 @@ class FocalPlane:
                  ny=dict(zip(['raft', 'ccd', 'sensor'], [5, 15, 2*15])),
                  FoV=9.62,
                  level='raft',
+                 raft_sub=dict(
+                     zip(['to_remove'], [['1_1', '1_5', '5_1', '5_5']])),
                  ccd_sub=dict(zip(['to_remove', 'guide', 'sensor'],
                                   [['1_1', '1_2', '1_3', '2_1', '2_2', '3_1',
                                     '1_13', '1_14', '1_15',
@@ -42,6 +44,9 @@ class FocalPlane:
             Field of view. The default is 9.62.
         level : str, optional
             segmentation level (raft,ccd,sensor). The default is 'raft'.
+        raft_sub: dict, optional
+            list of rafts to remove
+            the default is dict(zip(['to_remove'],['1_1','1_4','5,1','5_5']))
         ccd_sub :dict, optional
             list of ccds to remove.
             The default is dict(zip(['to_remove', 'guide', 'sensor'],
@@ -78,8 +83,11 @@ class FocalPlane:
 
         self.fp = self.buildIt()
 
-        for key, vals in ccd_sub.items():
-            self.remove_ccd(vals)
+        if self.level == 'raft':
+            self.remove_cells(raft_sub)
+
+        if self.level == 'ccd':
+            self.remove_cells(ccd_sub)
 
         self.ccols = ['healpixID', 'pixRA', 'pixDec',
                       'observationId', 'raft']
@@ -88,6 +96,24 @@ class FocalPlane:
         if level == 'sensor':
             self.ccols.append('ccd')
             self.ccols.append('sensor')
+
+    def remove_cells(self, cell_dict):
+        """
+        Method to remove cells
+
+        Parameters
+        ----------
+        cell_dict : dict
+            List of cells to remove.
+
+        Returns
+        -------
+        None.
+
+        """
+
+        for key, vals in cell_dict.items():
+            self.remove_cell(vals)
 
     def set_display_mode(self):
         """
@@ -211,7 +237,7 @@ class FocalPlane:
                 print('{}'.format(top_level), vv,
                       'N {}s'.format(low_level), len(idxb))
 
-    def remove_ccd(self, ccdlist):
+    def remove_cell(self, celllist):
         """
         Method to remove ccds from fp
 
@@ -226,7 +252,7 @@ class FocalPlane:
 
         """
 
-        idx = self.fp['ccd'].isin(ccdlist)
+        idx = self.fp[self.level].isin(celllist)
 
         self.fp = self.fp[~idx]
 
