@@ -794,7 +794,8 @@ class Process(FP2pixels):
             ppars['obsCol'] = obsCol
             if len(obs) == 0:
                 continue
-            obs_pix = self.multiproc(obs, ppars, self.proj_pixel, self.nproc)
+            obs_pix = self.multiproc(obs, ppars, self.proj_pixel,
+                                     self.nproc_pixels)
             procpix(obs_pix)
 
         procpix.finish()

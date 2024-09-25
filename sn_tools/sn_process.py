@@ -1087,7 +1087,7 @@ class Process(FP2pixels):
         params['pixelmap'] = pixels
         params_multi = np.unique(pixels['healpixID'])
         nprocb = min(self.nproc, len(params_multi))
-        if not self.display:
+        if not self.nproc > 1:
             multiproc(params_multi, params, self.process_metric, nprocb)
         else:
             self.process_metric(params_multi, params)
