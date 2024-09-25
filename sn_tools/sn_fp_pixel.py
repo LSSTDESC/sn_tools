@@ -418,7 +418,7 @@ def get_pixels_in_window(nside, RA_min, RA_max, Dec_min, Dec_max):
         1, np.deg2rad(dec_poly), np.deg2rad(ra_poly))
 
     healpixIDs = hp.query_polygon(
-        nside, np.array(xyzpoly).T, nest=True).tolist()
+        nside, np.array(xyzpoly).T, nest=True, inclusive=True).tolist()
 
     # get pixel coordinates
     coords = hp.pix2ang(nside, healpixIDs, nest=True, lonlat=True)
@@ -428,7 +428,10 @@ def get_pixels_in_window(nside, RA_min, RA_max, Dec_min, Dec_max):
     df['pixRA'] = pixRA
     df['pixDec'] = pixDec
 
-    return df
+    idx = df['pixRA'] >= RA_min
+    idx = df['pixRA'] < RA_max
+
+    return df[idx]
 
 
 def get_window(data, RACol='fieldRA', DecCol='fieldDec',
