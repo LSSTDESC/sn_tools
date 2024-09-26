@@ -350,7 +350,7 @@ class FocalPlane:
         xy = (row['xmin'], row['ymin'])
         height = row['ymax']-row['ymin']
         width = row['xmax']-row['xmin']
-        rect = Rectangle(xy, width, height, fill=fill)
+        rect = Rectangle(xy, width, height, fill=fill, alpha=0.5)
 
         return rect
 
@@ -475,7 +475,7 @@ def get_window(data, RACol='fieldRA', DecCol='fieldDec',
 
 
 def get_xy_pixels(pointings, healpixID, pixRA, pixDec, nside=64,
-                  RACol='fieldRA', DecCol='fieldDec'):
+                  RACol='fieldRA', DecCol='fieldDec', filterCol='filter'):
     """
     Grab gnomonic projection of pixels around(RA,Dec)
 
@@ -522,8 +522,8 @@ def get_xy_pixels(pointings, healpixID, pixRA, pixDec, nside=64,
     df['healpixID'] = healpixID
     df['pixRA'] = pixRA
     df['pixDec'] = pixDec
-    ccols = ['observationId', 'filter', 'rotSkyPos']
-    ccols += ['fieldRA', 'fieldDec']
+    ccols = ['observationId', filterCol, 'rotSkyPos']
+    ccols += [RACol, DecCol]
     for var in ccols:
         df[var] = pointings[var]
 
@@ -620,7 +620,8 @@ def get_xy(RA, Dec, nside=64):
     return df
 
 
-def get_proj_data(sel_data, nside=64):
+def get_proj_data(sel_data, nside=64, RACol='fieldRA',
+                  DecCol='fieldDec', filterCol='filter'):
     """
     Function to get gnomonic projection of a pixel corresponding
     to a set of pointings.
@@ -640,14 +641,14 @@ def get_proj_data(sel_data, nside=64):
     """
 
     df_pix = pd.DataFrame()
-    for vv in sel_data:
-        dd = get_xy(vv['fieldRA'], vv['fieldDec'], nside=nside)
+    for i, vv in sel_data.iterrows():
+        dd = get_xy(vv[RACol], vv[DecCol], nside=nside)
         """
         dd = pd.DataFrame(x, columns=['xpixel_norot'])
         dd['ypixel_norot'] = y
         """
-        ccols = ['observationId', 'filter', 'rotSkyPos']
-        ccols += ['fieldRA', 'fieldDec']
+        ccols = ['observationId', filterCol, 'rotSkyPos']
+        ccols += [RACol, DecCol]
         for var in ccols:
             dd[var] = vv[var]
         df_pix = pd.concat((df_pix, dd))
