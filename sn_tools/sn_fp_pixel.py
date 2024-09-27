@@ -239,12 +239,14 @@ class FocalPlane:
 
     def remove_cell(self, colName, celllist):
         """
-        Method to remove ccds from fp
+        Method to remove cells from fp
 
         Parameters
         ----------
-        ccdlist : list(str)
-            List of ccds to remove.
+        colName : str
+            cell type (raft, ccd).
+        celllist : list(str)
+            List of cells to remove.
 
         Returns
         -------
