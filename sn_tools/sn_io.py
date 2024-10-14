@@ -1,4 +1,5 @@
 import h5py
+import astropy
 from astropy.table import Table, vstack
 import numpy as np
 import pandas as pd
@@ -10,6 +11,7 @@ from scipy.interpolate import interp1d
 import numpy.lib.recfunctions as rf
 import sqlite3
 import logging
+from collections.abc import MutableMapping
 
 
 def append(metricTot, sel):
@@ -248,12 +250,57 @@ def loadFile(filename, objtype='pandasDataFrame'):
                     res = pd.concat([res, df], sort=False)
                 if objtype == 'astropyTable':
                     df = Table.read(filename, path=kk)
-                    res = vstack([res, df])
+                    res = vstack([res, df], metadata_conflicts='silent')
             return res
         else:
             print(filename)
             print('unknown format: file will not be downloaded')
             return None
+
+
+def loopStack_params(namelist,
+                     params=dict(zip(['objtype'], ['pandasDataFrame'])),
+                     j=0, output_q=None):
+    """
+    Function to load a file according to the type of data it contains
+
+    Parameters
+    ---------------
+    namelist: list(str)
+       list of the name of the files to consider
+    objtype: str, opt
+       type of the data the file contains (default: pandas DataFrame)
+       possible values: pndasDataFrame, astropyTable, numpy array
+
+    Returns
+    -----------
+    object of the file (stacked)
+
+    """
+    objtype = params['objtype']
+    res = pd.DataFrame()
+    if objtype == 'astropyTable':
+        res = Table()
+    if objtype == 'numpyArray':
+        res = None
+
+    for fname in namelist:
+        tab = loadFile(fname, objtype)
+
+        if objtype == 'pandasDataFrame':
+            res = pd.concat([res, tab], sort=False)
+        if objtype == 'astropyTable':
+            res = vstack([res, tab])
+        if objtype == 'numpyArray':
+            if res is None:
+                res = tab
+            else:
+                res = np.concatenate((res, tab))
+
+    if output_q is not None:
+        return output_q.put({j: res})
+    else:
+        return res
 
 
 def loopStack(namelist, objtype='pandasDataFrame'):
@@ -309,7 +356,7 @@ def convert_to_npy(namelist, objtype='pandasDataFrame'):
 
     Returns
     ----------
-    numpy array 
+    numpy array
 
     """
     res = loopStack(namelist, objtype=objtype)
@@ -453,8 +500,8 @@ class Read_Sqlite:
         """
         """
         self.dbfile = dbfile
-        conn = sqlite3.connect(dbfile)
-        self.cur = conn.cursor()
+        self.conn = sqlite3.connect(dbfile)
+        self.cur = self.conn.cursor()
         # get the table list
         self.cur.execute("SELECT name FROM sqlite_master WHERE type='table';")
         self.tables = self.cur.fetchall()
@@ -493,7 +540,7 @@ class Read_Sqlite:
             sql += 'proposalId=%d' % sel['proposalId']
         return sql
 
-    def get_data(self, cols=None, sql=None, to_degrees=False, new_col_names=None):
+    def get_data(self, cols=None, sql=None, to_degrees=False, new_col_names=None, table='observations'):
         """
         Method to get the contents of the SQL database dumped into a numpy rec array
 
@@ -507,18 +554,20 @@ class Read_Sqlite:
           to convert rad to degrees (default: False)
         new_col_names: bool, opt
           to rename the columns (default: None)
+        table: str, opt
+          sql table to read (default: observations - used to be SummaryAllProp for fbs < v2.0
 
         """
         sql_request = 'SELECT '
         if cols is None:
             sql_request += ' * '
-            self.cur.execute('PRAGMA TABLE_INFO(SummaryAllProps)')
+            self.cur.execute('PRAGMA TABLE_INFO({})'.format(table))
             r = self.cur.fetchall()
             cols = [c[1] for c in r]
         else:
             sql_request += ','.join(cols)
 
-        sql_request += 'FROM SummaryAllProps'
+        sql_request += 'FROM {}'.format(table)
         if sql is not None and len(sql) > 0:
             sql_request += ' WHERE ' + sql
         sql_request += ';'
@@ -528,7 +577,6 @@ class Read_Sqlite:
         self.cur.execute(sql_request)
         rows = self.cur.fetchall()
         logging.info('done. %d entries' % len(rows))
-
         logging.info('converting dump into numpy array')
         colnames = [str(c) for c in cols]
         d = np.rec.fromrecords(rows, names=colnames)
@@ -542,6 +590,38 @@ class Read_Sqlite:
             self.update_col_names(d, new_col_names)
 
         return d
+
+    def get_data_df(self, cols=None, sql=None, to_degrees=False, new_col_names=None, table='observations'):
+        """
+        Method to get the contents of the SQL database dumped into a numpy rec array
+
+        Parameters
+        ---------------
+        cols: list (str), opt
+          list of cols to consider (default: None = all cols are considered)
+        sql: str, opt
+          selection for sql (default: None)
+        to_degrees: bool, opt
+          to convert rad to degrees (default: False)
+        new_col_names: bool, opt
+          to rename the columns (default: None)
+        table: str, opt
+          sql table to read (default: observations - used to be SummaryAllProp for fbs < v2.0
+
+        """
+        sql_request = 'SELECT '
+        if cols is None:
+            sql_request += ' * '
+        else:
+            sql_request += ','.join(cols)
+
+        sql_request += 'FROM {}'.format(table)
+        if sql is not None and len(sql) > 0:
+            sql_request += ' WHERE ' + sql
+        sql_request += ';'
+
+        df = pd.read_sql_query(sql_request, self.conn)
+        return df
 
     def update_col_names(self, d, new_col_names):
         """
@@ -565,50 +645,7 @@ class Read_Sqlite:
         return d
 
 
-def getObservations(dbDir, dbName, dbExtens):
-    """
-    Function to extract observations: 
-    from an initial db from the scheduler, get a numpy array of observations
-
-    Parameters
-    ----------------
-    dbDir: str
-       location directory of the db
-    dbName: str
-       name of the database
-    dbExtens: str
-      extension of the db: .db or .npy
-
-    Returns
-    -----------
-    numpy array of observations
-
-    """
-
-    dbFullName = '{}/{}.{}'.format(dbDir, dbName, dbExtens)
-    # if extension is npy -> load
-    if dbExtens == 'npy':
-        observations = np.load(dbFullName, allow_pickle=True)
-    else:
-        # db as input-> need to transform as npy
-        # print('looking for',dbFullName)
-        keymap = {'observationStartMJD': 'mjd',
-                  'filter': 'band',
-                  'visitExposureTime': 'exptime',
-                  'skyBrightness': 'sky',
-                  'fieldRA': 'RA',
-                  'fieldDec': 'Dec', }
-
-        reader = Read_Sqlite(dbFullName)
-        # sql = reader.sql_selection(None)
-        observations = reader.get_data(cols=None, sql='',
-                                       to_degrees=False,
-                                       new_col_names=keymap)
-
-    return observations
-
-
-def check_get_file(web_server, fDir, fName):
+def check_get_file(web_server, fDir, fName, fnewDir=None):
     """
     Function checking if a file is available
     If not, grab it from a web server
@@ -628,8 +665,10 @@ def check_get_file(web_server, fDir, fName):
         return
 
     path = '{}/{}/{}'.format(web_server, fDir, fName)
+    if fnewDir is None:
+        fnewDir = fDir
     cmd = 'wget --no-clobber --no-verbose {} --directory-prefix {}'.format(
-        path, fDir)
+        path, fnewDir)
     os.system(cmd)
 
 
@@ -672,3 +711,488 @@ def dustmaps(dustDir):
     config['data_dir'] = dustDir
     import dustmaps.sfd
     dustmaps.sfd.fetch()
+
+
+def colName(names, list_search):
+    """
+    Function to get a name from a list
+
+    Parameters
+    ----------------
+    names: list(str)
+      list of names
+    list_search: list(str)
+      list of names to find in names
+
+    Returns
+    -----------
+    the found name (str) or None
+
+    """
+
+    for vv in list_search:
+        if vv in names:
+            return vv
+
+    return None
+
+
+def recursive_items(dictionary):
+    """
+    Method to loop on a nested dictionnary
+
+    Parameters
+    --------------
+    dictionnary: dict
+
+    Returns
+    ----------
+    generator (yield) of the 'last' (key,value)
+
+    """
+    for key, value in dictionary.items():
+        if type(value) is dict:
+            yield from recursive_items(value)
+        else:
+            yield (key, value)
+
+
+def recursive_keys(keys, dictionary):
+    """
+    Method to loop on a nested dictionnary
+
+    Parameters
+    --------------
+    dictionnary: dict
+
+    Returns
+    ----------
+    generator (yield) the keys
+
+    """
+    for key, value in dictionary.items():
+        if type(value) is dict:
+            keys.append(key)
+            return recursive_keys(keys, value)
+        else:
+            return keys
+
+
+def recursive_merge(d1, d2):
+    """
+    Update two dicts of dicts recursively, 
+    if either mapping has leaves that are non-dicts, 
+    the second s leaf overwrites the first s.
+
+    Parameters
+    ---------------
+    d1, d2: dicts to merge
+
+    Returns
+    -----------
+    merged dict
+    """
+    for k, v in d1.items():  # in Python 2, use .iteritems()!
+        if k in d2:
+            # this next check is the only difference!
+            if all(isinstance(e, MutableMapping) for e in (v, d2[k])):
+                d2[k] = recursive_merge(v, d2[k])
+                # we could further check types and merge as appropriate here.
+    d3 = d1.copy()
+    d3.update(d2)
+    return d3
+
+
+def make_dict_from_config(path, config_file):
+    """
+    Function to make a dict from a configuration file
+
+    Parameters
+    ---------------
+    path: str
+      path dir to the config file
+    config_file: str
+       config file name
+
+    Returns
+    ----------
+    dict with the config file infos
+
+    """
+
+    # open and load the file here
+    ffile = open('{}/{}'.format(path, config_file), 'r')
+    line = ffile.read().splitlines()
+    ffile.close()
+
+    # process the result
+    params = {}
+    for i, ll in enumerate(line):
+        if ll != '' and ll[0] != '#':
+            spla = ll.split('#')
+            lspl = spla[0].split(' ')
+            lspl = ' '.join(lspl).split()
+            n = len(lspl)
+            keym = ''
+            lim = n-2
+            for io, keya in enumerate([lspl[i] for i in range(lim)]):
+                keym += keya
+                if io != lim-1:
+                    keym += '_'
+            params[keym] = (lspl[n-1], lspl[n-2], spla[1])
+    return params
+
+
+def make_dict_from_optparse(thedict):
+    """
+    Function to make a nested dict from a dict
+    The idea is to split the original dict key(delimiter: _)  to as many keys
+
+    Parameters
+    --------------
+    thedict: dict
+
+    Returns
+    ----------
+    final dict
+
+    """
+
+    params = {}
+    for key, vals in thedict.items():
+        lspl = key.split('_')
+        n = len(lspl)
+        mystr = ''
+        myclose = ''
+        for keya in [lspl[i] for i in range(n)]:
+            mystr += '{\''+keya + '\':'
+            myclose += ' }'
+
+        if vals[0] != 'str':
+            dd = '{} {} {}'.format(mystr, eval(
+                '{}({})'.format(vals[0], vals[1])), myclose)
+        else:
+            dd = '{} \'{}\' {}'.format(mystr, vals[1], myclose)
+
+        thedict = eval(dd)
+        params = recursive_merge(params, thedict)
+
+    return params
+
+
+def decrypt_parser(parser):
+    """
+    Method to decrypt the parser help
+
+    Parameters
+    ---------------
+    parser: optparse parser
+
+
+    Returns
+    ----------
+    dict with decrypted infos
+
+    """
+
+    file_name = 'help_script.txt'
+    file_object = open(file_name, 'w')
+    parser.print_help(file_object)
+    file_object.close()
+
+    file = open(file_name, 'r')
+    line = file.read().splitlines()
+
+    params = {}
+    for i, ll in enumerate(line):
+        lolo = ' '.join(ll.split(' ')).split()
+        if lolo and lolo[0][:2] == '--':
+            key = lolo[0].split('--')[1]
+            key = key.split('=')
+            params[key[0]] = (key[1].split('/')[0], key[1].split('/')[1])
+
+    return params
+
+
+def make_dict_old(thedict, key, what, val):
+    """
+    Method to append to a dict infos
+    The goal is in fine to create a yaml file
+
+    Parameters
+    --------------
+    thedict: dict
+      the dict to append to
+    key: str
+     key used to append
+    what: (str,str)
+      name and type
+    val: str
+      value
+
+    Returns
+    ----------
+    thedict: dict
+      resulting dict
+
+    """
+
+    keym = key.split('_')[0]
+    keys = ''
+    if '_' in key:
+        keys = '_'.join(key.split('_')[1:])
+
+    names = what[0].split(',')
+    dtypes = what[1].split(',')
+    val = val.split(',')
+
+    valb = [val[i] if dtypes[i] == 'str' else eval(
+        '{}({})'.format(dtypes[i], val[i])) for i in range(len(dtypes))]
+
+    if keys == '':
+        if names[0] != 'value':
+            thedict[keym] = dict(zip(names, valb))
+        else:
+            thedict[keym] = valb[0]
+    else:
+        if keym not in thedict.keys():
+            thedict[keym] = {}
+        if names[0] != 'value':
+            thedict[keym][keys] = dict(zip(names, valb))
+        else:
+            thedict[keym][keys] = valb[0]
+
+    return thedict
+
+
+def checkDir(outDir):
+    """
+    function to check whether a directory exist
+    and create it if necessary
+    """
+    if not os.path.isdir(outDir):
+        os.makedirs(outDir)
+
+
+def add_parser(parser, confDict):
+    for key, vals in confDict.items():
+        vv = vals[1]
+        if vals[0] != 'str':
+            vv = eval('{}({})'.format(vals[0], vals[1]))
+        parser.add_option('--{}'.format(key), help='{} [%default]'.format(
+            vals[2]), default=vv, type=vals[0], metavar='')
+
+
+class Read_LightCurve:
+
+    def __init__(self, file_name='Data.hdf5', inputDir='dataLC'):
+        """
+        Parameters
+        ----------
+        file_name : str
+            Name of the hdf5 file that you want to read.
+        """
+        self.file_name = file_name
+        self.file = h5py.File('{}/{}'.format(inputDir, file_name), 'r')
+
+    def get_path(self):
+        """
+        Method to return the list of keys of the hdf5 file
+
+        Returns
+        ----------
+        list(str): list of keys (aka paths)
+
+        """
+
+        return list(self.file.keys())
+
+    def get_table(self, path):
+        """
+        Parameters
+        ----------
+        path : str
+            hdf5 path for light curve.
+
+        Returns
+        -------
+        AstropyTable
+            Returns the reading of an .hdf5 file as an AstropyTable.
+        """
+
+        tab = Table()
+        try:
+            tab = astropy.io.misc.hdf5.read_table_hdf5(
+                self.file, path=path, character_as_bytes=False)
+        except (OSError, KeyError):
+            pass
+
+        return tab
+
+    def get_all_data(self):
+
+        paths = self.get_path()
+        paths = list(filter(lambda s: not ('table' in s), paths))
+        metaTot = Table()
+        for pp in paths:
+            metaTable = self.get_table(path=pp)
+            metadata = metaTable.meta
+            lcDir = metadata['lc_dir']
+            lcName = metadata['lc_fileName']
+            metaTable.add_column(lcDir, name='lc_dir')
+            metaTable.add_column(lcName, name='lc_fileName')
+            metaTot = vstack([metaTot, metaTable])
+
+        return metaTot
+
+
+def get_meta(prodID, metaDir):
+    """
+    function to grab metadata from prodID and metaDir
+
+    Parameters
+    ----------
+    prodID : str
+        production ID.
+    metaDir : str
+        mate data (simu) rep.
+
+    Returns
+    -------
+    metaTable : astropy table
+        table of meta data.
+
+    """
+
+    import glob
+
+    full_path = '{}/Simu_{}*.hdf5'.format(metaDir, prodID)
+    fis = glob.glob(full_path)
+
+    metaTable = Table()
+    for io, fi in enumerate(fis):
+        metaName = fi.split('/')[-1]
+        meta = Read_LightCurve(file_name=metaName, inputDir=metaDir)
+        metaTot = meta.get_all_data()
+        metaTable = vstack([metaTable, metaTot], metadata_conflicts='silent')
+    return metaTable
+
+
+def load_SN(SNDir, SNFile):
+    """
+    Function to load SN from file
+
+    Parameters
+    ----------
+    SNDir : str
+        SN dir.
+    SNFile : str
+        SN file.
+
+    Returns
+    -------
+    SN : astropy table
+        table of SN.
+
+    """
+
+    SN = Table()
+
+    from sn_tools.sn_io import loopStack
+    path = '{}/{}'.format(SNDir, SNFile)
+    SN = loopStack([path], 'astropyTable')
+
+    return SN
+
+
+def get_beg_table(tab='{table*}', fontsize='',
+                  caption='{test}',
+                  label='{tab:test}', tabcols='{l|c|c|c}', center=True):
+    """
+    Function to get the first lines(decl) of latex table
+
+    Parameters
+    ----------
+    tab : str, optional
+     Table type. The default is '{table*}'.
+    caption : str, optional
+        Table caption. The default is '{test}'.
+    label : str, optional
+        Table label. The default is '{tab:test}'.
+    tabcols : str, optional
+        Table columns. The default is '{l|c|c|c}'.
+    center : bool, optional
+        To center the table. The default is True.
+
+    Returns
+    -------
+    r : list(str)
+        List for latex decl of a Table.
+
+    """
+
+    # r = ['\\begin'+tab+'[!htbp]']
+    r = ['\\begin'+tab+'[!htbp]']
+    if fontsize != '':
+        r += [fontsize]
+    if center:
+        r += ['\\begin{center}']
+    r += ['\caption{} \label{}'.format(caption, label)]
+    # r += ['\\begin{tabular}{l|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c}']
+    r += ['\\begin{tabular}'+tabcols]
+    r += ['\hline']
+    r += ['\hline']
+    nv = len(tabcols.split('|'))
+    va = ' '.join(['&']*(nv-1))
+    r += [va+' \\\\']
+    return r
+
+
+def get_end_table(tab='{table*}', center=True):
+    """
+    Function to get latex last lines for table end of decl.
+
+    Parameters
+    ----------
+    tab : str, optional
+        Table type. The default is '{table*}'.    
+    center : bool, optional
+        To center the table. The default is True.
+
+    Returns
+    -------
+    r : list(str)
+        out data.
+
+    """
+
+    r = ['\hline']
+    r += ['\end{tabular}']
+    if center:
+        r += ['\end{center}']
+    r += ['\end'+tab]
+
+    return r
+
+
+def dumpIt(fName, lines):
+    """
+    Function to dump in a file
+
+    Parameters
+    ----------
+    fName : str
+        output file name.
+    lines : list(str)
+        Data to dump.
+
+    Returns
+    -------
+    None.
+
+    """
+
+    with open(fName, 'a') as f:
+        for line in lines:
+            f.write(line)
+            f.write('\n')

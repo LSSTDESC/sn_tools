@@ -1,0 +1,115 @@
+## RA and Dec
+RA 0.0 float # RA
+Dec 0.0 float #Dec
+
+## fieldName (to be set as 'note' in the file)
+field DD:COSMOS str # field
+
+## seasons
+seasons 1 str # seasons
+seasonLength 180 str #season_length (days)
+MJDmin 60321. float #MJD min for observations - 1/12/2024
+
+## bands to consider
+bands grizy str #bands to consider
+
+## cadence[day] per band
+cadence g 1. float # cadence g band
+cadence r 1. float # cadence r band
+cadence i 1. float # cadence i band
+cadence z 1. float # cadence z band
+cadence y 1. float # cadence y band
+
+## obs file
+obsCondFile m5_night.csv str # Observing condition file
+obsFromSimu 0 int # to take obs. cond. from obsCondFile
+
+## fiveSigmaDepth per band
+fiveSigmaDepth u 23.48 str #u 5-sigma depth values
+fiveSigmaDepth g 24.26 str #g 5-sigma depth values
+fiveSigmaDepth r 23.87 str #r 5-sigma depth values
+fiveSigmaDepth i 23.46 str #i 5-sigma depth values
+fiveSigmaDepth z 22.76 str #z 5-sigma depth values
+fiveSigmaDepth y 22.02 str #y 5-sigma depth values
+
+## number of visits per band
+Nvisits u 10 int #Nvisits u
+Nvisits g 10 int #Nvisits g
+Nvisits r 20 int #Nvisits r
+Nvisits i 20  int #Nvisits i
+Nvisits z 26 int #Nvisits z
+Nvisits y 20 int #Nvisits y
+
+## Single visit exposure time
+visitExposureTime u  30. float #single visit exp time u-band
+visitExposureTime g  30. float #single visit exp time g-band
+visitExposureTime r  30. float #single visit exp time r-band
+visitExposureTime i  30. float #single visit exp time i-band
+visitExposureTime z  30. float #single visit exp time z-band
+visitExposureTime y  30. float #single visit exp time y-band
+
+## numExposures
+numExposures u  2 int #single visit exp time u-band
+numExposures g  2 int #single visit exp time g-band
+numExposures r  2 int #single visit exp time r-band
+numExposures i  2 int #single visit exp time i-band
+numExposures z  2 int #single visit exp time z-band
+numExposures y  2 int #single visit exp time y-band
+
+##shift between visits per band per day
+shiftDays 0.0069444 float #in days: 10./(24.*60.)
+
+##seeing
+seeingFwhmEff u 0.90 float # seeingFwhmEff u-band
+seeingFwhmEff g 0.87 float # seeingFwhmEff g-band
+seeingFwhmEff r 0.83 float # seeingFwhmEff r-band
+seeingFwhmEff i 0.80  float # seeingFwhmEff i-band
+seeingFwhmEff z 0.78 float # seeingFwhmEff z-band
+seeingFwhmEff y 0.76 float # seeingFwhmEff y-band
+
+seeingFwhmGeom u 0.90 float # seeingFwhmGeom u-band
+seeingFwhmGeom g 0.87 float # seeingFwhmGeom g-band
+seeingFwhmGeom r 0.83 float # seeingFwhmGeom r-band
+seeingFwhmGeom i 0.80  float # seeingFwhmGeom i-band
+seeingFwhmGeom z 0.78 float # seeingFwhmGeom z-band
+seeingFwhmGeom y 0.76 float # seeingFwhmGeom y-band
+
+##airmass
+airmass u 1.2 float #airmass u-band
+airmass g 1.2 float #airmass g-band
+airmass r 1.2 float #airmass r-band
+airmass i 1.2 float #airmass i-band
+airmass z 1.2 float #airmass z-band
+airmass y 1.2 float #airmass y-band
+
+##sky
+sky u 1.2 float #sky g-band
+sky g 1.2 float #sky g-band
+sky r 1.2 float #sky r-band
+sky i 1.2 float #sky i-band
+sky z 1.2 float #sky z-band
+sky y 1.2 float #sky y-band
+
+
+## moonPhase
+moonPhase u 0.5 float #moonPhase u-band
+moonPhase g 0.5 float #moonPhase g-band
+moonPhase r 0.5 float #moonPhase r-band
+moonPhase i 0.5 float #moonPhase i-band
+moonPhase z 0.5 float #moonPhase z-band
+moonPhase y 0.5 float #moonPhase y-band
+moonPhaseu 20. float #max moon phase for u-obs
+moonswapFilter y str #filter to be replaced by when no moon
+mooncompensate 0 int # to compensate for moon effects
+
+## rotTelPos
+rotTelPos 0 int #tel rotation dithering
+
+## m5file from realistic simus
+# m5File NoData str #m5 file from realistic simus
+# healpixID -1 int #healpixID for m5 values
+
+## Save data infos
+saveData 0 int #flag to save data
+outDir ../Fake_Observations str #output directory
+outName Fakes str #output file name

@@ -19,21 +19,34 @@ class SN_Rate:
       type of rate chosen (Ripoche, Perrett, Dilday) (default : Perrett)
     H0 : float, opt
        Hubble constant value :math:`H_{0}`(default : 70.)
+    H0_err: float, opt
+       H0 error (default: 2)
     Om0 : float, opt
         matter density value :math:`\Omega_{0}`  (default : 0.25)
+    Om0_err: float, opt
+       Om0 error (default: 0.025)
     min_rf_phase : float, opt
        min rest-frame phase (default : -15.)
     max_rf_phase : float, opt
        max rest-frame phase (default : 30.)
+    error_params: bool, opt
+      to propagate parameter errors (default: False)
     """
 
-    def __init__(self, rate='Perrett', H0=70, Om0=0.25,
-                 min_rf_phase=-15., max_rf_phase=30.):
+    def __init__(self, rate='Perrett', H0=70., H0_err=2.,
+                 Om0=0.25, Om0_err=0.025,
+                 min_rf_phase=-15., max_rf_phase=30.,
+                 error_params=False):
 
+        self.H0 = H0
+        self.H0_err = H0_err
+        self.Om0 = Om0
+        self.Om0_err = Om0_err
         self.astropy_cosmo = FlatLambdaCDM(H0=H0, Om0=Om0)
         self.rate = rate
         self.min_rf_phase = min_rf_phase
         self.max_rf_phase = max_rf_phase
+        self.error_params = error_params
 
     def __call__(self, zmin=0.1, zmax=0.2,
                  dz=0.01, survey_area=9.6,
@@ -55,7 +68,9 @@ class SN_Rate:
         bins : list(float), opt
           redshift bins (default : None)
         account_for_edges : bool
-          to account for season edges. If true, duration of the survey will be reduced by (1+z)*(maf_rf_phase-min_rf_phase)/365.25 (default : False)
+          to account for season edges. If true, duration of the survey
+          will be reduced by (1+z)*(maf_rf_phase-min_rf_phase)/365.25
+          (default : False)
         duration : float, opt
            survey duration (in days) (default : 140 days)
         duration_z : list(float),opt
@@ -72,8 +87,10 @@ class SN_Rate:
            production rate error
         nsn : float
            number of SN
-        err_nsn : float 
+        err_nsn : float
            error on the number of SN
+        age_universe: float
+         age of the universe at this redshift
         """
 
         if bins is None:
@@ -90,7 +107,6 @@ class SN_Rate:
         # or area= self.survey_area/41253.
 
         dvol = norm*self.astropy_cosmo.comoving_volume(thebins).value
-
         dvol = dvol[1:] - dvol[:-1]
 
         if account_for_edges:
@@ -105,9 +121,54 @@ class SN_Rate:
 
         normz = (1.+zz)
         nsn = rate * area * dvol * effective_duration / normz
-        err_nsn = err_rate*area * dvol * effective_duration / normz
+        err_rate = err_rate*area * dvol * effective_duration / normz
 
-        return zz, rate, err_rate, nsn, err_nsn
+        err_dvol = 0.
+        if self.error_params:
+            dvol_err = self.comoving_volume_error(norm, thebins)
+            err_dvol = rate * area * dvol_err * effective_duration / normz
+
+        err_nsn = np.sqrt(err_rate**2+err_dvol**2)
+        age_universe = self.astropy_cosmo.age(zz).value
+        return zz, rate, err_rate, nsn, err_nsn, age_universe
+
+    def comoving_volume_error(self, norm, thebins):
+        """
+        Method to estimate the comoving volume error
+
+        Parameters
+        ---------------
+        norm: float
+          normalisation factor
+        thebins: array
+          redshift bins
+
+        Returns
+        ----------
+        the comoving volume error
+
+        """
+
+        dx = 1.e-8
+
+        dvol = {}
+
+        for sign in [(-1, 0), (+1, 0), (0, -1), (0, +1)]:
+            astropy_cosmo = FlatLambdaCDM(
+                H0=self.H0+sign[0]*dx, Om0=self.Om0+sign[1]*dx)
+            tag = 'H0_{}_Om0_{}'.format(sign[0], sign[1])
+            dvol[tag] = norm*astropy_cosmo.comoving_volume(thebins).value
+
+        for key in dvol.keys():
+            dvol[key] = dvol[key][1:]-dvol[key][:-1]
+
+        dvol_err_H0 = (dvol['H0_1_Om0_0']-dvol['H0_-1_Om0_0'])/(2.*dx)
+        dvol_err_Om0 = (dvol['H0_0_Om0_1']-dvol['H0_0_Om0_-1'])/(2.*dx)
+
+        dvol_err = (dvol_err_H0*self.H0_err)**2
+        dvol_err += (dvol_err_Om0*self.Om0_err)**2
+
+        return np.sqrt(dvol_err)
 
     def RipocheRate(self, z):
         """The SNLS SNIa rate according to the (unpublished) Ripoche et al study.
@@ -122,6 +183,7 @@ class SN_Rate:
         rate : float
         error_rate : float
         """
+
         rate = 1.53e-4*0.343
         expn = 2.14
         my_z = np.copy(z)
@@ -142,11 +204,13 @@ class SN_Rate:
         rate : float
         error_rate : float
         """
+
         rate = 0.17E-4
         expn = 2.11
         err_rate = 0.03E-4
         err_expn = 0.28
         my_z = np.copy(z)
+        my_z[z > 1.] = 1.
         rate_sn = rate * np.power(1+my_z, expn)
         err_rate_sn = np.power(1+my_z, 2.*expn)*np.power(err_rate, 2.)
         err_rate_sn += np.power(rate_sn*np.log(1+my_z)*err_expn, 2.)
@@ -155,6 +219,7 @@ class SN_Rate:
 
     def DildayRate(self, z):
         """The Dilday rate according to
+        B. Dilday et al. Astrophys.J.682:262-282,2008
 
          Parameters
         --------------
@@ -177,10 +242,125 @@ class SN_Rate:
         err_rate_sn = rate_sn*np.log(1+my_z)*err_expn
         return rate_sn, err_rate_sn
 
-    """
-    def flat_rate(self, z):
-        return 1., 0.1
-    """
+    def HounsellRate(self, z):
+        """
+        Hounsell rate according to 
+        The Astrophysical Journal, Volume 867, Issue 1, article id. 23, 34
+
+        Parameters
+        ----------
+        z : float(s)
+            redshift.
+
+        Returns
+        -------
+        rate_sn : float
+            sn rate.
+        err_rate_sn: float
+            sn rate error.
+
+        """
+
+        rate_z_1 = 2.5e-5
+        expn_z_1 = 1.5
+        rate_z_1_3 = 9.7e-5
+        expn_z_1_3 = -0.5
+
+        my_z = np.copy(z)
+        idx = my_z < 1
+        rate_sn_z_1 = rate_z_1 * np.power(1+my_z[idx], expn_z_1)
+        rate_sn_z_1_3 = rate_z_1_3 * np.power(1+my_z[~idx], expn_z_1_3)
+        rate_sn = np.concatenate((rate_sn_z_1, rate_sn_z_1_3))
+        err_rate_sn = 0.2*rate_sn
+
+        return rate_sn, err_rate_sn
+
+    def CandelsRate(self, z):
+        """
+        Candels rate according to 
+        The Astronomical Journal, Volume 148, Issue 1, article id. 13, 2014)
+        T
+        (Rodney et al)
+
+        Parameters
+        ----------
+        z : float(s)
+            redshift.
+
+        Returns
+        -------
+        rate_sn : float
+            sn rate.
+        err_rate_sn: float
+            sn rate error.
+
+        """
+
+        eta_Ia = 1.02e-4
+        err_eta_Ia = 0.27e-4
+
+        age_universe = self.astropy_cosmo.age(z).value
+
+        import scipy.integrate as integrate
+
+        rate_sn = []
+        err_rate_sn = []
+        for vv in age_universe:
+            rr = integrate.quad(lambda x: self.SFR(
+                vv-x)*self.DTD(x, eta=eta_Ia), 0., vv)
+            rrerr = integrate.quad(lambda x: self.SFR(
+                vv-x)*self.DTD(x, eta=err_eta_Ia), 0., vv)
+            rate_sn.append(rr[0])
+            err_rate_sn.append(rrerr[0])
+
+        return np.array(rate_sn), np.array(err_rate_sn)
+
+    def SFR(self, z):
+        """
+        Start Formation Rate
+        Extracted from 
+        Monthly Notices of the Royal Astronomical Society, Volume 487, Issue 3
+        Wojtak et al, 2019
+
+        Parameters
+        ----------
+        z : float
+            Redshift.
+
+        Returns
+        -------
+        SFR, float
+
+        """
+
+        psi = 0.015*(1+z)**2.7
+        ff = ((1+z)/2.9)**5.6
+        psi /= 1.+ff
+
+        return psi
+
+    def DTD(self, x, eta=1.02e-4):
+        """
+        Delay Time Distribution
+        Extracted from 
+        Monthly Notices of the Royal Astronomical Society, Volume 487, Issue 3
+        Wojtak et al, 2019
+
+        Parameters
+        ----------
+        x : TYPE
+            DESCRIPTION.
+        eta : TYPE, optional
+            DESCRIPTION. The default is 1.02e-4.
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
+
+        return eta/x
 
     def SNRate(self, z):
         """SN rate estimation
@@ -195,12 +375,27 @@ class SN_Rate:
         rate : float
         error_rate : float
         """
-        if self.rate == 'Ripoche':
-            return self.RipocheRate(z)
-        if self.rate == 'Perrett':
-            return self.PerrettRate(z)
-        if self.rate == 'Dilday':
-            return self.DildayRate(z)
+        if self.rate != 'combined':
+            res, err = eval('self.{}Rate(z)'.format(self.rate))
+            return res, err
+        if self.rate == 'combined':
+            nsn = {}
+            w_nsn = {}
+            for rate in ['Ripoche', 'Perrett', 'Hounsell']:
+                res, err = eval('self.{}Rate(z)'.format(rate))
+                nsn[rate] = res
+                w_nsn[rate] = 1./err**2
+
+            rat = 0
+            wtot = 0
+            for key, vals in nsn.items():
+                rat += vals*w_nsn[key]
+                wtot += w_nsn[key]
+
+            rat /= wtot
+            err_rat = 1./np.sqrt(wtot)
+
+            return rat, err_rat
         """
         if self.rate == 'Flat':
             return self.flat_rate(z)
@@ -240,7 +435,9 @@ class SN_Rate:
         bins : list(float), opt
           redshift bins (default : None)
         account_for_edges : bool
-          to account for season edges. If true, duration of the survey will be reduced by (1+z)*(maf_rf_phase-min_rf_phase)/365.25 (default : False)
+          to account for season edges. If true, duration of the survey
+          will be reduced by (1+z)*(maf_rf_phase-min_rf_phase)/365.25
+          (default : False)
         duration : float, opt
            survey duration (in days) (default : 140 days)
         duration_z : list(float),opt
@@ -251,7 +448,7 @@ class SN_Rate:
         """
         import pylab as plt
 
-        zz, rate, err_rate, nsn, err_nsn = self.__call__(
+        zz, rate, err_rate, nsn, err_nsn, age_universe = self.__call__(
             zmin=zmin, zmax=zmax, dz=dz, bins=bins,
             account_for_edges=account_for_edges,
             duration=duration, survey_area=survey_area)
@@ -265,3 +462,72 @@ class SN_Rate:
         plt.xlabel('z')
         plt.ylabel('N$_{SN}$ <')
         plt.grid()
+
+
+class NSN:
+    """
+    class to estimate the number of supernovae from rate
+
+    Parameters
+    ---------------
+    rate: str, opt
+      SN rate. The default is Perrett
+    H0: float, opt
+      Hubble cte (default: 70)
+    Om0: float, opt
+      Omega_m value (default: 0.3)
+    min_rf_phase: float, opt
+      min rest-frame phase for nsn estimation (default: -15.)
+    max_rf_phase: float, opt
+      max rest-frame phase for nsn estimation (default: 30à
+
+    """
+
+    def __init__(self, rate='Perrett', H0=70., Om0=0.3,
+                 min_rf_phase=-15., max_rf_phase=30.):
+
+        self.H0 = H0
+        self.Om0 = Om0
+        self.min_rf_phase = min_rf_phase
+        self.max_rf_phase = max_rf_phase
+
+        self.rateSN = SN_Rate(rate=rate, H0=self.H0, Om0=self.Om0,
+                              min_rf_phase=self.min_rf_phase, max_rf_phase=self.max_rf_phase)
+
+    def __call__(self, zmin, zmax, dz, season_length, survey_area,
+                 account_for_edges=True, scale_factor=1):
+        """
+        Method to estimate the number of supernovae
+
+        Parameters
+        ----------------
+        zmin: float
+          min redshift
+        zmax: float
+          max redshift
+        dz: float
+          redshift binning value
+        season_length: float
+          season length (in days)
+        survey_area: float
+          area of the survey (in deg2)
+        account_for_edges: bool, opt
+          to account for edges when estimating nsn (default: True)
+        scale_factor: float, opt
+          scale factor for the number of sn (default: 1)
+
+        Returns
+        ----------
+        The number of supernovae
+
+        """
+        zz, rate, err_rate, nsn, err_nsn, age_universe = self.rateSN(zmin=zmin,
+                                                                     zmax=zmax,
+                                                                     dz=dz,
+                                                                     duration=season_length,
+                                                                     survey_area=survey_area,
+                                                                     account_for_edges=account_for_edges)
+
+        res = scale_factor*np.cumsum(nsn)[-1]
+
+        return res

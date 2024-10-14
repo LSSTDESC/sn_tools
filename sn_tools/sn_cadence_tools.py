@@ -5,14 +5,19 @@ from matplotlib.patches import Ellipse
 import numpy.lib.recfunctions as rf
 import h5py
 from astropy.table import Table, Column, vstack
-from scipy.interpolate import griddata, interpn, CloughTocher2DInterpolator, LinearNDInterpolator
-from sn_tools.sn_telescope import Telescope
-from sn_tools.sn_io import Read_Sqlite
+from scipy.interpolate import CloughTocher2DInterpolator
 from sn_tools.sn_obs import renameFields, getFields
-from sn_tools.sn_io import getObservations
+from sn_tools.sn_obs import getObservations
 import pandas as pd
-from sn_tools.sn_obs import DataInside
+from sn_tools.sn_obs import DataInside, season
 from sn_tools.sn_clusters import ClusterObs
+from sn_tools.sn_utils import multiproc
+from sn_tools.sn_io import get_beg_table, get_end_table, dumpIt
+import os
+import operator
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 
 class ReferenceData:
@@ -96,240 +101,6 @@ class ReferenceData:
         return interpolate.interp1d(sel['m5'], sel['flux_e'], bounds_error=False, fill_value=0.)
 
 
-class GenerateFakeObservations:
-    """
-    class to generate Fake observations
-
-    Parameters
-    ---------------
-
-    config: dict
-      dict of parameters
-    list : str,opt
-        Name of the columns for data generation.
-        Default : 'observationStartMJD', 'fieldRA', 'fieldDec','filter','fiveSigmaDepth','visitExposureTime','numExposures','visitTime','season'
-
-    """
-
-    def __init__(self, config,
-                 mjdCol='observationStartMJD', RACol='fieldRA',
-                 DecCol='fieldDec', filterCol='filter', m5Col='fiveSigmaDepth',
-                 exptimeCol='visitExposureTime', nexpCol='numExposures',
-                 seasonCol='season', seeingEffCol='seeingFwhmEff', seeingGeomCol='seeingFwhmGeom',
-                 visitTime='visitTime',
-                 sequences=False):
-
-        # config = yaml.load(open(config_filename))
-        self.mjdCol = mjdCol
-        self.m5Col = m5Col
-        self.filterCol = filterCol
-        self.RACol = RACol
-        self.DecCol = DecCol
-        self.exptimeCol = exptimeCol
-        self.seasonCol = seasonCol
-        self.nexpCol = nexpCol
-        self.seeingEffCol = seeingEffCol
-        self.seeingGeomCol = seeingGeomCol
-        self.visitTime = visitTime
-
-        # now make fake obs
-        if not sequences:
-            self.makeFake(config)
-        else:
-            self.makeFake_sqs(config)
-
-    def makeFake_sqs(self, config):
-        """ Generate Fake observations
-
-        Parameters
-        -------------
-        config : dict
-           dict of parameters (config file)
-
-        Returns
-        ---------
-        recordarray of observations with the fields:
-        MJD, RA, Dec, band,m5,Nexp, ExpTime, Season
-        accessible through self.Observations
-
-        """
-
-        bands = config['bands']
-        cadence = config['cadence']
-        shift_days = dict(
-            zip(bands, [config['shift_days']*io for io in range(len(bands))]))
-        # m5 = dict(zip(bands, config['m5']))
-        # Nvisits = dict(zip(bands, config['Nvisits']))
-        # Single_Exposure_Time = dict(zip(bands, config['Single_Exposure_Time']))
-        inter_season_gap = 100.
-        seeingEff = dict(zip(bands, config['seeingEff']))
-        seeingGeom = dict(zip(bands, config['seeingGeom']))
-        airmass = dict(zip(bands, config['airmass']))
-        sky = dict(zip(bands, config['sky']))
-        moonphase = dict(zip(bands, config['moonphase']))
-        RA = config['RA']
-        Dec = config['Dec']
-        rtot = []
-        # for season in range(1, config['nseasons']+1):
-        Nvisits = {}
-        Single_Exposure_Time = {}
-        for il, season in enumerate(config['seasons']):
-            m5 = dict(zip(bands, config['m5'][season]))
-            mjd_min = config['MJD_min']+il * \
-                (config['season_length'][season]+inter_season_gap)
-            mjd_max = mjd_min+config['season_length'][season]
-            n_visits = config['Nvisits'][season]
-            seqs = config['sequences'][season]
-            sing_exp_time = config['Single_Exposure_Time'][season]
-            cadence = config['cadence'][season]
-
-            for i in range(len(seqs)):
-                # for i,val in enumerate(config['sequences']):
-                mjd_min_seq = mjd_min+i*config['deltaT_seq'][i]
-                mjd_max_seq = mjd_max+i*config['deltaT_seq'][i]
-                mjd = np.arange(mjd_min_seq, mjd_max_seq+cadence, cadence)
-                night = (mjd-config['MJD_min']).astype(int)+1
-
-                for j, band in enumerate(seqs[i]):
-                    mjd += shift_days[band]
-                    Nvisits[band] = n_visits[i][j]
-                    Single_Exposure_Time[band] = sing_exp_time[i][j]
-                    m5_coadded = self.m5coadd(m5[band],
-                                              Nvisits[band],
-                                              Single_Exposure_Time[band])
-
-                    myarr = np.array(mjd, dtype=[(self.mjdCol, 'f8')])
-                    myarr = rf.append_fields(myarr, 'night', night)
-                    myarr = rf.append_fields(myarr, [self.RACol, self.DecCol, self.filterCol], [
-                        [RA]*len(myarr), [Dec]*len(myarr), [band]*len(myarr)])
-                    myarr = rf.append_fields(myarr, [self.m5Col, self.nexpCol, self.exptimeCol, self.seasonCol], [
-                        [m5_coadded]*len(myarr), [Nvisits[band]]*len(myarr), [Nvisits[band]*Single_Exposure_Time[band]]*len(myarr), [season]*len(myarr)])
-                    myarr = rf.append_fields(myarr, [self.seeingEffCol, self.seeingGeomCol], [
-                        [seeingEff[band]]*len(myarr), [seeingGeom[band]]*len(myarr)])
-                    myarr = rf.append_fields(myarr, self.visitTime, [
-                                             Nvisits[band]*Single_Exposure_Time[band]]*len(myarr))
-                    myarr = rf.append_fields(myarr, ['airmass', 'sky', 'moonPhase'], [
-                        [airmass[band]]*len(myarr), [sky[band]]*len(myarr), [moonphase[band]]*len(myarr)])
-                    rtot.append(myarr)
-
-            """
-            for i, band in enumerate(bands):
-                mjd = np.arange(mjd_min, mjd_max+cadence[band],cadence[band])
-                # if mjd_max not in mjd:
-                #    mjd = np.append(mjd, mjd_max)
-                mjd += shift_days[band]
-                m5_coadded = self.m5coadd(m5[band],
-                                          Nvisits[band],
-                                          Exposure_Time[band])
-
-                myarr = np.array(mjd, dtype=[(self.mjdCol, 'f8')])
-                myarr = rf.append_fields(myarr, [self.RACol, self.DecCol, self.filterCol], [
-                                         [RA]*len(myarr), [Dec]*len(myarr), [band]*len(myarr)])
-                myarr = rf.append_fields(myarr, [self.m5Col, self.nexpCol, self.exptimeCol, self.seasonCol], [
-                                         [m5_coadded]*len(myarr), [Nvisits[band]]*len(myarr), [Nvisits[band]*Exposure_Time[band]]*len(myarr), [season]*len(myarr)])
-                myarr = rf.append_fields(myarr, [self.seeingEffCol, self.seeingGeomCol], [
-                                         [seeingEff[band]]*len(myarr), [seeingGeom[band]]*len(myarr)])
-                rtot.append(myarr)
-            """
-        res = np.copy(np.concatenate(rtot))
-        res.sort(order=self.mjdCol)
-
-        res = rf.append_fields(res, 'observationId',
-                               np.random.randint(10*len(res), size=len(res)))
-
-        self.Observations = res
-
-    def makeFake(self, config):
-        """ Generate Fake observations
-
-        Parameters
-        ---------------
-        config : dict
-           dict of parameters (config file)
-
-        Returns
-        -----------
-        recordarray of observations with the fields:
-        MJD, RA, Dec, band,m5,Nexp, ExpTime, Season
-        accessible through self.Observations
-
-        """
-
-        bands = config['bands']
-        cadence = dict(zip(bands, config['cadence']))
-        shift_days = dict(
-            zip(bands, [config['shift_days']*io for io in range(len(bands))]))
-        m5 = dict(zip(bands, config['m5']))
-        Nvisits = dict(zip(bands, config['Nvisits']))
-        Exposure_Time = dict(zip(bands, config['Exposure_Time']))
-        inter_season_gap = 300.
-        seeingEff = dict(zip(bands, config['seeingEff']))
-        seeingGeom = dict(zip(bands, config['seeingGeom']))
-        airmass = dict(zip(bands, config['airmass']))
-        sky = dict(zip(bands, config['sky']))
-        moonphase = dict(zip(bands, config['moonphase']))
-        RA = config['RA']
-        Dec = config['Dec']
-        rtot = []
-        # for season in range(1, config['nseasons']+1):
-        for il, season in enumerate(config['seasons']):
-            # mjd_min = config['MJD_min'] + float(season-1)*inter_season_gap
-            mjd_min = config['MJD_min'][il]
-            mjd_max = mjd_min+config['season_length']
-
-            for i, band in enumerate(bands):
-                mjd = np.arange(mjd_min, mjd_max+cadence[band], cadence[band])
-                # if mjd_max not in mjd:
-                #    mjd = np.append(mjd, mjd_max)
-                mjd += shift_days[band]
-                m5_coadded = self.m5coadd(m5[band],
-                                          Nvisits[band],
-                                          Exposure_Time[band])
-
-                myarr = np.array(mjd, dtype=[(self.mjdCol, 'f8')])
-                myarr = rf.append_fields(myarr, [self.RACol, self.DecCol, self.filterCol], [
-                                         [RA]*len(myarr), [Dec]*len(myarr), [band]*len(myarr)])
-                myarr = rf.append_fields(myarr, [self.m5Col, self.nexpCol, self.exptimeCol, self.seasonCol], [
-                                         [m5_coadded]*len(myarr), [Nvisits[band]]*len(myarr), [Nvisits[band]*Exposure_Time[band]]*len(myarr), [season]*len(myarr)])
-                myarr = rf.append_fields(myarr, [self.seeingEffCol, self.seeingGeomCol], [
-                                         [seeingEff[band]]*len(myarr), [seeingGeom[band]]*len(myarr)])
-                myarr = rf.append_fields(myarr, ['airmass', 'sky', 'moonPhase'], [
-                                         [airmass[band]]*len(myarr), [sky[band]]*len(myarr), [moonphase[band]]*len(myarr)])
-                rtot.append(myarr)
-
-        res = np.copy(np.concatenate(rtot))
-        res.sort(order=self.mjdCol)
-
-        res = rf.append_fields(res, 'observationId',
-                               np.random.randint(10*len(res), size=len(res)))
-
-        self.Observations = res
-
-    def m5coadd(self, m5, Nvisits, Tvisit):
-        """ Coadded :math:`m_{5}` estimation
-        use approx. :math:`\Delta m_{5}=1.25*log_{10}(N_{visits}*T_{visits}/30.)
-        with : :math:`N_{visits}` : number of visits
-                    :math:`T_{visits}` : single visit exposure time
-
-        Parameters
-        --------------
-        m5 : list(float)
-           list of five-sigma depth values
-         Nvisits : list(float)
-           list of the number of visits
-          Tvisit : list(float)
-           list of the visit times
-
-       Returns
-        ---------
-       m5_coadd : list(float)
-          list of m5 coadded values
-
-        """
-        m5_coadd = m5+1.25*np.log10(float(Nvisits)*Tvisit/30.)
-        return m5_coadd
-
-
 class TemplateData(object):
     """
     class to load template LC
@@ -347,6 +118,7 @@ class TemplateData(object):
     def __init__(self, filename, band):
         self.fi = filename
         self.refdata = self.Stack()
+        from sn_telmodel.sn_telescope import Telescope
         self.telescope = Telescope(airmass=1.1)
         self.blue_cutoff = 300.
         self.red_cutoff = 800.
@@ -1082,3 +854,1434 @@ def Match_DD(fields_DD, df, radius=5):
             dfb = pd.concat([dfb, dfSel], sort=False)
 
     return dfb
+
+
+class Stat_DD_night:
+    """
+    class to estimate statistical estimator related to DD fields per night
+
+    Parameters
+    --------------
+    dbDir: str
+      db directory
+    dbName: str
+      db name
+    dbExtens: str
+      db extension
+    prefix: str, opt
+      prefix to tag DD fields in data (default: DD)
+    """
+
+    def __init__(self, dbDir, dbName, dbExtens, prefix='DD'):
+
+        self.dbDir = dbDir
+        self.dbName = dbName
+        self.dbExtens = dbExtens
+        self.prefix = prefix
+
+        self.obs = self.load()
+        self.obs_DD = self.get_DD()
+        budget = time_budget(self.obs, self.obs_DD)
+        nDD_night = nvisits_DD_night(self.obs_DD)
+
+        print('DD budget', budget, len(self.obs), nDD_night)
+
+        # print(test)
+        params = {}
+        params['obs_DD'] = self.obs_DD
+        params['Nvisits'] = len(self.obs)
+        params['dbName'] = self.dbName
+        params['mjdCol'] = 'mjd'
+        params['nightCol'] = 'night'
+        params['fieldCol'] = 'field'
+        params['fieldColdb'] = 'note'
+        params['filterCol'] = 'band'
+        params['list_moon'] = ['moonAz', 'moonRA',
+                               'moonDec', 'moonDistance', 'season', 'moonPhase']
+
+        res = multiproc(
+            np.unique(self.obs_DD['note']), params, ana_DDF, 6)
+
+        tab = Table.from_pandas(res)
+        tab.meta = dict(zip(['dbName'], [dbName]))
+        tab.meta = {**tab.meta, **budget}
+        tab.meta['nDD_night'] = nDD_night
+        self.summary = tab
+
+    def load(self):
+        """
+        Method to load data
+
+        Returns
+        ----------
+        numpy array of data
+        """
+
+        from sn_tools.sn_obs import getObservations
+        """
+        fName = '{}/{}.{}'.format(self.dbDir, self.dbName, self.dbExtens)
+        data = np.load(fName, allow_pickle=True)
+        """
+        data = getObservations(self.dbDir, self.dbName, self.dbExtens)
+        return data
+
+    def get_DD(self):
+        """
+        Method to select observations corresponding to DD fields
+
+        Returns
+        ----------
+        array of obs corresponding to DD fields
+
+        """
+        field_list = np.unique(self.obs['note'])
+        self.field_DD = list(
+            filter(lambda x: x.startswith(self.prefix), field_list))
+
+        # select DD only
+        id_ddf = np.in1d(self.obs['note'], self.field_DD)
+
+        return np.copy(self.obs[id_ddf])
+
+
+def stat_DD_night_pixel_deprecated(obsPixelDir, dbName, nproc=8):
+    """
+    Function to perform cadence stat per pixel
+
+    Parameters
+    ---------------
+    obsPixelDir: str
+      directory where the data are to be found
+    dbName: str
+      OS name
+    nproc: int, opt
+      number of procs for multiprocessing (default: 8)
+
+    Returns
+    -----------
+    pandas df with stat values per pixel/season
+
+    """
+    import glob
+    obsPixelFiles = glob.glob('{}/{}/*.npy'.format(obsPixelDir, dbName))
+
+    rtot = pd.DataFrame()
+    for fi in obsPixelFiles:
+        pixels = pd.DataFrame(np.load(fi, allow_pickle=True))
+        print(fi, len(pixels), pixels.columns)
+        if len(pixels) > 0:
+            rr = process_night_pixel(pixels.to_records(), dbName, nproc=nproc)
+            print(rr, rr.columns)
+            rtot = pd.concat((rtot, rr))
+
+    return rtot
+
+
+def stat_DD_night_pixel(pixels, dbName, nproc=8):
+    """
+    Function to perform cadence stat per pixel
+
+    Parameters
+    ---------------
+    obsPixelDir: str
+      directory where the data are to be found
+    dbName: str
+      OS name
+    nproc: int, opt
+      number of procs for multiprocessing (default: 8)
+
+    Returns
+    -----------
+    pandas df with stat values per pixel/season
+
+    """
+
+    rtot = pd.DataFrame()
+
+    if len(pixels) > 0:
+        rr = process_night_pixel(pixels.to_records(), dbName, nproc=nproc)
+        print(rr, rr.columns)
+        rtot = pd.concat((rtot, rr))
+
+    return rtot
+
+
+def process_night_pixel(pixels, dbName, nproc=8):
+
+    params = {}
+    params['obs_DD'] = pixels
+    params['Nvisits'] = len(pixels)
+    params['dbName'] = dbName
+    params['mjdCol'] = 'observationStartMJD'
+    params['nightCol'] = 'night'
+    params['fieldCol'] = 'healpixID'
+    params['fieldColdb'] = 'healpixID'
+    params['filterCol'] = 'filter'
+    params['list_moon'] = ['pixRA', 'pixDec', 'season']
+
+    res = multiproc(
+        np.unique(pixels['healpixID']), params, ana_DDF, nproc)
+
+    # print('allo', np.unique(pixels['fieldName']))
+    res['field'] = np.unique(pixels['fieldName'])[0]
+
+    return res
+
+
+def time_budget(obs, obs_DD):
+    """"
+    Method to estimate the time budget from DD
+
+    Returns
+    -----------
+    time budget (float)
+    """
+
+    fields = np.unique(obs_DD['note'])
+
+    dictout = {}
+
+    DD_time = np.sum(obs_DD['numExposures']*obs_DD['exptime'])
+    obs_time = np.sum(obs['numExposures']*obs['exptime'])
+    dictout['time_budget'] = DD_time/obs_time
+
+    for fi in fields:
+        idx = obs_DD['note'] == fi
+        sel = obs_DD[idx]
+        fi_time = np.sum(sel['numExposures']*sel['exptime'])
+        dictout['time_budget_{}'.format(fi)] = fi_time/obs_time
+
+    return dictout
+
+
+def nvisits_DD_night(obs):
+    """
+    Method to estimate the number of DD visits/obs. night
+
+    Parameters
+    ---------------
+    obs: numpy array
+     data to process (DD obs)
+
+    Returns
+    ----------
+    mean number of visits per obs. night
+
+    """
+
+    tt = pd.DataFrame(obs)
+    rr = tt.groupby(['night']).size()
+
+    return np.mean(rr)
+
+
+def ana_DDF(list_DD, params, j, output_q):
+    """
+    Method to analyze DDFs
+
+    """
+
+    obs_DD = params['obs_DD']
+    Nvisits = params['Nvisits']
+    dbName = params['dbName']
+    mjdCol = params['mjdCol']
+    nightCol = params['nightCol']
+    fieldCol = params['fieldCol']
+    fieldColdb = params['fieldColdb']
+    filterCol = params['filterCol']
+    list_moon = params['list_moon']
+
+    res_DD = pd.DataFrame()
+
+    for field in list_DD:
+        # print('analyzing', field)
+        idx = obs_DD[fieldColdb] == field
+        res = ana_field(np.copy(obs_DD[idx]), dbName, Nvisits,
+                        mjdCol=mjdCol,  nightCol=nightCol,
+                        fieldColdb=fieldColdb,
+                        fieldCol=fieldCol,
+                        filterCol=filterCol,
+                        list_moon=list_moon)
+        res_DD = pd.concat((res_DD, res))
+
+    if output_q is not None:
+        return output_q.put({j: res_DD})
+    else:
+        return res_DD
+
+
+def ana_field(obs, dbName, Nvisits, mjdCol='mjd',
+              nightCol='night', fieldColdb='note',
+              fieldCol='field', filterCol='band',
+              list_moon=['moonAz', 'moonRA', 'moonDec',
+                         'moonDistance', 'season']):
+    """
+    Method to analyze a single DD field
+
+    Parameters
+    --------------
+    obs: array
+        observation corresponding to a single DD field
+
+    """
+    # estimate seasons
+    obs = season(obs, mjdCol=mjdCol)
+    # print('aoooo', np.unique(obs[['note', 'season']]), obs.dtype.names)
+    # print(test)
+    field = np.unique(np.copy(obs[fieldColdb]))[0]
+
+    res = ana_visits(obs, field, Nvisits,
+                     mjdCol=mjdCol,
+                     nightCol=nightCol,
+                     fieldCol=fieldCol,
+                     filterCol=filterCol,
+                     list_moon=list_moon)
+    res['dbName'] = dbName
+
+    return res
+
+
+def ana_visits(obs, field, Nvisits,
+               nightCol='night', fieldCol='field',
+               filterCol='band', mjdCol='mjd',
+               list_moon=['moonAz', 'moonRA', 'moonDec', 'moonDistance', 'season']):
+    """
+    Method to analyze the number of visits per obs night
+
+    Parameters
+    --------------
+    obs: array
+        array of observations
+    field: str
+        field name
+
+    Returns
+    ----------
+    pandas df with the number of visits per night and per band
+
+    """
+
+    rtot = pd.DataFrame()
+    for night in np.unique(obs[nightCol]):
+        idx = obs[nightCol] == night
+        obs_night = obs[idx]
+        # estimate the number of filter changes per night
+        obs_night.sort(order=mjdCol)
+        diff = np.diff(obs_night[mjdCol])
+        idx = diff > 0.0005
+        # print('night', night, np.diff(
+        # obs_night['mjd']), obs_night['band'], len(diff[idx]))
+
+        dd = {}
+        dd[fieldCol] = field
+        dd[nightCol] = night
+        dd['Nfc'] = len(diff[idx])
+        dd['time_budget_night'] = len(obs_night)/Nvisits
+        dd['nvisits_DD'] = len(obs_night)
+        if list_moon:
+            for ll in list_moon:
+                dd[ll] = np.median(obs_night[ll])
+
+        # for b in np.unique(obs_night[filterCol]):
+        for b in 'ugrizy':
+            idb = obs_night[filterCol] == b
+            obs_filter = obs_night[idb]
+            resa, resb = -1.0, -1.0
+            if len(obs_filter) > 0:
+                dd[b] = len(obs_filter)
+                if 'mjd' in obs_filter.dtype.names:
+                    diff = np.diff(obs_filter['mjd'])
+                    resa = np.mean(diff)
+                    resb = np.std(diff)
+
+            dd['deltaT_{}_mean'.format(b)] = resa
+            dd['deltaT_{}_rms'.format(b)] = resb
+
+        str_combi = ''
+        for b in 'ugrizy':
+            if not b in dd.keys():
+                dd[b] = 0
+            str_combi += '{}{}'.format(dd[b], b)
+            if b != 'y':
+                str_combi += '-'
+        dd['config'] = str_combi
+        # print(dd)
+        ddmod = {}
+        for key, val in dd.items():
+            ddmod[key] = [val]
+        rtt = pd.DataFrame.from_dict(ddmod)
+        rtot = pd.concat((rtot, rtt))
+
+    return rtot
+
+
+def summary(res):
+
+    for config in res['config'].unique():
+        idx = res['config'] == config
+        sel = res[idx]
+        print(config, len(sel)/len(res))
+
+    seas_cad(res)
+
+
+def seas_cad(obs, meta={}):
+
+    dictout = {}
+
+    if meta:
+        # print('aoooou', obs.name, meta['time_budget_{}'.format(obs.name[0])])
+        dictout['time_budget_field'] = [
+            meta['time_budget_{}'.format(obs.name[0])]]
+
+    # get cadence and season length
+    seas_min, seas_max = np.min(obs['night']), np.max(obs['night'])
+    seas_length = seas_max-seas_min
+    diff = np.diff(obs['night'])
+    cad_med, cad, cad_std = np.median(diff), np.mean(diff), np.std(diff)
+
+    dictout['cadence_median'] = [cad_med]
+    dictout['cadence_mean'] = [cad]
+    dictout['cadence_std'] = [cad_std]
+    dictout['season_length'] = [seas_length]
+    dictout['time_budget_field_season'] = [np.sum(obs['time_budget_night'])]
+
+    # get gaps_stat
+    df_diff = pd.DataFrame(diff, columns=['cad'])
+    gapvals = [5, 10, 15, 20, 25, 30, 100]
+    group = df_diff.groupby(pd.cut(df_diff.cad, np.array(gapvals)))
+
+    for group_name, df_group in group:
+        gmin = group_name.left
+        gmax = group_name.right
+        dictout['gap_{}_{}'.format(gmin, gmax)] = [len(df_group)]
+
+    # stat on filter allocation
+    combis = obs.groupby(['config'])['config'].count()/len(obs)
+    dictout['filter_alloc'] = [combis.index.to_list()]
+    dictout['filter_frac'] = [
+        list(np.around(np.array(combis.values.tolist()), 2))]
+
+    dictout['Nfc'] = [np.sum(obs['Nfc'])]
+    for b in 'ugrizy':
+        dictout[b] = [np.sum(obs[b])]
+
+    return pd.DataFrame.from_dict(dictout)
+
+
+def Stat_DD_season(data_tab, cols=['field', 'season']):
+    """
+    Method to analyze a set of observing data per obs night
+
+    Parameters
+    --------------
+    data_tab: astopy table
+      data to process
+
+    """
+
+    print('hhh', data_tab.meta)
+
+    res = data_tab.to_pandas().groupby(cols).apply(
+        lambda x: seas_cad(x, data_tab.meta)).reset_index()
+
+    res['dbName'] = data_tab.meta['dbName']
+    res['time_budget'] = np.round(data_tab.meta['time_budget'], 3)
+    res['nDD_night'] = data_tab.meta['nDD_night']
+    return res
+
+
+def stat_DD_season_pixel(data_tab, cols=['healpixID', 'field',
+                                         'pixRA', 'pixDec',
+                                         'season', 'dbName']):
+    """
+    Function to analyze a set of observing data per obs night and per pixel
+
+    Parameters
+    --------------
+    data_tab: astopy table
+      data to process
+    cols: list(str)
+      list of variable to use foe groupby estimation
+      default: ['healpixID', 'field', 'pixRA', 'pixDec', 'season', 'dbName']
+
+    Returns
+    ----------
+    pandas df with stat cadence data
+
+    """
+
+    res = data_tab.groupby(cols).apply(
+        lambda x: seas_cad(x)).reset_index()
+
+    return res
+
+
+class Survey_depth:
+    def __init__(self, dbDir, configFile, outName='depth.tex'):
+        """
+        Class to print (latex table format) coadded depth and total number of visits
+
+        Parameters
+        ----------
+        dbDir : str
+            Location data dir.
+        configFile : str
+            config csv file.
+        outName : str, optional
+            Output name file. The default is 'depth.tex'.
+
+        Returns
+        -------
+        None.
+
+        """
+
+        self.dbDir = dbDir
+        self.configFile = configFile
+        self.outName = outName
+
+        # check if the file exist; yes? -> remove it
+        if os.path.isfile(outName):
+            os.system('rm {}'.format(outName))
+
+        # process the data
+        df = self.process_OS_depths()
+
+        idx = df['note'].isin(['DD:COSMOS', 'DD:ECDFS'])
+        df = df[idx]
+        # dump in file
+        self.print_latex_depth_one_table(df)
+        # self.print_latex_depth(df)
+        # self.print_latex_depth_two(df)
+
+    def process_OS_depths(self):
+        """
+        Method to process the data
+
+        Returns
+        -------
+        df : pandas df
+            Processed data.
+
+        """
+
+        conf = pd.read_csv(self.configFile)
+
+        df = pd.DataFrame()
+
+        for i, row in conf.iterrows():
+            dfa = self.process_OS_depth(row['dbName'])
+            dfa['dbName'] = row['dbName']
+            dfa['dbNamePlot'] = row['dbNamePlot']
+            df = pd.concat((df, dfa))
+
+        return df
+
+    def process_OS_depth(self, dbName):
+        """
+        Method to process a strategy
+
+        Parameters
+        ----------
+        dbName : str
+            Db name (OS) to process.
+
+        Returns
+        -------
+        res : pandas df
+            Processed data.
+
+        """
+
+        full_path = '{}/{}.npy'.format(self.dbDir, dbName)
+
+        data = np.load(full_path, allow_pickle=True)
+
+        data = pd.DataFrame.from_records(season(data))
+
+        idx = data['season'] == 1
+
+        res = pd.DataFrame()
+
+        for seas in data['season'].unique():
+            idx = data['season'] == seas
+
+            sela = data[idx]
+
+            res_y = sela.groupby(['note', 'filter']).apply(
+                lambda x: self.gime_m5_visits(x)).reset_index()
+            res_y['season'] = seas
+
+            res = pd.concat((res, res_y))
+
+        # cumulate seasons 2-10
+        idx = data['season'] >= 2
+        selb = data[idx]
+        res_c = selb.groupby(['note', 'filter']).apply(
+            lambda x: self.gime_m5_visits(x)).reset_index()
+        res_c['season'] = 11
+
+        res = pd.concat((res, res_c))
+
+        return res
+
+    def gime_m5_visits(self, grp):
+        """
+        Method to estimate coadded m5 and total number of visits
+
+        Parameters
+        ----------
+        grp : pandas df
+            Data to process.
+
+        Returns
+        -------
+        res : pandas df
+            output data.
+
+        """
+
+        m5_coadd = 1.25*np.log10(np.sum(10**(0.8*grp['fiveSigmaDepth'])))
+        nvisits = len(grp)
+
+        res = pd.DataFrame({'m5': [m5_coadd], 'nvisits': [nvisits]})
+
+        return res
+
+    def print_latex_depth(self, df):
+        """
+        Method to print results
+
+        Parameters
+        ----------
+        df : pandas df
+            Data to print.
+
+        Returns
+        -------
+        None.
+
+        """
+
+        dbNames = df['dbName'].unique()
+
+        for io, dbName in enumerate(dbNames):
+            idx = df['dbName'] == dbName
+            sel = df[idx]
+            dbNameb = sel['dbNamePlot'].unique()[0]
+            self.print_latex_depth_os(sel, dbName, io, dbNameb)
+
+    def print_latex_depth_one_table(self, df):
+        """
+        Method to print results
+
+        Parameters
+        ----------
+        df : pandas df
+            Data to print.
+
+        Returns
+        -------
+        None.
+
+        """
+        tta = ['DD:COSMOS', 'DD:ELAISS1', 'DD:XMM_LSS',
+               'DD:ECDFS', 'DD:EDFS_a', 'DD:EDFS_b']
+        ttb = ['\cosmos', '\elais', '\\xmm', '\cdfs', '\\adfa', '\\adfb']
+        fty = ['UDF', 'DF', 'UDF', 'DF', 'DF', 'DF']
+        trans_ddf = dict(zip(tta, ttb))
+        trans_ddfb = dict(zip(tta, fty))
+        dbNames = df['dbName'].unique()
+        bands = list('ugrizy')
+
+        caption = 'Coadded \\fivesig~depth and total number of visits $N_v$ per band.'
+
+        caption = '{'+caption+'}'
+        label = 'tab:depth'
+        label = '{'+label+'}'
+        r = get_beg_table(tab='{table*}', tabcols='{l|l|c|c|c}',
+                          fontsize='\\tiny',
+                          caption=caption, label=label, center=True)
+        rr = ' & & '
+        pp = 'Strategy & Field & '
+        pp += 'season & $m_5$ & $N_v$'
+        bb = '/'.join(bands)
+        rr += ' & {} & {}'.format(bb, bb)
+        rr += ' \\\\'
+        pp += ' \\\\'
+
+        r += [pp]
+        r += [rr]
+        r += [' & & & & \\\\']
+        r += ['\hline']
+        for io, dbName in enumerate(dbNames):
+            idx = df['dbName'] == dbName
+            sel = df[idx]
+            dbNameb = sel['dbNamePlot'].unique()[0]
+            dbNameb = dbNameb.replace('_', '\_')
+            fields = sel['note'].unique()
+            idb = 0
+            for ifi, field in enumerate(fields):
+                idxb = sel['note'] == field
+                selb = sel[idxb]
+                rb = self.print_latex_depth_field(selb)
+                vva = ' & {} & {}'.format(trans_ddfb[field], rb[0])
+                r += [vva]
+                vvb = ' & & {}'.format(rb[10])
+                if idb == 0:
+                    vvb = '{} {}'.format(dbNameb, vvb)
+                    idb = 1
+                r += [vvb]
+                if ifi == 1:
+                    r += ['\\hline']
+                else:
+                    r += ['\\cline{2-5}']
+            # r += ['\\hline']
+
+        print(r)
+        r += get_end_table(tab='{table*}', center=True)
+
+        # dump in file
+
+        dumpIt(self.outName, r)
+
+    def print_latex_depth_two(self, df):
+        """
+        Method to print results
+
+        Parameters
+        ----------
+        df : pandas df
+            Data to print.
+
+        Returns
+        -------
+        None.
+
+        """
+
+        dbNames = df['dbName'].unique()
+
+        for io, dbName in enumerate(dbNames):
+            idx = df['dbName'] == dbName
+            sel = df[idx]
+            dbNameb = sel['dbNamePlot'].unique()[0]
+            self.print_latex_depth_os_single(sel, dbName, io, dbNameb)
+            self.print_latex_depth_os_single(
+                sel, dbName, io, dbNameb, 'nv',
+                'total number of visits $N_v$ per band', varn='$N_v$')
+
+    def print_latex_depth_os(self, df, dbName, io, dbNameb):
+        """
+        Method to print os results
+
+        Parameters
+        ----------
+        df : pandas df
+            Data to print.
+        dbName : str
+            OS to process.
+        io : int
+            tag for label.
+        dbNameb : str
+            OS name to use for printing.
+
+        Returns
+        -------
+        None.
+
+        """
+
+        tta = ['DD:COSMOS', 'DD:ELAISS1', 'DD:XMM_LSS',
+               'DD:ECDFS', 'DD:EDFS_a', 'DD:EDFS_b']
+        ttb = ['\cosmos', '\elais', '\\xmm', '\cdfs', '\\adfa', '\\adfb']
+        fty = ['UDF', 'DF', 'UDF', 'DF', 'DF', 'DF']
+        trans_ddf = dict(zip(tta, ttb))
+        trans_ddfb = dict(zip(tta, fty))
+
+        fields = df['note'].unique()
+
+        bands = list('ugrizy')
+        dbNameb = dbNameb.split('_')
+        dbNameb = '\_'.join(dbNameb)
+        caption = '{} strategy: coadded \\fivesig~depth and total number of visits $N_v$ per band.'.format(
+            dbNameb)
+
+        caption = '{'+caption+'}'
+        label = 'tab:total_depth_{}'.format(io)
+        label = '{'+label+'}'
+        r = get_beg_table(tab='{table*}', tabcols='{l|c|c|c}',
+                          fontsize='\\tiny',
+                          caption=caption, label=label, center=True)
+        rr = ' & '
+        pp = 'Field & '
+        seas_max = 10
+        # for seas in df['season'].unique():
+        for seas in [1]:
+            pp += 'season & $m_5$ & $N_v$'
+            bb = '/'.join(bands)
+            rr += ' & {}'.format(bb)
+            rr += ' \\\\'
+            pp += ' \\\\'
+            """
+           if seas < seas_max:
+               rr += ' & '
+               pp += ' & '
+           else:
+               rr += ' \\\\'
+               pp += ' \\\\'
+           """
+            r += [pp]
+            r += [rr]
+            r += [' & & \\\\']
+            r += ['\hline']
+        for fi in fields:
+            idx = df['note'] == fi
+            selb = df[idx]
+            ll = self.print_latex_depth_field(selb)
+            """
+            for io, vv in enumerate(ll):
+                if io != 5:
+                    tt = ' & {}'.format(vv)
+                else:
+                    tt = '{} & {}'.format(trans_ddf[fi], vv)
+                r += [tt]
+            """
+            for io, vv in enumerate(ll):
+                tt = ''
+                if io == 10:
+                    tt = ' & {}'.format(vv)
+                else:
+                    if io == 0:
+                        tt = '{} & {}'.format(trans_ddfb[fi], vv)
+                if tt != '':
+                    r += [tt]
+            r += ['\hline']
+        r += get_end_table(tab='{table*}', center=True)
+
+        """
+       r.append('\newpage')
+       r.append('\vspace*{20cm}')
+       r.append('\newpage')
+       """
+        # dump in file
+        """
+       for vv in r:
+           print(vv)
+       """
+
+        dumpIt(self.outName, r)
+
+    def print_latex_depth_os_single(self, df, dbName, io, dbNameb,
+                                    var='m5',
+                                    forcap='coadded \\fivesig~depth per band',
+                                    varn='$m_5$'):
+        """
+        Method to print os results
+
+        Parameters
+        ----------
+        df : pandas df
+            Data to print.
+        dbName : str
+            OS to process.
+        io : int
+            tag for label.
+        dbNameb : str
+            OS name to use for printing.
+
+        Returns
+        -------
+        None.
+
+        """
+
+        tta = ['DD:COSMOS', 'DD:ELAISS1', 'DD:XMM_LSS',
+               'DD:ECDFS', 'DD:EDFS_a', 'DD:EDFS_b']
+        ttb = ['\cosmos', '\elais', '\\xmm', '\cdfs', '\\adfa', '\\adfb']
+        fty = ['UDF', 'DF', 'UDF', 'DF', 'DF', 'DF']
+        trans_ddf = dict(zip(tta, ttb))
+        trans_ddfb = dict(zip(tta, fty))
+
+        fields = df['note'].unique()
+
+        bands = list('ugrizy')
+        dbNameb = dbNameb.split('_')
+        dbNameb = '\_'.join(dbNameb)
+        # caption = '{} strategy: coadded \\fivesig~depth and total number of visits $N_v$ per band.'.format(
+        #    dbNameb)
+
+        caption = '{} strategy: {}.'.format(dbNameb, forcap)
+        caption = '{'+caption+'}'
+        label = 'tab:total_depth_{}_{}'.format(var, io)
+        label = '{'+label+'}'
+        r = get_beg_table(tab='{table}', tabcols='{l|c|c}',
+                          fontsize='\\tiny',
+                          caption=caption, label=label, center=True)
+        rr = ' & '
+        pp = 'Field & '
+        seas_max = 10
+        # for seas in df['season'].unique():
+        for seas in [1]:
+            pp += 'season & '+varn
+            bb = '/'.join(bands)
+            rr += ' & {}'.format(bb)
+            rr += ' \\\\'
+            pp += ' \\\\'
+            """
+            if seas < seas_max:
+                rr += ' & '
+                pp += ' & '
+            else:
+                rr += ' \\\\'
+                pp += ' \\\\'
+            """
+            r += [pp]
+            r += [rr]
+            r += [' & & \\\\']
+            r += ['\hline']
+        for fi in fields:
+            idx = df['note'] == fi
+            selb = df[idx]
+            ll = self.print_latex_depth_field_single(selb, var=var)
+            """
+            for io, vv in enumerate(ll):
+                if io != 5:
+                    tt = ' & {}'.format(vv)
+                else:
+                    tt = '{} & {}'.format(trans_ddf[fi], vv)
+                r += [tt]
+            """
+            for io, vv in enumerate(ll):
+                if io == 11:
+                    tt = ' & {}'.format(vv)
+                else:
+                    if io == 0:
+                        tt = '{} & {}'.format(trans_ddf[fi], vv)
+                r += [tt]
+            r += ['\hline']
+        r += get_end_table(tab='{table}', center=True)
+        # r.append('\\newpage')
+        """
+        r.append('\newpage')
+        r.append('\vspace*{20cm}')
+        r.append('\newpage')
+        """
+        # dump in file
+        """
+        for vv in r:
+            print(vv)
+        """
+
+        dumpIt(self.outName, r)
+
+    def print_latex_depth_field(self, data, bands='ugrizy'):
+        """
+        Method to print field results in latex mode
+
+        Parameters
+        ----------
+        data : pandas df
+            Data to print.
+        bands : str, optional
+            List of bands to consider. The default is 'ugrizy'.
+
+        Returns
+        -------
+        r : list(str)
+            Result to be printed.
+
+        """
+
+        r = []
+        seasons = range(1, 12, 1)
+        seas_tt = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '2-10']
+        # seasons = range(1, 11, 1)
+        # seas_tt = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
+        trans_seas = dict(zip(seasons, seas_tt))
+
+        for seas in data['season'].unique():
+            idx = data['season'] == seas
+            sel = data[idx]
+            m5 = []
+            nv = []
+            for b in list(bands):
+                idxb = sel['filter'] == b
+                selb = sel[idxb]
+                mm5 = selb['m5'].values[0]
+                nvv = selb['nvisits'].values[0]
+                m5.append('{}'.format(np.round(mm5, 1)))
+                nv.append('{}'.format(int(nvv)))
+            m5_tot = '/'.join(m5)
+            nv_tot = '/'.join(nv)
+
+            rr = '{} & {} & {}'.format(trans_seas[seas], m5_tot, nv_tot)
+
+            rr += '\\\\'
+            r.append(rr)
+            """
+            if seas != 10:
+                rr += ' & '
+            else:
+                rr += ' \\\\'
+            """
+        return r
+
+    def print_latex_depth_field_single(self, data, bands='ugrizy', var='m5'):
+        """
+        Method to print field results in latex mode
+
+        Parameters
+        ----------
+        data : pandas df
+            Data to print.
+        bands : str, optional
+            List of bands to consider. The default is 'ugrizy'.
+
+        Returns
+        -------
+        r : list(str)
+            Result to be printed.
+
+        """
+
+        r = []
+        seasons = range(1, 12, 1)
+        seas_tt = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '2-10']
+        # seasons = range(1, 11, 1)
+        # seas_tt = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
+        trans_seas = dict(zip(seasons, seas_tt))
+
+        for seas in data['season'].unique():
+            idx = data['season'] == seas
+            sel = data[idx]
+            m5 = []
+            nv = []
+            for b in list(bands):
+                idxb = sel['filter'] == b
+                selb = sel[idxb]
+                mm5 = selb['m5'].values[0]
+                nvv = selb['nvisits'].values[0]
+                m5.append('{}'.format(np.round(mm5, 1)))
+                nv.append('{}'.format(int(nvv)))
+            m5_tot = '/'.join(m5)
+            nv_tot = '/'.join(nv)
+
+            # rr = '{} & {} & {}'.format(trans_seas[seas], m5_tot, nv_tot)
+            gg = m5_tot
+            if var == 'nv':
+                gg = nv_tot
+            rr = '{} & {}'.format(trans_seas[seas], gg)
+            rr += '\\\\'
+            r.append(rr)
+            """
+            if seas != 10:
+                rr += ' & '
+            else:
+                rr += ' \\\\'
+            """
+        return r
+
+
+class Survey_time:
+    def __init__(self, dbDir, configFile, outName='survey_exptime.tex'):
+        """
+        class to estimate exposure times
+
+        Parameters
+        ----------
+        dbDir : str
+            Data location dir.
+        configFile : str
+            configuration file (csv).
+        outName : str, optional
+            Output file name. The default is 'survey_exptime.tex'.
+
+        Returns
+        -------
+        None.
+
+        """
+
+        self.dbDir = dbDir
+        self.configFile = configFile
+        self.outName = outName
+
+        # check if the file exist; yes? -> remove it
+        if os.path.isfile(outName):
+            os.system('rm {}'.format(outName))
+
+        # processing data
+        df = self.process_survey_time()
+
+        # print file
+        self.print_survey_time(df)
+
+    def process_survey_time(self):
+        """
+        Method to process survey exptimes
+
+        Returns
+        -------
+        df : pandas df
+            Processed data.
+
+        """
+
+        conf = pd.read_csv(self.configFile)
+
+        df = pd.DataFrame()
+
+        for i, row in conf.iterrows():
+            dfa = self.process_OS(row['dbName'])
+            dfa['dbName'] = row['dbName']
+            dfa['dbNamePlot'] = row['dbNamePlot']
+            df = pd.concat((df, dfa))
+            # break
+
+        return df
+
+    def process_OS(self, dbName):
+        """
+        Method to process an observing strategy
+
+        Parameters
+        ----------
+        dbName : str
+            OS name.
+
+        Returns
+        -------
+        df_tot : pandas df
+            Processed data.
+
+        """
+
+        full_path = '{}/{}.npy'.format(self.dbDir, dbName)
+
+        data = np.load(full_path, allow_pickle=True)
+
+        data = pd.DataFrame.from_records(season(data))
+
+        # season 1 stat
+        df_y1 = self.get_infos(data, [1])
+
+        # season 2 fields
+        df_y2 = pd.DataFrame()
+        for vv in ['COSMOS', 'ELAISS1', 'EDFS_a']:
+            df_y = self.get_infos(data, [2], vv)
+            df_y2 = pd.concat((df_y, df_y2))
+
+        # print(df_y2)
+        # all fields, all seasons
+
+        df_tot = pd.concat((df_y1, df_y2))
+        # df_all = get_infos(data, range(2, 11))
+
+        idx = data['season'] > 1
+        # print(df_all['expTime_sum'].sum(), data[idx]['visitExposureTime'].sum())
+
+        expTime = data[idx]['visitExposureTime'].sum()
+
+        df_all = pd.DataFrame([expTime], columns=['expTime_sum'])
+        df_all['season'] = 10
+        df_all['field'] = 'all'
+        df_all['moon'] = -1
+        df_all['expTime_nightly'] = -1
+
+        df_tot = pd.concat((df_tot, df_all))
+
+        return df_tot
+
+    def print_survey_time(self, df):
+        """
+        Method to print(dump) results
+
+        Parameters
+        ----------
+        df : pandas df
+            Data to dump.
+
+        Returns
+        -------
+        None.
+
+        """
+
+        # udf
+        idx = df['season'] == 2
+        sel_y2 = df[idx]
+
+        idd = df['season'] == 10
+        sel_all = df[idd]
+
+        rtot = []
+        for dbName in sel_y2['dbName'].unique():
+            idxa = sel_y2['dbName'] == dbName
+            sela = sel_y2[idxa]
+            dbNameb = sela['dbNamePlot'].values[0]
+            r = [dbNameb]
+            for vv in ['COSMOS', 'ELAISS1']:
+                rr = self.get_vals(sela, vv)
+                r += rr
+            # rtot.append(r)
+            idf = sel_all['dbName'] == dbName
+            r_all = sel_all[idf]['expTime_sum'].mean()
+            r_all = np.round(r_all/3600., 1)
+            r.append(r_all)
+            rtot.append(r)
+            # break
+        # print(rtot)
+
+        rr = []
+        caption = '{Exposure times (in hours) for seasons 2-10.}'
+        # caption += ' $\Phi_{Moon}$ is the Moon phase.}'
+        rr = get_beg_table(tab='{table}',
+                           caption=caption,
+                           label='{tab:exptime_1}',
+                           tabcols='{l|c|c|c}')
+        rr.append(' &  \multicolumn{2}{|c|}{nightly} & \\\\')
+        rr.append('Strategy & UDF & DF & survey \\\\')
+        # rr.append(' & $\Phi_{Moon}\leq 20\\%$ & $\Phi_{Moon} > 20\\%$ \
+        #     & $\Phi_{Moon}\leq 20\\%$ & $\Phi_{Moon} > 20\\% $& \\\\')
+        # rr.append(' & $\Phi_{Moon}$ & $\Phi_{Moon}$ \
+        #      & $\Phi_{Moon}$ & $\Phi_{Moon}$& \\\\')
+        # rr.append(' & $\leq 20\\%$ & $> 20\\%$ \
+        #      & $\leq 20\\%$ & $> 20\\% $& \\\\')
+        rr.append('\hline')
+
+        for vv in rtot:
+            # dbNameb = '_'.join(vv[0].split('_')
+            dbNameb = vv[0].replace('_', '\_')
+            rr.append('{} & {} & {} & {} \\\\'.format(
+                dbNameb, vv[2], vv[4], vv[5]))
+        rr.append('\\hline')
+        rr += get_end_table(tab='{table}')
+
+        # dump data
+        dumpIt(self.outName, rr)
+
+    def print_survey_time_orig(self, df):
+        """
+        Method to print(dump) results
+
+        Parameters
+        ----------
+        df : pandas df
+            Data to dump.
+
+        Returns
+        -------
+        None.
+
+        """
+
+        # udf
+        idx = df['season'] == 2
+        sel_y2 = df[idx]
+
+        idd = df['season'] == 10
+        sel_all = df[idd]
+
+        rtot = []
+        for dbName in sel_y2['dbName'].unique():
+            idxa = sel_y2['dbName'] == dbName
+            sela = sel_y2[idxa]
+            dbNameb = sela['dbNamePlot'].values[0]
+            r = [dbNameb]
+            for vv in ['COSMOS', 'ELAISS1']:
+                rr = self.get_vals(sela, vv)
+                r += rr
+            # rtot.append(r)
+            idf = sel_all['dbName'] == dbName
+            r_all = sel_all[idf]['expTime_sum'].mean()
+            r_all = np.round(r_all/3600., 1)
+            r.append(r_all)
+            rtot.append(r)
+            # break
+        # print(rtot)
+
+        rr = []
+        caption = '{Exposure times (in hours) for seasons 2-10.'
+        caption += ' $\Phi_{Moon}$ is the Moon phase.}'
+        rr = get_beg_table(tab='{table}',
+                           caption=caption,
+                           label='{tab:exptime_1}',
+                           tabcols='{l|c|c|c|c|c}')
+        rr.append(' & \multicolumn{4}{|c|}{nightly} & \\\\')
+        rr.append(
+            'Strategy & \multicolumn{2}{|c|}{UDF} & \
+                \multicolumn{2}{|c|}{DF} & survey \\\\')
+        # rr.append(' & $\Phi_{Moon}\leq 20\\%$ & $\Phi_{Moon} > 20\\%$ \
+        #     & $\Phi_{Moon}\leq 20\\%$ & $\Phi_{Moon} > 20\\% $& \\\\')
+        rr.append(' & $\Phi_{Moon}$ & $\Phi_{Moon}$ \
+              & $\Phi_{Moon}$ & $\Phi_{Moon}$& \\\\')
+        rr.append(' & $\leq 20\\%$ & $> 20\\%$ \
+              & $\leq 20\\%$ & $> 20\\% $& \\\\')
+        rr.append('\hline')
+
+        for vv in rtot:
+            # dbNameb = '_'.join(vv[0].split('_')
+            dbNameb = vv[0].replace('_', '\_')
+            rr.append('{} & {} & {} & {} & {} & {} \\\\'.format(
+                dbNameb, vv[1], vv[2], vv[3], vv[4], vv[5]))
+
+        rr += get_end_table(tab='{table}')
+
+        # dump data
+        dumpIt(self.outName, rr)
+
+    def get_vals(self, sela, field):
+        """
+        Method to get rounded exptimes
+
+        Parameters
+        ----------
+        sela : pandas df
+            Data to process.
+        field : str
+            Field name.
+
+        Returns
+        -------
+        list(float)
+            exptimes in hours.
+
+        """
+
+        idxb = sela['field'] == field
+        selb = sela[idxb]
+
+        idxc = selb['moon'] == 0
+        ra = selb[idxc]['expTime_nightly'].values[0]
+        rb = selb[~idxc]['expTime_nightly'].values[0]
+
+        ra /= 3600
+        rb /= 3600.
+        return [np.round(ra, 1), np.round(rb, 1)]
+
+    def nvisits(self, grp, varsel, valsel, op):
+        """
+        Method to get nvisits
+
+        Parameters
+        ----------
+        grp : pandas df
+            Data to process.
+        varsel : str
+            Selection var name.
+        valsel : float
+            selection value.
+        op : operator
+            Operator to apply.
+
+        Returns
+        -------
+        pandas df
+            Processed data.
+
+        """
+
+        idx = op(grp[varsel], valsel)
+
+        sel = grp[idx]
+
+        nvisits = len(sel)
+        expTime = sel['visitExposureTime'].sum()
+
+        return pd.DataFrame([[expTime, len(sel)]],
+                            columns=['expTime', 'nvisits'])
+
+    def nightly_visits(self, data):
+        """
+        Method to estimate nightly visits
+
+        Parameters
+        ----------
+        data : pandas df
+            Data to process.
+
+        Returns
+        -------
+        df : pandas df
+            processed data.
+
+        """
+
+        # get the nightly number of visits
+        nv_moon = data.groupby(['note', 'night']).apply(
+            lambda x: self.nvisits(x, 'moonPhase', 20, operator.gt))
+        nv_nomoon = data.groupby(['note', 'night']).apply(
+            lambda x: self.nvisits(x, 'moonPhase', 20, operator.le))
+
+        dfa = self.calc_exptime(nv_moon)
+        dfb = self.calc_exptime(nv_nomoon)
+
+        dfa['moon'] = 1
+        dfb['moon'] = 0
+
+        df = pd.concat((dfa, dfb))
+
+        return df
+
+    def calc_exptime(self, data):
+        """
+        Method to estimate exposure time
+
+        Parameters
+        ----------
+        data : pandas df
+            Data to process.
+
+        Returns
+        -------
+        pandas df
+            Processed data.
+
+        """
+
+        idx = data['expTime'] > 0.
+        sel_data = data[idx]
+
+        med_exptime = sel_data['expTime'].median()
+        sum_exptime = sel_data['expTime'].sum()
+
+        return pd.DataFrame([[med_exptime, sum_exptime]],
+                            columns=['expTime_nightly', 'expTime_sum'])
+
+    def get_infos(self, data, season, field='all'):
+        """
+        Method to get field infos
+
+        Parameters
+        ----------
+        data : pandas df
+            Data to process.
+        season : int
+            Season to process.
+        field : str, optional
+            Field to process. The default is 'all'.
+
+        Returns
+        -------
+        dfb : pandas df
+            Processed data.
+
+        """
+
+        dfb = pd.DataFrame()
+        for seas in season:
+            idx = data['season'] == seas
+            if field != 'all':
+                idx &= data['note'] == 'DD:{}'.format(field)
+            data_y = data[idx]
+
+            df_y = self.nightly_visits(data_y)
+
+            df_y['season'] = seas
+            df_y['field'] = field
+
+            dfb = pd.concat((dfb, df_y))
+
+        return dfb
