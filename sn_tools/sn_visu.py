@@ -1,5 +1,5 @@
 import numpy as np
-import matplotlib
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.animation as manimation
@@ -776,7 +776,7 @@ class MoviePixels:
     def pixelNight(self, night, data, nVisits_min, pixel_night, res):
         """
         Method to identify the pixels that got visits (in some defined bands) that night.
-        The idea is to update a pandas df with cols healpixID, night_last where 
+        The idea is to update a pandas df with cols healpixID, night_last where
         healpixID is the pixel ID and night_last is the lastest nigh when the pixel was observed
         in bands define by nVisits_min.
 
@@ -791,14 +791,14 @@ class MoviePixels:
         pixel_night: pandas df
           df with the following cols: healpixID, night_last
         res: record array
-          some global stat: 
+          some global stat:
 
         Returns
         ----------
         pixel_night: pandas df
           df with the following cols: healpixID, night_last
         res: record array
-          some global stat: 
+          some global stat:
 
         """
 
@@ -1152,7 +1152,7 @@ def get_map(nside) -> pd.DataFrame:
     return map_pixel
 
 
-def plot_pixels(data, rot=(0., 0., 0.)):
+def plot_pixels(data, rot=(0., 0., 0.), imin=1, imax=5):
     """
     Function to plot pixels with weight >= 0
 
@@ -1167,20 +1167,39 @@ def plot_pixels(data, rot=(0., 0., 0.)):
 
     """
 
+    plt.rcParams['axes.labelweight'] = 'bold'
+    plt.rcParams['axes.titleweight'] = 'bold'
+    plt.rcParams['figure.titleweight'] = 'bold'
+    plt.rcParams['axes.labelsize'] = 12
     npixels = len(data)
     hpxmap = np.zeros(npixels, dtype=float)
-    hpxmap = np.full(hpxmap.shape, 0.)
+    hpxmap = np.full(hpxmap.shape, -1)
     hpxmap[data['healpixID']] += data['weight']
 
-    xmin = 0.0
-    xmax = np.max(data['weight'])
-    norm = plt.cm.colors.Normalize(xmin, xmax)
-
-    cmap = plt.cm.jet
+    # cmap = plt.cm.jetc
+    cmap = plt.get_cmap('jet', imax)
+    norm = plt.cm.colors.Normalize(imin, imax)
     cmap.set_under('w')
 
-    hp.mollview(hpxmap, cmap=cmap, nest=True, flip='astro',
-                min=xmin, max=xmax, norm=norm, coord=['C'],
-                title='E(B-V) MW - SFD', rot=rot)
+    proj_map = hp.mollview(hpxmap, cmap=cmap, nest=True, flip='astro',
+                           min=imin, max=imax, norm=norm, coord=['C'],
+                           title='Spectro-z footprint',
+                           rot=rot, cbar=False, return_projected_map=True)
 
+    fig = plt.gcf()
+    ax = plt.gca()
+    cax = ax.imshow(proj_map, cmap=cmap)
+    # fig.colorbar()
+    # set some values to ticks
+    bounds = list(range(imin, imax+1))
+    cbar = fig.colorbar(cax, ticks=bounds,
+                        orientation='horizontal')
+
+    boundsb = [0.5, 1.5, 2.5, 3.5, 4.5]
+    cbar.set_ticks(boundsb)
+    cbar.ax.set_xticklabels(
+        ['TiDES', 'desi_v3', '4hs_v3', 'desi2_v3', 'crs_v3'],
+        fontweight='bold')
+    cbar.ax.tick_params(size=0)
+    # cbar.set_label(label='Survey', weight='bold')
     hp.graticule(coord='C')
