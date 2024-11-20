@@ -1819,9 +1819,11 @@ class DataToPixels:
         seldata = pd.DataFrame(np.copy(data[idx]))
 
         # print('process for pixel match', j, len(obsid))
+
         matched_pixels = seldata.groupby(grpCol).apply(
             lambda x: self.match_gnomonic(x, healpixIDs, pixRA,
-                                          pixDec, display)).reset_index()
+                                          pixDec, display))
+        # .reset_index()
 
         # print('pixel match done', j)
         if output_q is not None:

@@ -30,6 +30,8 @@ def multiproc(data, params, func, nproc):
       number of processes
 
     """
+    #method = multiprocessing.get_start_method()
+    #print('multiproc method', method)
     nproc = min([len(data), nproc])
     # multiprocessing parameters
     nz = len(data)
