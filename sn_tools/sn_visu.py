@@ -1152,7 +1152,8 @@ def get_map(nside) -> pd.DataFrame:
     return map_pixel
 
 
-def plot_pixels(data, rot=(0., 0., 0.), imin=1, imax=5):
+def plot_pixels(data, rot=(0., 0., 0.), imin=1, imax=5,
+                xticklabels=['TiDES', 'desi_v3', '4hs_v3', 'desi2_v3', 'crs_v3']):
     """
     Function to plot pixels with weight >= 0
 
@@ -1197,9 +1198,7 @@ def plot_pixels(data, rot=(0., 0., 0.), imin=1, imax=5):
 
     boundsb = [0.5, 1.5, 2.5, 3.5, 4.5]
     cbar.set_ticks(boundsb)
-    cbar.ax.set_xticklabels(
-        ['TiDES', 'desi_v3', '4hs_v3', 'desi2_v3', 'crs_v3'],
-        fontweight='bold')
+    cbar.ax.set_xticklabels(xticklabels, fontweight='bold')
     cbar.ax.tick_params(size=0)
     # cbar.set_label(label='Survey', weight='bold')
     hp.graticule(coord='C')
