@@ -1202,3 +1202,53 @@ def plot_pixels(data, rot=(0., 0., 0.), imin=1, imax=5,
     cbar.ax.tick_params(size=0)
     # cbar.set_label(label='Survey', weight='bold')
     hp.graticule(coord='C')
+    
+def pix_coord(df, nside=64):
+    """
+    Function to add (RA,Dec) of pixels given healpixIDs
+
+    Parameters
+    ----------
+    df : pandas df
+        Data to process.
+    nside : int, optional
+        nside healpix param. The default is 64.
+
+    Returns
+    -------
+    df : pandas df
+        original df+pixRA and pixDec cols.
+
+    """
+
+    healpixId = df['healpixID'].to_list()
+    coord = hp.pix2ang(nside, healpixId, nest=True, lonlat=True)
+
+    pixRA = coord[0]
+    pixDec = coord[1]
+    df['pixRA'] = pixRA
+    df['pixDec'] = pixDec
+
+    return df
+
+def get_all_pixels(nside=64):
+    """
+    Function to grab all healpixIDs corresponding to nside
+
+    Parameters
+    ----------
+    nside : int, optional
+        nside healpix param. The default is 64.
+
+    Returns
+    -------
+    pandas df
+        Output data (healpixID col).
+
+    """
+
+    npix = hp.nside2npix(nside)
+
+    dfa = pd.DataFrame(np.arange(npix), columns=['healpixID'])
+
+    return pix_coord(dfa, nside)
