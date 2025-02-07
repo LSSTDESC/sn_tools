@@ -30,8 +30,8 @@ def multiproc(data, params, func, nproc):
       number of processes
 
     """
-    #method = multiprocessing.get_start_method()
-    #print('multiproc method', method)
+    # method = multiprocessing.get_start_method()
+    # print('multiproc method', method)
     nproc = min([len(data), nproc])
     # multiprocessing parameters
     nz = len(data)
@@ -2760,3 +2760,46 @@ def n_z(data, var='z', bins=np.arange(0.005, 0.11, 0.01),
     df[varname] = list(_values)
 
     return df
+
+
+def register_bands_sncosmo(sncosmo, telescope, airmass, aerosol, pwv, ozone):
+    """
+    Function to register throughputs in sncosmo
+
+    Parameters
+    ----------
+    sncosmo : sncosmo instance
+        DESCRIPTION.
+    telescope : Throughputs
+        instance of the class.
+    airmass : float
+        airmass value.
+    aerosol : float
+        aerosol value.
+    pwv : float
+        precipitable water vapour value.
+    ozone : float
+        ozone value.
+
+    Returns
+    -------
+    None.
+
+    """
+
+    # band registery in sncosmo
+    from astropy import units as u
+
+    telescope.new_atmosphere(site_name=telescope.site_name,
+                             airmass=airmass,
+                             aerosol=aerosol,
+                             pwv=pwv, oz=ozone)
+    for band in 'grizy':
+        name = '{}::{}_{}'.format(
+            telescope.site_name, band, int(10*airmass))
+        throughput = telescope.throughputs[band]
+        bandcosmo = sncosmo.Bandpass(throughput.wavelen,
+                                     throughput.sb,
+                                     name=name,
+                                     wave_unit=u.nm)
+        sncosmo.registry.register(bandcosmo, force=True)
