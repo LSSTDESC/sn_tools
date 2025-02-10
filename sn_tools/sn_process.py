@@ -998,7 +998,14 @@ class Process(FP2pixels):
                 if isinstance(a, list):
                     return b
                 else:
-                    return np.concatenate((a, b))
+                    if a.size > 0 and b.size > 0:
+                        return np.concatenate((a, b))
+                    else:
+                        if b.size == 0:
+                            return a
+                        else:
+                            return b
+                    # return np.vstack([a, b])
 
         if isinstance(first_value, int):
             restot = 0
@@ -1170,7 +1177,6 @@ class Process(FP2pixels):
             ax.plot([RAmax, RAmax], [Decmin, Decmax], color='r')
             plt.show()
 
-        print('hello', ppix)
         if len(ppix) > 0:
             # print('processing pixels bb', len(ppix))
             procpix(ppix, observations, self.npixels)
