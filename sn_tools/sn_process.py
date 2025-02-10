@@ -847,8 +847,12 @@ class Process(FP2pixels):
         pix_arr.sort(order=obsCol)
         pix_arr = rf.drop_fields(pix_arr, obsCol)
         for vv in pix_arr.dtype.names:
-            obs = rf.append_fields(
-                obs, vv, pix_arr[vv].tolist(), usemask=False)
+            if vv in ['raft', 'ccd']:
+                obs = rf.append_fields(
+                    obs, vv, pix_arr[vv].tolist(), dtypes=['U5'], usemask=False)
+            else:
+                obs = rf.append_fields(
+                    obs, vv, pix_arr[vv].tolist(), usemask=False)
 
         if output_q is not None:
             return output_q.put({j: obs})
