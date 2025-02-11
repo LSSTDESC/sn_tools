@@ -1046,7 +1046,7 @@ class Read_LightCurve:
         return metaTot
 
 
-def get_meta(prodID, metaDir):
+def get_meta(prodID, fName, metaDir):
     """
     function to grab metadata from prodID and metaDir
 
@@ -1054,6 +1054,8 @@ def get_meta(prodID, metaDir):
     ----------
     prodID : str
         production ID.
+    fName: str
+        input filename (if prodID is None)
     metaDir : str
         mate data (simu) rep.
 
@@ -1066,8 +1068,11 @@ def get_meta(prodID, metaDir):
 
     import glob
 
-    full_path = '{}/Simu_{}*.hdf5'.format(metaDir, prodID)
-    fis = glob.glob(full_path)
+    if prodID != 'None':
+        full_path = '{}/Simu_{}*.hdf5'.format(metaDir, prodID)
+        fis = glob.glob(full_path)
+    else:
+        fis = [fName]
 
     metaTable = Table()
     for io, fi in enumerate(fis):
