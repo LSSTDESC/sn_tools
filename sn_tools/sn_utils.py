@@ -109,7 +109,13 @@ def gather_results(resultdict):
             if isinstance(a, list):
                 return b
             else:
-                return np.concatenate((a, b))
+                if a.size > 0 and b.size > 0:
+                    return np.concatenate((a, b))
+                else:
+                    if b.size == 0:
+                        return a
+                    else:
+                        return b
 
     if isinstance(first_value, int):
         restot = 0
@@ -712,7 +718,7 @@ class SimuParameters:
         # names=['x1','c','weight_x1','weight_c','weight_tot']
         dtype = np.dtype([(para, np.float), (parb, np.float),
                           ('weight_{}'.format(para),
-                           np.float), ('weight_{}'.format(parb), np.float),
+                         np.float), ('weight_{}'.format(parb), np.float),
                           ('weight', np.float)])
         params = {}
         for val in ['low_z', 'high_z']:
@@ -990,7 +996,7 @@ class SimuParameters:
 
     def get_nsn_bin(self, nsn, zz, zmin=0.01, zmax=0.8, NSN_factor=1, deltaz=0.02):
         """
-        Method to estimate and generate z distrib per z-bin 
+        Method to estimate and generate z distrib per z-bin
 
         Parameters
         ----------
@@ -2297,7 +2303,7 @@ class MbCov:
 
 
 class Gamma:
-    """ 
+    """
     Class to estimate gamma parameters
     depending on mag and exposure time
 
@@ -2354,7 +2360,7 @@ class Gamma:
                       append=True, compression=True, serialize_meta=True)
 
     def loopGamma(self, bands, mag_range, single_exposure_time, nexps, telescope):
-        """ 
+        """
         gamma parameter estimation - loop on bands
 
         Parameters
@@ -2451,7 +2457,7 @@ class Gamma:
                         (band, mag, single_expo, nexp, gamma, flux_e))
 
         rec = Table(rows=gamm, names=[
-                    'band', 'mag', 'single_exptime', 'nexp', 'gamma', 'flux_e_sec'])
+            'band', 'mag', 'single_exptime', 'nexp', 'gamma', 'flux_e_sec'])
 
         if output_q is not None:
             output_q.put({j: rec})
