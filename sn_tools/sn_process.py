@@ -5,19 +5,16 @@ from sn_tools.sn_io import colName
 # from sn_tools.sn_obs import getObservations, get_obs
 from sn_tools.sn_obs import get_obs
 from sn_tools.sn_obs import ebv_pixels
-from sn_tools.sn_utils import multiproc
 from sn_tools.sn_fp_pixel import get_window, get_pixels_in_window
 from sn_tools.sn_fp_pixel import FocalPlane
 from sn_tools.sn_fp_pixel import get_xy_pixels, get_data_window
 import time
 import numpy as np
 import pandas as pd
-# import multiprocessing
 import glob
 import random
 import numpy.lib.recfunctions as rf
 from astropy.table import Table, vstack, Column
-import multiprocessing
 
 
 class FP2pixels:
@@ -87,7 +84,7 @@ class FP2pixels:
         obs = self.check_obs_pixels(obs, pixels['pixRA'].mean())
         # self.plot_obs_pix(obs, pixels)
 
-        print('selecting pixels', len(pixels), self.ebvofMW_pixel)
+        # print('selecting pixels', len(pixels), self.ebvofMW_pixel)
         pixels = self.select_pixels(pixels)
         # self.plot_obs_pix(obs, pixels)
 
@@ -181,12 +178,14 @@ class FP2pixels:
             pixels = pixels[idx]
 
         # grab random pixels
+        # deprecated with the new code structure
+        """
         if self.npixels > 0 and not pixels.empty:
             hlist = pixels['healpixID'].tolist()
             random_pixels = randomPixels(hlist, self.npixels)
             idx = pixels['healpixID'].isin(random_pixels)
             pixels = pixels[idx]
-
+        """
         return pixels
 
     def get_pixels_obs(self, obs, fieldName):
@@ -731,7 +730,7 @@ class Process(FP2pixels):
         self.ebvofMW_pixel = ebvofMW_pixel
         self.fp_level = fp_level
 
-        print('Npixels to process:', len(self.pixels), len(self.obs))
+        print('Npixels to process:', len(self.pixels))
         if len(self.pixels) > 0:
             self.processIt()
 
@@ -761,7 +760,7 @@ class Process(FP2pixels):
         None.
 
         """
-
+        from sn_tools.sn_utils import multiproc
         procpix = ProcessPixels_metric(self.metricList, 0,
                                        outDir=self.outDir, dbName=self.dbName,
                                        saveData=self.saveData)
@@ -769,7 +768,7 @@ class Process(FP2pixels):
         # loop on pixels
         obsCol = 'observationId'
 
-        print('pixels to process', len(pixels))
+        npixels_processed = 0
         for i, pix in pixels.iterrows():
             # print('processing pixel', pix['healpixID'], len(self.obs))
             # gnomonic proj
@@ -795,13 +794,18 @@ class Process(FP2pixels):
             ppars['obsCol'] = obsCol
             if len(obs) == 0:
                 continue
-            obs_pix = self.multiproc(obs, ppars, self.proj_pixel,
-                                     self.nproc_pixels)
+            obs_pix = multiproc(obs, ppars, self.proj_pixel,
+                                self.nproc_pixels)
 
             if len(obs_pix) == 0:
                 continue
             print('processing pixel', pix['healpixID'], len(obs_pix))
             procpix(obs_pix)
+
+            npixels_processed += 1
+
+            if npixels_processed == self.npixels:
+                break
 
         procpix.finish()
 
@@ -909,233 +913,6 @@ class Process(FP2pixels):
         fig, ax = plt.subplots()
         ax.plot(pp['xpixel'], pp['fieldRA']-pp['pixRA'], 'k.')
         plt.show()
-
-    def multiproc(self, data, params, func, nproc):
-        """
-        Function to perform multiprocessing
-
-        Parameters
-        ---------------
-        data: array
-          data to process
-        params: dict
-          fixed parameters of func
-        func: function
-          function to apply for multiprocessing
-        nproc: int
-          number of processes
-
-        """
-        nproc = min([len(data), nproc])
-        # multiprocessing parameters
-        nz = len(data)
-        t = np.linspace(0, nz, nproc+1, dtype='int')
-        # print('multi', nz, t)
-        result_queue = multiprocessing.Queue()
-
-        procs = [multiprocessing.Process(name='Subprocess-'+str(j), target=func,
-                                         args=(data[t[j]:t[j+1]], params, j, result_queue))
-                 for j in range(nproc)]
-
-        for p in procs:
-            p.start()
-
-        resultdict = {}
-        # get the results in a dict
-
-        for i in range(nproc):
-            resultdict.update(result_queue.get())
-
-        for p in multiprocessing.active_children():
-            p.join()
-
-        restot = self.gather_results(resultdict)
-
-        return restot
-
-    def gather_results(self, resultdict):
-        """
-        Function to gather results of a directory
-
-        Parameters
-        ----------------
-        resultdict: dict
-          dictory of data
-
-        Returns
-        ----------
-        gathered results. The type is determined from resultdict.
-        Supported types: pd.core.frame.DataFrame, Table, np.ndarray,
-        np.recarray, int
-
-        """
-        supported_types = ['pd.core.frame.DataFrame', 'Table', 'np.ndarray',
-                           'np.recarray', 'int', 'dict']
-
-        # get outputtype here
-        first_value = None
-        for key, vals in resultdict.items():
-            if vals is not None:
-                first_value = vals
-                break
-
-        restot = None
-        if first_value is None:
-            return restot
-
-        if isinstance(first_value, pd.core.frame.DataFrame):
-            restot = pd.DataFrame()
-
-            def concat(a, b):
-                return pd.concat((a, b), sort=False)
-
-        if isinstance(first_value, Table):
-            restot = Table()
-
-            def concat(a, b):
-                return vstack([a, b])
-
-        if isinstance(first_value, np.ndarray) or isinstance(first_value, np.recarray):
-            restot = []
-
-            def concat(a, b):
-                if isinstance(a, list):
-                    return b
-                else:
-                    if a.size > 0 and b.size > 0:
-                        return np.concatenate((a, b))
-                    else:
-                        if b.size == 0:
-                            return a
-                        else:
-                            return b
-                    # return np.vstack([a, b])
-
-        if isinstance(first_value, int):
-            restot = 0
-
-            def concat(a, b):
-                return operator.add(a, b)
-
-        if isinstance(first_value, dict):
-            restot = {}
-
-            def concat(a, b):
-                return dict(a, **b)
-
-        if isinstance(first_value, list):
-            restot = []
-
-            def concat(a, b):
-                return a+b
-
-        if isinstance(first_value, tuple):
-            restot = ([], [])
-            tlength = len(first_value)
-            restot = tuple([] for _ in range(tlength))
-
-            def concat(a, b):
-                bo = []
-                for i in range(tlength):
-                    bo.append(a[i]+b[i])
-
-                myres = tuple(bo[i] for _ in range(tlength))
-                return myres
-
-        if restot is None:
-            print('Sorry to bother you but: unknown data type', type(first_value))
-            print('Supported types', supported_types)
-            return restot
-
-        # gather the results
-        for key, vals in resultdict.items():
-            restot = concat(restot, vals)
-
-        return restot
-
-    def processIt_deprecated(self, observations):
-        """
-        Method to process a field
-
-        Parameters
-        --------------
-        observations: array
-            data to process
-
-        """
-
-        # pixels = self.get_pixels_field(observations)
-        # getting the pixels
-        # print('getting pixels call')
-
-        print('in processit, getting pixels')
-        noteCol = 'note'
-        if 'scheduler_note' in observations.dtype.names:
-            noteCol = 'scheduler_note'
-        pixels = pd.DataFrame()
-        for field in self.fieldNames:
-            if self.fieldType == 'DD':
-                idx = observations[noteCol] == field
-                selobs = observations[idx]
-                ppix = super(Process, self).__call__(selobs)
-                ppix['fieldName'] = field
-                pixels = pd.concat((pixels, ppix))
-            else:
-                pixels = super(Process, self).__call__(observations)
-                pixels['fieldName'] = field
-
-        print('pixels', len(pixels))
-        # self.display = True
-        if self.display:
-            import matplotlib.pyplot as plt
-            fig, ax = plt.subplots()
-            fig.suptitle('pixel coord.')
-            ax.plot(pixels['pixRA'], pixels['pixDec'], 'r*')
-            ax.plot(observations[self.RACol],
-                    observations[self.DecCol], 'ko', mfc='None')
-            ax.set_xlabel('pixRA [deg]')
-            ax.set_ylabel('pixDec [deg]')
-            plt.show()
-
-        """
-        pixRAmin = pixels['pixRA'].min()
-        pixRAmax = pixels['pixRA'].max()
-        deltaRA = (pixRAmax-pixRAmin)/self.nproc
-
-        params_multi = np.arange(pixRAmin, pixRAmax, deltaRA).tolist()
-        """
-        print('number of pixels', len(pixels['healpixID'].unique()))
-        # get E(B-V) for these pixels
-        hpixes = np.unique(pixels[['healpixID', 'pixRA', 'pixDec']], axis=0)
-        hpixes = ebv_pixels(hpixes)
-        pixels = pixels.merge(hpixes,
-                              left_on=['healpixID'], right_on=['healpixID'])
-
-        # do not process pixels with high E(B-V)
-        if self.ebvofMW_pixel > 0.:
-            idx = pixels['ebvofMW'] <= self.ebvofMW_pixel
-            pixels = pixels[idx]
-
-        print('number of pixels - ebvofMW', len(pixels['healpixID'].unique()))
-        params = {}
-        params['observations'] = observations
-        params['pixelmap'] = pixels
-        params_multi = np.unique(pixels['healpixID'])
-        nprocb = min(self.nproc, len(params_multi))
-        if not self.display:
-            multiproc(params_multi, params, self.process_metric, nprocb)
-        else:
-            self.process_metric(params_multi, params)
-
-        """
-        eval('multiproc(params_multi, params, self.process_metric_{}, nprocb)'.format(
-            self.fieldType))
-        """
-        """
-        self.nproc = 1
-        params_multi = [0.]
-        eval('self.process_metric_{}(params_multi, params)'.format(self.fieldType))
-        """
 
     def process_metric(self, pixels, params, j=0, output_q=None):
         """
