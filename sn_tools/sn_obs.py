@@ -241,7 +241,7 @@ def patchObs_new(observations, fieldType, fieldName,
 
     if 'scheduler_note' in observations.dtype.names:
         noteCol = 'scheduler_note'
-        
+
     if 'target_name' in observations.dtype.names:
         noteCol = 'target_name'
 
@@ -4226,7 +4226,20 @@ def load_obs(dbDir, dbName, dbExtens):
     llb = ['filter', 'visitExposureTime',
            'fieldDec', 'observationStartMJD', 'fieldRA']
     dict_rep = dict(zip(lla, llb))
-    rec = rfn.rename_fields(observations, dict_rep)
+
+    names = observations.dtype.names
+    r = []
+    for key, vals in dict_rep.items():
+        if vals in names:
+            r.append(key)
+    import copy
+    col_names = copy.deepcopy(dict_rep)
+
+    if len(r) > 0:
+        for vv in r:
+            del col_names[vv]
+
+    rec = rfn.rename_fields(observations, col_names)
 
     # observations = renameFields(observations)
 
@@ -4256,6 +4269,7 @@ def get_obs(fieldType, dbDir, dbName, dbExtens, lookup_ddf=''):
     """
     # loading all obs here
     observations = load_obs(dbDir, dbName, dbExtens)
+
     lsst_start = np.min(observations['observationStartMJD'])
 
     # add lsst_start to observations
