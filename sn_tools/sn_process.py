@@ -24,7 +24,7 @@ class FP2pixels:
                  RAmin=0., RAmax=360.,
                  Decmin=-80., Decmax=80,
                  pixelmap_dir='', npixels=0, nproc_pixels=1,
-                 VRO_FP='circular', project_FP='gnomonic', telrot=0.,
+                 # VRO_FP='circular', project_FP='gnomonic', telrot=0.,
                  ebvofMW_pixel=-1.0,
                  radius=4., pixelList='None', display=False,
                  seasons='-1', **kwargs):
@@ -43,11 +43,14 @@ class FP2pixels:
         self.pixelmap_dir = pixelmap_dir
         self.npixels = npixels
         self.radius = radius
+        """
         self.VRO_FP = VRO_FP
         self.project_FP = project_FP
         self.telrot = telrot
+        """
         self.ebvofMW_pixel = ebvofMW_pixel
         self.pixelList = pixelList
+
         self.display = display
 
         assert (self.RAmin <= self.RAmax)
@@ -261,7 +264,7 @@ class FP2pixels:
 
         return season
 
-    def __call__(self, obs=None):
+    def __call__deprecated(self, obs=None):
 
         # print('getting pixels')
         if obs is None:
@@ -301,6 +304,8 @@ class FP2pixels:
         nproc_p = self.nproc_pixels
         if self.healpixIDs:
             nproc_p = np.min([nproc_p, len(self.healpixIDs)])
+
+        print('going to datatopixels')
         datapixels = DataToPixels(
             self.nside, self.project_FP, self.VRO_FP,
             RACol=self.RACol, DecCol=self.DecCol,
@@ -711,8 +716,9 @@ class Process(FP2pixels):
                  Decmin=-80., Decmax=80,
                  saveData=False, remove_dithering=False,
                  outDir='', nproc=1, nproc_pixels=1, seasons=-1, metricList=[],
-                 pixelmap_dir='', npixels=0, ebvofMW_pixel=-1.,
-                 VRO_FP='circular', project_FP='gnomonic', telrot=0.,
+                 pixelmap_dir='', npixels=0, ebvofMW_pixel=-1., FoV=9.6,
+                 # VRO_FP='circular', project_FP='gnomonic',
+                 telrot=0,
                  fp_level='ccd',
                  radius=4., pixelList='None', display=False, **kwargs):
         super().__init__(dbDir, dbName, dbExtens,
@@ -720,7 +726,7 @@ class Process(FP2pixels):
                          RAmin, RAmax,
                          Decmin, Decmax,
                          pixelmap_dir, npixels, nproc_pixels,
-                         VRO_FP, project_FP, telrot,
+                         # VRO_FP, project_FP, telrot,
                          ebvofMW_pixel,
                          radius, pixelList, display, seasons)
 
@@ -732,6 +738,8 @@ class Process(FP2pixels):
         self.metricList = metricList
         self.ebvofMW_pixel = ebvofMW_pixel
         self.fp_level = fp_level
+        self.FoV = FoV
+        self.telrot = telrot
 
         print('Npixels to process:', len(self.pixels))
         if len(self.pixels) > 0:
@@ -748,7 +756,7 @@ class Process(FP2pixels):
         """
 
         # FP instance
-        df_fp = FocalPlane(level=self.fp_level)
+        df_fp = FocalPlane(FoV=self.FoV, level=self.fp_level)
         # quick check
         # df_fp.check_fp(top_level='raft', low_level='ccd')
 
@@ -841,7 +849,9 @@ class Process(FP2pixels):
                            pix['healpixID'],
                            pix['pixRA'],
                            pix['pixDec'],
-                           RACol=self.RACol, DecCol=self.DecCol)
+                           RACol=self.RACol,
+                           DecCol=self.DecCol,
+                           telrot=self.telrot)
         # self.plot_pixels(dd)
         # df_fp.plot_fp_pixels(dd)
         # pixels in FP

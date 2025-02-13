@@ -1701,6 +1701,8 @@ class DataToPixels:
         rat = 135./189.
         self.area_part = [rat*self.FoV, rat*self.FoV]
 
+        print('in datatopixels')
+
     def __call__(self, data, pixels, display=False, inclusive=False):
         """
         call method: this is where the processing is.

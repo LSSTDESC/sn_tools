@@ -14,7 +14,7 @@ import healpy as hp
 class FocalPlane:
     def __init__(self, nx=dict(zip(['raft', 'ccd', 'sensor'], [5, 15, 8*15])),
                  ny=dict(zip(['raft', 'ccd', 'sensor'], [5, 15, 2*15])),
-                 FoV=9.62,
+                 FoV=9.6,
                  level='raft',
                  raft_sub=dict(
                      zip(['to_remove'], [['1_1', '1_5', '5_1', '5_5']])),
@@ -477,7 +477,8 @@ def get_window(data, RACol='fieldRA', DecCol='fieldDec',
 
 
 def get_xy_pixels(pointings, healpixID, pixRA, pixDec, nside=64,
-                  RACol='fieldRA', DecCol='fieldDec', filterCol='filter'):
+                  RACol='fieldRA', DecCol='fieldDec', filterCol='filter',
+                  telrot=True):
     """
     Grab gnomonic projection of pixels around(RA,Dec)
 
@@ -493,6 +494,8 @@ def get_xy_pixels(pointings, healpixID, pixRA, pixDec, nside=64,
         RA colname. The default is 'fieldRA'.
     DecCol : str, optional
         Dec colname. The default is 'DecCol'.
+    telrot: bool, opt
+      to include telescope rotation or not. The default is True.
 
     Returns
     -------
@@ -502,7 +505,6 @@ def get_xy_pixels(pointings, healpixID, pixRA, pixDec, nside=64,
         y-axis values.
 
     """
-
     # print(pixRA, pixDec)
     pixRA_rad = np.deg2rad(pixRA)
     pixDec_rad = np.deg2rad(pixDec)
@@ -529,13 +531,17 @@ def get_xy_pixels(pointings, healpixID, pixRA, pixDec, nside=64,
     for var in ccols:
         df[var] = pointings[var]
 
-    # pixel rotation here
-    df['rotSkyPixel'] = -np.deg2rad(df['rotSkyPos'])
-    # df['rotSkyPixel'] = 0.
-    df['xpixel'] = np.cos(df['rotSkyPixel'])*df['xpixel_norot']
-    df['xpixel'] -= np.sin(df['rotSkyPixel'])*df['ypixel_norot']
-    df['ypixel'] = np.sin(df['rotSkyPixel'])*df['xpixel_norot']
-    df['ypixel'] += np.cos(df['rotSkyPixel'])*df['ypixel_norot']
+    if telrot:
+        # pixel rotation here
+        df['rotSkyPixel'] = -np.deg2rad(df['rotSkyPos'])
+        # df['rotSkyPixel'] = 0.
+        df['xpixel'] = np.cos(df['rotSkyPixel'])*df['xpixel_norot']
+        df['xpixel'] -= np.sin(df['rotSkyPixel'])*df['ypixel_norot']
+        df['ypixel'] = np.sin(df['rotSkyPixel'])*df['xpixel_norot']
+        df['ypixel'] += np.cos(df['rotSkyPixel'])*df['ypixel_norot']
+    else:
+        df['xpixel'] = df['xpixel_norot']
+        df['ypixel'] = df['ypixel_norot']
 
     return df
 
