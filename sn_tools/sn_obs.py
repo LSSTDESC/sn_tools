@@ -117,6 +117,9 @@ def patchObs(observations, fieldType, fieldName,
     if 'scheduler_note' in observations.dtype.names:
         noteCol = 'scheduler_note'
 
+    if 'target_name' in observations.dtype.names:
+        noteCol = 'target_name'
+
     if fieldType == 'DD':
         # go faster with observations here
         fieldName = fieldName.split(',')
@@ -238,6 +241,9 @@ def patchObs_new(observations, fieldType, fieldName,
 
     if 'scheduler_note' in observations.dtype.names:
         noteCol = 'scheduler_note'
+        
+    if 'target_name' in observations.dtype.names:
+        noteCol = 'target_name'
 
     if fieldType == 'DD':
         # go faster with observations here
@@ -3968,6 +3974,9 @@ def getFields(observations, fieldType='WFD', fieldIds=None,
     if 'scheduler_note' in observations.dtype.names:
         noteCol = 'scheduler_note'
 
+    if 'target_name' in observations.dtype.names:
+        noteCol = 'target_name'
+
     for pName in ['proposalId', 'survey_id']:
         if pName in observations.dtype.names:
 
@@ -4059,8 +4068,11 @@ def getFields(observations, fieldType='WFD', fieldIds=None,
 def getDD_from_note(observations, nside, RACol, DecCol, fieldName=''):
 
     noteCol = 'note'
-    if 'scheduler_note' in observations.dtype.names:
+    if '' in observations.dtype.names:
         noteCol = 'scheduler_note'
+
+    if 'target_name' in observations.dtype.names:
+        noteCol = 'target_name'
 
     if noteCol in observations.dtype.names:
         ido = np.core.defchararray.find(
@@ -4131,6 +4143,9 @@ def renameDDF(obser, lookup_ddf='',
     if 'scheduler_note' in obser.dtype.names:
         noteCol = 'scheduler_note'
 
+    if 'target_name' in obser.dtype.names:
+        noteCol = 'target_name'
+
     bb = obser[noteCol]
 
     lookup = pd.read_csv(lookup_ddf, comment='#')
@@ -4155,6 +4170,9 @@ def cluster_from_obs(obs, dbName, radius):
 
     if 'scheduler_note' in obs.dtype.names:
         noteCol = 'scheduler_note'
+
+    if 'target_name' in obs.dtype.names:
+        noteCol = 'target_name'
 
     fieldName = np.unique(obs[noteCol])
     for io, field in enumerate(fieldName):
@@ -4248,6 +4266,9 @@ def get_obs(fieldType, dbDir, dbName, dbExtens, lookup_ddf=''):
 
     if 'scheduler_note' in observations.dtype.names:
         noteCol = 'scheduler_note'
+
+    if 'target_name' in observations.dtype.names:
+        noteCol = 'target_name'
 
     if noteCol in observations.dtype.names and fieldType != 'Fake':
         ido = np.core.defchararray.find(

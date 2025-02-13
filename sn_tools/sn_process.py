@@ -341,6 +341,9 @@ class FP2pixels:
         if 'scheduler_note' in observations.dtype.names:
             noteCol = 'scheduler_note'
 
+        if 'target_name' in observations.dtype.names:
+            noteCol = 'target_name'
+
         if self.fieldType == 'DD':
             idx = np.in1d(observations[noteCol], fieldName)
             observations = observations[idx]

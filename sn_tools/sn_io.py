@@ -640,8 +640,22 @@ class Read_Sqlite:
 
         """
         names = list(d.dtype.names)
-        d.dtype.names = [new_col_names[n]
-                         if n in new_col_names else n for n in d.dtype.names]
+
+        r = []
+        for key, vals in new_col_names.items():
+            if vals in names:
+                r.append(key)
+
+        import copy
+        col_names = copy.deepcopy(new_col_names)
+
+        if len(r) > 0:
+            for vv in r:
+                del col_names[vv]
+
+        d.dtype.names = [col_names[n]
+                         if n in col_names else n for n in d.dtype.names]
+
         return d
 
 
