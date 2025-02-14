@@ -881,6 +881,7 @@ class Stat_DD_night:
 
         self.obs = self.load()
         self.obs_DD = self.get_DD()
+        print('DDF', len(self.obs_DD))
         budget = time_budget(self.obs, self.obs_DD)
         nDD_night = nvisits_DD_night(self.obs_DD)
 
@@ -894,13 +895,18 @@ class Stat_DD_night:
         params['mjdCol'] = 'mjd'
         params['nightCol'] = 'night'
         params['fieldCol'] = 'field'
-        params['fieldColdb'] = 'note'
         params['filterCol'] = 'band'
         params['list_moon'] = ['moonAz', 'moonRA',
                                'moonDec', 'moonDistance', 'season', 'moonPhase']
 
+        fieldColb = 'note'
+        for vv in ['scheduler_note', 'target_name']:
+            if vv in self.obs_DD.dtype.names:
+                fieldColb = vv
+
+        params['fieldColdb'] = fieldColb
         res = multiproc(
-            np.unique(self.obs_DD['note']), params, ana_DDF, 6)
+            np.unique(self.obs_DD[fieldColb]), params, ana_DDF, 6)
 
         tab = Table.from_pandas(res)
         tab.meta = dict(zip(['dbName'], [dbName]))
@@ -923,6 +929,7 @@ class Stat_DD_night:
         data = np.load(fName, allow_pickle=True)
         """
         data = getObservations(self.dbDir, self.dbName, self.dbExtens)
+
         return data
 
     def get_DD(self):
@@ -934,12 +941,18 @@ class Stat_DD_night:
         array of obs corresponding to DD fields
 
         """
-        field_list = np.unique(self.obs['note'])
+
+        colName = 'note'
+        for vv in ['scheduler_note', 'target_name']:
+            if vv in self.obs.dtype.names:
+                colName = vv
+
+        field_list = np.unique(self.obs[colName])
         self.field_DD = list(
             filter(lambda x: x.startswith(self.prefix), field_list))
 
         # select DD only
-        id_ddf = np.in1d(self.obs['note'], self.field_DD)
+        id_ddf = np.in1d(self.obs[colName], self.field_DD)
 
         return np.copy(self.obs[id_ddf])
 
@@ -1037,7 +1050,12 @@ def time_budget(obs, obs_DD):
     time budget (float)
     """
 
-    fields = np.unique(obs_DD['note'])
+    colName = 'note'
+    for vv in ['scheduler_note', 'target_name']:
+        if vv in obs_DD.dtype.names:
+            colName = vv
+
+    fields = np.unique(obs_DD[colName])
 
     dictout = {}
 
@@ -1046,7 +1064,7 @@ def time_budget(obs, obs_DD):
     dictout['time_budget'] = DD_time/obs_time
 
     for fi in fields:
-        idx = obs_DD['note'] == fi
+        idx = obs_DD[colName] == fi
         sel = obs_DD[idx]
         fi_time = np.sum(sel['numExposures']*sel['exptime'])
         dictout['time_budget_{}'.format(fi)] = fi_time/obs_time
@@ -1279,8 +1297,6 @@ def Stat_DD_season(data_tab, cols=['field', 'season']):
       data to process
 
     """
-
-    print('hhh', data_tab.meta)
 
     res = data_tab.to_pandas().groupby(cols).apply(
         lambda x: seas_cad(x, data_tab.meta)).reset_index()
