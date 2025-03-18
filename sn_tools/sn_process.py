@@ -75,7 +75,8 @@ class FP2pixels:
             # print('there man', len(obs), these_seasons)
             if len(obs_sel) > 0:
                 # get the pixels
-                pixels_obs = self.get_pixels_obs(obs_sel, fieldName)
+                # pixels_obs = self.get_pixels_obs(obs_sel, fieldName)
+                pixels_obs = self.get_pixels_field(obs_sel)
                 pixels = pd.concat((pixels, pixels_obs))
                 if obs is None:
                     obs = obs_sel
@@ -95,6 +96,86 @@ class FP2pixels:
         # pixels are in self.pixels
         self.obs = obs
         self.pixels = pixels
+
+    def get_pixels_field(self, observations):
+        """
+        Method to get pixels corresponding to a given area
+
+        Parameters
+        --------------
+        observations: array
+          data to process
+
+        Returns
+        -----------
+        list of pixels
+
+        """
+        if self.fieldType == 'DD':
+            mean_RA = np.mean(observations[self.RACol])
+            mean_Dec = np.mean(observations[self.DecCol])
+            width_RA = np.max(observations[self.RACol]) - \
+                np.min(observations[self.RACol])
+            width_Dec = np.max(observations[self.DecCol]) - \
+                np.min(observations[self.DecCol])
+
+        if self.fieldType == 'WFD':
+            width_RA = self.RAmax-self.RAmin
+            width_Dec = self.Decmax-self.Decmin
+            mean_RA = np.mean([self.RAmin, self.RAmax])
+            mean_Dec = np.mean([self.Decmin, self.Decmax])
+
+        # get pixels
+        pixels = self.gime_pixels(
+            mean_RA, mean_Dec, np.max([width_RA, width_Dec]))
+
+        if self.fieldType == 'WFD':
+            pixels = self.select_zone(
+                pixels, self.RAmin, self.RAmax, 'pixRA', self.Decmin, self.Decmax, 'pixDec', 0.)
+
+        return pixels
+
+    def gime_pixels(self, RA, Dec, width, inclusive=True):
+        """
+        method to get pixels corresponding to obs area
+
+        Parameters
+        --------------
+        RA: float
+          mean RA position
+        Dec: float
+           mean Dec position
+        width: float
+           width of the window around (RA,Dec)
+        inclusive: bool, opt
+          inclusive bool for healpix (default: True)
+
+        Returns
+        -----------
+        list of pixels corresponding to (RA, Dec) central position
+
+        """
+        import healpy as hp
+        import numpy.lib.recfunctions as rf
+        # get central pixel ID
+        healpixID = hp.ang2pix(self.nside, RA,
+                               Dec, nest=True, lonlat=True)
+
+        # get nearby pixels
+        vec = hp.pix2vec(self.nside, healpixID, nest=True)
+        healpixIDs = hp.query_disc(
+            self.nside, vec, np.deg2rad(width)+np.deg2rad(3.5), inclusive=inclusive, nest=True)
+
+        # get pixel coordinates
+        coords = hp.pix2ang(self.nside, healpixIDs,
+                            nest=True, lonlat=True)
+        pixRA, pixDec = coords[0], coords[1]
+
+        pixels = pd.DataFrame(healpixIDs, columns=['healpixID'])
+        pixels['pixRA'] = pixRA
+        pixels['pixDec'] = pixDec
+
+        return pixels
 
     def check_obs_pixels(self, obsa, pixRA_mean):
         """
@@ -741,7 +822,7 @@ class Process(FP2pixels):
         self.FoV = FoV
         self.telrot = telrot
 
-        print('Npixels to process:', len(self.pixels))
+        print('Npixels to process:', len(self.pixels), fieldType)
         if len(self.pixels) > 0:
             self.processIt()
 
