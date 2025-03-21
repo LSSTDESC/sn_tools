@@ -1215,3 +1215,92 @@ def dumpIt(fName, lines):
         for line in lines:
             f.write(line)
             f.write('\n')
+
+
+def load_DataFrame(dbDir, dbName, runType='spectroz',
+                   timescale_file='year', timeslots=[1], fieldType='WFD'):
+    """
+    Function to load data if pandas df
+
+    Parameters
+    ----------
+    dbDir : str
+        data location dir.
+    dbName : str
+        db name.
+    runType : str, optional
+        Run type. The default is spectroz.
+    timescale_file : str, optional
+       Time scale of the files to process. The default is 'year'.
+    timeslots : list(int), optional
+       Time slots to process. The default is [1].
+    fieldType : str, optional
+       Field type to process. The default is 'WFD'.
+
+    Returns
+    -------
+    wfd : pandas df
+        Loaded data.
+
+    """
+
+    df = pd.DataFrame()
+    print('processing', dbName)
+    for seas in timeslots:
+        df_seas = load_OS_df(dbDir, dbName, runType=runType,
+                             timescale_file=timescale_file,
+                             timeslot=seas, fieldType=fieldType)
+        df = pd.concat((df, df_seas))
+        del df_seas
+
+    return df
+
+
+def load_OS_df(dbDir, dbName, runType, timescale_file='year',
+               timeslot=1, fieldType='DDF'):
+    """
+    Function to load OS data
+
+    Parameters
+    ----------
+    dbDir : str
+        data location dir.
+    dbName : str
+        db name to process.
+    runType : str
+       run type (spectroz or photoz).
+    timescale_file : str, optional
+        Time scle of the files to load. The default is 'year'.
+    timeslot : list(int), optional
+        Time slots to process. The default is 1.
+    fieldType : str, optional
+        Field type to process. The default is 'DDF'.
+
+
+    Returns
+    -------
+    df : pandas df
+        OS data.
+
+    """
+
+    fullDir = '{}/{}/{}_{}'.format(dbDir, dbName, fieldType, runType)
+    search_path = '{}/SN_{}_*_{}_{}.hdf5'.format(
+        fullDir, fieldType, timescale_file, timeslot)
+
+    fis = glob.glob(search_path)
+
+    if len(fis) == 0:
+        print('pb: no files found for path', search_path)
+
+    df = pd.DataFrame()
+
+    for fi in fis:
+        dfa = pd.read_hdf(fi)
+
+        # idx = dfa['ebvofMW'] < 0.25
+        # dfa = dfa[idx]
+
+        df = pd.concat((df, dfa))
+        # break
+    return df
