@@ -2809,3 +2809,30 @@ def register_bands_sncosmo(sncosmo, telescope, airmass, aerosol, pwv, ozone):
                                      name=name,
                                      wave_unit=u.nm)
         sncosmo.registry.register(bandcosmo, force=True)
+
+
+def get_val(var):
+    """
+    Function to grab values from parser
+
+    Parameters
+    ----------
+    var : str
+        var to process.
+
+    Returns
+    -------
+    var : list(int)
+        Result.
+
+    """
+    if '-' in var:
+        seas_spl = var.split('-')
+        seas_min = int(seas_spl[0])
+        seas_max = int(seas_spl[1])
+        var = range(seas_min, seas_max+1)
+    else:
+        var = var.split(',')
+        var = list(map(int, var))
+
+    return var
