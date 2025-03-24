@@ -864,6 +864,7 @@ class SimuParameters:
         zstep = self.params['z']['step']
         NSN_factor = self.params['NSNfactor']
         NSN_absolute = self.params['NSNabsolute']
+        weight_sn_z = self.params['z']['weight']
 
         if ztype == 'unique':
             zvals = [zmin]*NSN_absolute
@@ -883,7 +884,7 @@ class SimuParameters:
 
             # print(zmin, zmax, duration, self.area)
             zz, rate, err_rate, nsn, err_nsn, age_univ = self.sn_rate(
-                zmin=zmin_simu, zmax=zmax_simu,
+                zmin=zmin, zmax=zmax,
                 duration=duration,
                 survey_area=self.area,
                 account_for_edges=False, dz=1.e-5)
@@ -894,7 +895,7 @@ class SimuParameters:
             weight_z = np.cumsum(nsn)/np.sum(np.cumsum(nsn))
             if NSN_absolute > 0:
                 N_SN = NSN_absolute
-                weight_z = [1./len(zz)]*len(zz)
+                # weight_z = [1./len(zz)]*len(zz)
             # print('nsn from rate', zmin, zmax,
             #      duration, self.area, self.min_rf_phase_qual,
             # self.max_rf_phase_qual, N_SN, NSN_factor)
@@ -906,12 +907,18 @@ class SimuParameters:
                 N_SN = 1
                 # weight_z = 1
 
+            if weight_sn_z == 'flat':
+                weight_z = [1./len(zz)]*len(zz)
+
             zvals = np.random.choice(zz, N_SN, p=weight_z)
 
-            # apply z-selection
-            idx = zvals >= zmin
-            idx &= zvals <= zmax
-            zvals = zvals[idx]
+            """
+            if NSN_absolute <= 0:
+                # apply z-selection
+                idx = zvals >= zmin
+                idx &= zvals <= zmax
+                zvals = zvals[idx]
+            """
 
         return pd.DataFrame(zvals, columns=['z'])
 
