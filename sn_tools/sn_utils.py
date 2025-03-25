@@ -855,11 +855,13 @@ class SimuParameters:
         zmin = self.params['z']['min']
         zmax = self.params['z']['max']
 
+        """
         if zmin < zmin_simu:
             print('pb here zmin and zmin_simu')
 
         if zmax > zmax_simu:
             print('pb here zmax and zmax_simu')
+        """
 
         zstep = self.params['z']['step']
         NSN_factor = self.params['NSNfactor']
