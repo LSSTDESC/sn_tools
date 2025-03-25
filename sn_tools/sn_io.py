@@ -287,6 +287,9 @@ def loopStack_params(namelist,
     for fname in namelist:
         tab = loadFile(fname, objtype)
 
+        if len(tab) == 0:
+            continue
+
         if objtype == 'pandasDataFrame':
             res = pd.concat([res, tab], sort=False)
         if objtype == 'astropyTable':
