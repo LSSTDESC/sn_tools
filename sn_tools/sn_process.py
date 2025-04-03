@@ -18,7 +18,6 @@ from astropy.table import Table, vstack, Column
 
 
 class FP2pixels:
-
     def __init__(self, dbDir='', dbName='', dbExtens='',
                  fieldType='', fieldName='', lookup_ddf='', nside=128,
                  RAmin=0., RAmax=360.,
@@ -28,6 +27,57 @@ class FP2pixels:
                  ebvofMW_pixel=-1.0,
                  radius=4., pixelList='None', display=False,
                  seasons='-1', **kwargs):
+        """
+        Class to select data and link data to pixels
+
+        Parameters
+        ----------
+        dbDir : str, optional
+            dir file location. The default is ''.
+        dbName : str, optional
+            database name. The default is ''.
+        dbExtens : str, optional
+            db extens. The default is ''.
+        fieldType : str, optional
+            field type. The default is ''.
+        fieldName : str, optional
+            field name. The default is ''.
+        lookup_ddf : array, optional
+            look-up table for DDF names. The default is ''.
+        nside : int, optional
+            nside healpix parameter. The default is 128.
+        RAmin : float, optional
+            min RA value. The default is 0..
+        RAmax : float, optional
+            max RA value. The default is 360..
+        Decmin : float, optional
+            Dec min value. The default is -80..
+        Decmax : float, optional
+            Dec max value. The default is 80.
+        pixelmap_dir : str, optional
+            pixel map directory. The default is ''.
+        npixels : int, optional
+            number of pixels to process. The default is 0.
+        nproc_pixels : int, optional
+            nproc to used for pixel/data matching. The default is 1.
+        ebvofMW_pixel : float, optional
+            E(B-V) selection criteria. The default is -1.0.
+        radius : float, optional
+            Radius for pixel/data matching. The default is 4..
+        pixelList : str, optional
+            pixel list to process. The default is 'None'.
+        display : bool, optional
+            To display the results. The default is False.
+        seasons : list(int), optional
+            List of seasons to process. The default is '-1'.
+        **kwargs : TYPE
+            additionnal  args.
+
+        Returns
+        -------
+        None.
+
+        """
 
         self.dbDir = dbDir
         self.dbName = dbName
