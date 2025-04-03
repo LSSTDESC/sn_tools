@@ -4293,7 +4293,16 @@ def get_obs(fieldType, dbDir, dbName, dbExtens, lookup_ddf=''):
             ies = np.ma.asarray(
                 list(map(lambda st: False if st != -1 else True, ido)))
             if fieldType == 'WFD':
-                return observations[ies]
+                wfd = observations[ies]
+                # remove Roman field in v4.3.1 - not sure it will be here for ever
+                idob = np.core.defchararray.find(
+                    wfd['scheduler_note'].astype(str), 'DD')
+                if idob.tolist():
+                    iesb = np.ma.asarray(
+                        list(map(lambda st: False if st != -1 else True, idob)))
+                    return wfd[iesb]
+                else:
+                    return wfd
             if fieldType == 'DD':
                 return renameDDF(observations[~ies], lookup_ddf)
     else:
