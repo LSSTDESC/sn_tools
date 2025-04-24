@@ -835,7 +835,7 @@ class SimuParameters:
 
         return pars
 
-    def zdist(self, duration):
+    def zdist(self, duration, duration_min_z=20):
         """
         Method to estimate the redshift distribution
 
@@ -843,6 +843,8 @@ class SimuParameters:
         ---------------
         duration: float
           duration of the survey (season length)
+        duration_min_z: float, optional.
+           min season legth after phase correction. The default is 20.
 
         Returns
         -----------
@@ -879,6 +881,21 @@ class SimuParameters:
             zvals *= NSN_absolute
 
         if ztype == 'random':
+            """
+            print('duration', duration, zmin, zmax,
+                  self.max_rf_phase_qual, self.min_rf_phase_qual)
+            """
+            zlim = (duration-duration_min_z)
+            zlim /= (self.max_rf_phase_qual-self.min_rf_phase_qual)
+            zlim -= 1
+
+            # print('aoo zlim', zlim)
+            if zlim < zmin:
+                return None
+
+            if zlim >= zmin and zlim < zmax:
+                zmax = zlim
+
             # get sn rate for this z range
 
             if zmin < 1.e-6:
