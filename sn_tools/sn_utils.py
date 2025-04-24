@@ -889,7 +889,7 @@ class SimuParameters:
             zlim /= (self.max_rf_phase_qual-self.min_rf_phase_qual)
             zlim -= 1
 
-            # print('aoo zlim', zlim)
+            # print('aoo zlim', duration, zlim, zmin, zmax)
             if zlim < zmin:
                 return None
 
