@@ -674,6 +674,7 @@ class SimuParameters:
         from scipy.interpolate import interp1d
         self.weights = interp1d(list(weights.keys()), list(weights.values()),
                                 bounds_error=False, fill_value=0.)
+        self.daymax_restricted = self.params['daymax']['restricted']
 
     def getDist(self):
         """ get (x1,color) distributions
@@ -1109,8 +1110,8 @@ class SimuParameters:
         if daymaxtype == 'uniform':
             daymaxdf = pd.DataFrame()
             for z in pars['z'].values:
-                daymax_min = daymin-(1.+z)*self.min_rf_phase_qual
-                daymax_max = daymax-(1.+z)*self.max_rf_phase_qual
+                daymax_min, daymax_max = self.get_day_min_max(
+                    z, daymin, daymax)
                 if daymax_max-daymax_min >= 10:
                     ndaymax = int((daymax_max-daymax_min)/daymaxstep)+1
                     df = pd.DataFrame(np.linspace(
@@ -1120,18 +1121,138 @@ class SimuParameters:
 
         if daymaxtype == 'random':
             daymaxdf = pd.DataFrame(pars)
-            daymaxdf['daymax_min'] = daymin - \
-                (1.+pars['z'])*self.min_rf_phase_qual
-            daymaxdf['daymax_max'] = daymax - \
-                (1.+pars['z'])*self.max_rf_phase_qual
+            daymax_min, daymax_max = self.get_day_min_max(pars['z'],
+                                                          daymin, daymax)
+            daymaxdf['daymax_min'] = daymax_min
+            daymaxdf['daymax_max'] = daymax_max
+
             idx = daymaxdf['daymax_max']-daymaxdf['daymax_min'] >= 10.
             daymaxdf = daymaxdf[idx]
             if len(daymaxdf) > 0:
                 daymaxdf['daymax'] = np.random.uniform(
-                    daymaxdf['daymax_min'], daymaxdf['daymax_max'], size=(1, len(daymaxdf)))[0]
+                    daymaxdf['daymax_min'], daymaxdf['daymax_max'],
+                    size=(1, len(daymaxdf)))[0]
+
                 daymaxdf = daymaxdf.drop(columns=['daymax_min', 'daymax_max'])
 
         return daymaxdf
+
+    def get_day_min_max(self, z, daymin, daymax):
+        """
+        Method to estimate (daymin, daymax) for T0 random choices
+
+        Parameters
+        ----------
+        z : float
+            redshift.
+        daymin : float
+            MJD min of the season.
+        daymax : float
+            MJD max of the season.
+
+        Returns
+        -------
+        day_min : float
+            MJD min value for T0 choice.
+        day_max : float
+            MJD max value for T0 choice.
+
+        """
+
+        if self.daymax_restricted:
+            day_min, day_max = self.get_day_restricted(daymin, daymax)
+        else:
+            day_min, day_max = self.get_day_lims(z, daymin, daymax)
+
+        return day_min, day_max
+
+    def get_day_restricted(self, daymin, daymax):
+        """
+        Method to restrict (daymin, daymax) range for T0 random choices
+        to minimize phase effects
+
+        Parameters
+        ----------
+        daymin : float
+            MJD min season.
+        daymax : float
+            MJD max season.
+
+        Returns
+        -------
+        day_min_rest : float
+            MJD min for the restricted range.
+        day_max_rest : float
+            MJD max for the restricted range.
+
+        """
+
+        zmax = self.get_zmax(daymax-daymin)
+        day_min_rest, day_max_rest = self.get_day_lims(zmax, daymin, daymax)
+
+        return day_min_rest, day_max_rest
+
+    def get_day_lims(self, z, daymin, daymax):
+        """
+        Method to get daymin and daymax for T0 choice with phase effects
+
+        Parameters
+        ----------
+        z : float
+            redshift.
+        daymin : float
+            MJD min of the season.
+        daymax : float
+            MJD max of the season.
+
+        Returns
+        -------
+        day_min_lim : float
+            MJD min for T0 choices.
+        day_max_lim : float
+            MJD max for T0 choices.
+
+        """
+
+        day_min_lim = self.get_day_lim(daymin, z, self.min_rf_phase_qual)
+
+        day_max_lim = self.get_day_lim(daymax, z, self.max_rf_phase_qual)
+
+        return day_min_lim, day_max_lim
+
+    def get_day_lim(self, day_a, z, rf_phase):
+        """
+        Estimation of da (min or max)
+
+        Parameters
+        ----------
+        day_a : float
+            MJD (min or max) of the season.
+        z : float
+            redshift.
+        rf_phase : float
+            rest frame phase selection value.
+
+        Returns
+        -------
+        res : float
+            MJD (min or max) with phase effect included.
+
+        """
+
+        res = day_a-(1.+z)*rf_phase
+
+        return res
+
+    def get_zmax(self, sl, sl_min=60):
+
+        delta = sl-sl_min
+        delta /= (self.max_rf_phase_qual-self.min_rf_phase_qual)
+        zmax = delta-1
+
+        zmax = np.min([zmax, 1.1])
+
+        return zmax
 
     def pdist(self, pars, pname):
         """
