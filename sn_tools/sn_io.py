@@ -662,6 +662,126 @@ class Read_Sqlite:
         return d
 
 
+def update_col_names(d, new_col_names):
+    """
+    Function to rename columns
+
+    Parameters
+    ---------------
+    d: numpy array
+      data to process
+    new_col_names: list(str)
+      list of the new column names
+
+    Returns
+    -----------
+    numpy array with new column names
+
+    """
+    names = list(d.dtype.names)
+
+    r = []
+    for key, vals in new_col_names.items():
+        if vals in names:
+            r.append(key)
+
+    import copy
+    col_names = copy.deepcopy(new_col_names)
+
+    if len(r) > 0:
+        for vv in r:
+            del col_names[vv]
+
+    d.dtype.names = [col_names[n]
+                     if n in col_names else n for n in d.dtype.names]
+
+    return d
+
+
+class Read_Postgres:
+    def __init__(self, database="mydb", user="postgres",
+                 password="postgres_20250603",
+                 host="localhost", port=5432):
+        """
+        Class to read postgresql db data
+
+        Parameters
+        ----------
+        database : str, optional
+            Database name. The default is "mydb".
+        user : str, optional
+            User name. The default is "postgres".
+        password : str, optional
+            password to access the db. The default is "postgres_20250603".
+        host : str, optional
+            Host. The default is "localhost".
+        port : int, optional
+            port number. The default is 5432.
+
+        Returns
+        -------
+
+
+        """
+
+        import psycopg2
+        connection = psycopg2.connect(database=database,
+                                      user=user,
+                                      password=password, host=host, port=port)
+
+        self.cur = connection.cursor()
+
+    def get_data(self, table='observations', cols=None, new_col_names=None, to_degrees=False):
+        """
+        Method to grab the data from the observations table
+
+        Parameters
+        ----------
+        table : str, optional
+            Name of the table to load. The default is 'observations'.
+
+        Returns
+        -------
+        record : numpy array?
+            output data.
+
+        """
+        sql_request = 'SELECT '
+        if cols is None:
+            sql_request += ' * '
+            toexec = '{} FROM information_schema.columns WHERE table_name=\'{}\';'.format(
+                sql_request, table)
+            self.cur.execute(toexec)
+            r = self.cur.fetchall()
+            cols = [c[3] for c in r]
+        else:
+            sql_request += ','.join(cols)
+
+        sql_request += 'FROM {}'.format(table)
+        """
+        if sql is not None and len(sql) > 0:
+            sql_request += ' WHERE ' + sql
+        """
+        sql_request += ';'
+
+        self.cur.execute(sql_request)
+
+        # Fetch all rows from database
+        rows = self.cur.fetchall()
+
+        colnames = [str(c) for c in cols]
+        d = np.rec.fromrecords(rows, names=colnames)
+
+        if to_degrees:
+            d['fieldRA'] *= (180. / np.pi)
+            d['fieldDec'] *= (180. / np.pi)
+
+        if new_col_names is not None:
+            update_col_names(d, new_col_names)
+
+        return d
+
+
 def check_get_file(web_server, fDir, fName, fnewDir=None):
     """
     Function checking if a file is available

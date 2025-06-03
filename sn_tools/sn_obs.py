@@ -4338,31 +4338,36 @@ def getObservations(dbDir, dbName, dbExtens):
     else:
         # db as input-> need to transform as npy
         # print('looking for',dbFullName)
-        from sn_tools.sn_io import Read_Sqlite
-        keymap = {'observationStartMJD': 'mjd',
-                  'filter': 'band',
-                  'visitExposureTime': 'exptime',
-                  'skyBrightness': 'sky',
-                  'fieldRA': 'RA',
-                  'fieldDec': 'Dec', }
+        if dbExtens == 'db':
+            from sn_tools.sn_io import Read_Sqlite
+            keymap = {'observationStartMJD': 'mjd',
+                      'filter': 'band',
+                      'visitExposureTime': 'exptime',
+                      'skyBrightness': 'sky',
+                      'fieldRA': 'RA',
+                      'fieldDec': 'Dec', }
 
-        reader = Read_Sqlite(dbFullName)
-        # sql = reader.sql_selection(None)
-        observations = reader.get_data(cols=None, sql='',
-                                       to_degrees=False,
-                                       new_col_names=keymap)
+            reader = Read_Sqlite(dbFullName)
+            # sql = reader.sql_selection(None)
+            observations = reader.get_data(cols=None, sql='',
+                                           to_degrees=False,
+                                           new_col_names=keymap)
 
-        # save this file on disk if it does not exist
-        """
-        outDir = dbDir.replace('/db', '/npy')
-        if not os.path.isdir(outDir):
-            os.mkdir(outDir)
-
-        path = '{}/{}.npy'.format(outDir, dbName)
-        if not os.path.isfile(path):
-            np.save(path, observations)
-        """
-
+            # save this file on disk if it does not exist
+            """
+            outDir = dbDir.replace('/db', '/npy')
+            if not os.path.isdir(outDir):
+                os.mkdir(outDir)
+                
+            path = '{}/{}.npy'.format(outDir, dbName)
+            if not os.path.isfile(path):
+                np.save(path, observations)
+            """
+        if dbExtens == 'postgresql':
+            from sn_tools.sn_io import Read_Postgres
+            reader = Read_Postgres()
+            # sql = reader.sql_selection(None)
+            observations = reader.get_data()
     return observations
 
 
