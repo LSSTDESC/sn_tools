@@ -120,6 +120,7 @@ def patchObs(observations, fieldType, fieldName,
     if 'target_name' in observations.dtype.names:
         noteCol = 'target_name'
 
+    print('here 2')
     if fieldType == 'DD':
         # go faster with observations here
         fieldName = fieldName.split(',')
@@ -245,6 +246,7 @@ def patchObs_new(observations, fieldType, fieldName,
     if 'target_name' in observations.dtype.names:
         noteCol = 'target_name'
 
+    print('here 3')
     if fieldType == 'DD':
         # go faster with observations here
         fieldName = fieldName.split(',')
@@ -3979,6 +3981,7 @@ def getFields(observations, fieldType='WFD', fieldIds=None,
     if 'target_name' in observations.dtype.names:
         noteCol = 'target_name'
 
+    print('here 4')
     for pName in ['proposalId', 'survey_id']:
         if pName in observations.dtype.names:
 
@@ -4076,6 +4079,7 @@ def getDD_from_note(observations, nside, RACol, DecCol, fieldName=''):
     if 'target_name' in observations.dtype.names:
         noteCol = 'target_name'
 
+    print('here 5')
     if noteCol in observations.dtype.names:
         ido = np.core.defchararray.find(
             observations[noteCol].astype(str), 'DD')
@@ -4109,7 +4113,8 @@ def getDD_from_note(observations, nside, RACol, DecCol, fieldName=''):
 def renameDDF(obser, lookup_ddf='',
               torep=dict(zip(['ECDFS', 'EDFS, a', 'EDFS, b',
                               'EDFS_a', 'EDFS_b', 'XMM_LSS'], [
-                  'CDFS', 'EDFSa', 'EDFSb', 'EDFSa', 'EDFSb', 'XMM-LSS']))):
+                  'CDFS', 'EDFSa', 'EDFSb', 'EDFSa', 'EDFSb', 'XMM-LSS'])),
+              noteCol='scheduler_note'):
     """
      Method to rename DDF name (note col)
 
@@ -4123,6 +4128,8 @@ def renameDDF(obser, lookup_ddf='',
                                   'EDFS_a', 'EDFS_b', 'XMM_LSS'],
                                  ['CDFS', 'EDFSa', 'EDFSb', 'EDFSa',
                                   'EDFSb', 'XMM-LSS'])).
+     noteCol: str
+       col field name. The default is scheduler_note
 
      Returns
      -------
@@ -4140,6 +4147,7 @@ def renameDDF(obser, lookup_ddf='',
     """
     import pandas as pd
 
+    """
     noteCol = 'note'
 
     if 'scheduler_note' in obser.dtype.names:
@@ -4147,6 +4155,8 @@ def renameDDF(obser, lookup_ddf='',
 
     if 'target_name' in obser.dtype.names:
         noteCol = 'target_name'
+
+    """
 
     bb = obser[noteCol]
 
@@ -4175,6 +4185,8 @@ def cluster_from_obs(obs, dbName, radius):
 
     if 'target_name' in obs.dtype.names:
         noteCol = 'target_name'
+
+    print('here 7')
 
     fieldName = np.unique(obs[noteCol])
     for io, field in enumerate(fieldName):
@@ -4248,7 +4260,8 @@ def load_obs(dbDir, dbName, dbExtens):
     return rec
 
 
-def get_obs(fieldType, dbDir, dbName, dbExtens, lookup_ddf=''):
+def get_obs(fieldType, dbDir, dbName, dbExtens, lookup_ddf='',
+            noteCol='scheduler_note'):
     """
     function to load data depending on fieldType
 
@@ -4262,6 +4275,10 @@ def get_obs(fieldType, dbDir, dbName, dbExtens, lookup_ddf=''):
        OS name
     dbExtens: str
       db extens (npy or db)
+    lookup_ddf: str
+      file to rename DDF. The default is ''.
+    noteCol : str, optional
+        col name to get field name. The default is 'scheduler_note'.
 
     Returns
     -----------
@@ -4278,6 +4295,7 @@ def get_obs(fieldType, dbDir, dbName, dbExtens, lookup_ddf=''):
     observations = rf.append_fields(
         observations, 'lsst_start', [lsst_start]*len(observations))
 
+    """
     noteCol = 'note'
 
     if 'scheduler_note' in observations.dtype.names:
@@ -4285,6 +4303,10 @@ def get_obs(fieldType, dbDir, dbName, dbExtens, lookup_ddf=''):
 
     if 'target_name' in observations.dtype.names:
         noteCol = 'target_name'
+
+    print('here 1')
+    """
+    # noteCol = colNote
 
     if noteCol in observations.dtype.names and fieldType != 'Fake':
         ido = np.core.defchararray.find(
@@ -4296,7 +4318,7 @@ def get_obs(fieldType, dbDir, dbName, dbExtens, lookup_ddf=''):
                 wfd = observations[ies]
                 # remove Roman field in v4.3.1 - not sure it will be here for ever
                 idob = np.core.defchararray.find(
-                    wfd['scheduler_note'].astype(str), 'DD')
+                    wfd[noteCol].astype(str), 'DD')
                 if idob.tolist():
                     iesb = np.ma.asarray(
                         list(map(lambda st: False if st != -1 else True, idob)))
@@ -4304,7 +4326,7 @@ def get_obs(fieldType, dbDir, dbName, dbExtens, lookup_ddf=''):
                 else:
                     return wfd
             if fieldType == 'DD':
-                return renameDDF(observations[~ies], lookup_ddf)
+                return renameDDF(observations[~ies], lookup_ddf, noteCol=noteCol)
     else:
         return observations
 

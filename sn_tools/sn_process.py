@@ -26,7 +26,7 @@ class FP2pixels:
                  # VRO_FP='circular', project_FP='gnomonic', telrot=0.,
                  ebvofMW_pixel=-1.0,
                  radius=4., pixelList='None', display=False,
-                 seasons='-1', **kwargs):
+                 seasons='-1', noteCol='scheduler_note', **kwargs):
         """
         Class to select data and link data to pixels
 
@@ -106,7 +106,8 @@ class FP2pixels:
         assert (self.RAmin <= self.RAmax)
 
         # loading data (complete file)
-        observations = get_obs(fieldType, dbDir, dbName, dbExtens, lookup_ddf)
+        observations = get_obs(fieldType, dbDir, dbName, dbExtens,
+                               lookup_ddf, noteCol)
 
         names = observations.dtype.names
         self.RACol = colName(names, ['fieldRA', 'RA', 'Ra'])
@@ -842,6 +843,7 @@ class Process(FP2pixels):
 
     def __init__(self, dbDir='', dbName='', dbExtens='',
                  fieldType='', fieldName='', lookup_ddf='',
+                 noteCol='scheduler_note',
                  nside=128,
                  RAmin=0., RAmax=360.,
                  Decmin=-80., Decmax=80,
@@ -859,7 +861,7 @@ class Process(FP2pixels):
                          pixelmap_dir, npixels, nproc_pixels,
                          # VRO_FP, project_FP, telrot,
                          ebvofMW_pixel,
-                         radius, pixelList, display, seasons)
+                         radius, pixelList, display, seasons, noteCol)
 
         self.saveData = saveData
         self.remove_dithering = remove_dithering
