@@ -2956,7 +2956,46 @@ def register_bands_sncosmo(sncosmo, telescope, airmass, aerosol, pwv, ozone):
                                      name=name,
                                      wave_unit=u.nm)
         sncosmo.registry.register(bandcosmo, force=True)
+        
+def register_bands_sncosmo_new(sncosmo,telescope,bandname,band,
+                               airmass,pwv,ozone,aerosol):
+    """
+    Function to register throughputs in sncosmo
 
+    Parameters
+    ----------
+    sncosmo : sncosmo instance
+        DESCRIPTION.
+    telescope : Throughputs
+        instance of the class.
+    airmass : float
+        airmass value.
+    aerosol : float
+        aerosol value.
+    pwv : float
+        precipitable water vapour value.
+    ozone : float
+        ozone value.
+
+    Returns
+    -------
+    None.
+
+    """
+
+    # band registery in sncosmo
+    from astropy import units as u
+
+    telescope.new_atmosphere(site_name=telescope.site_name,
+                             airmass=airmass,
+                             aerosol=aerosol,
+                             pwv=pwv, oz=ozone)
+    throughput = telescope.throughputs[band]
+    bandcosmo = sncosmo.Bandpass(throughput.wavelen,
+                                 throughput.sb,
+                                 name=bandname,
+                                 wave_unit=u.nm)
+    sncosmo.registry.register(bandcosmo, force=True)
 
 def get_val(var):
     """
