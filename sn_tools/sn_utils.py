@@ -2915,7 +2915,8 @@ def n_z(data, var='z', bins=np.arange(0.005, 0.11, 0.01),
     return df
 
 
-def register_bands_sncosmo(sncosmo, telescope, airmass, aerosol, pwv, ozone):
+def register_bands_sncosmo_old(sncosmo, telescope,
+                               airmass, aerosol, pwv, ozone):
     """
     Function to register throughputs in sncosmo
 
@@ -2956,9 +2957,10 @@ def register_bands_sncosmo(sncosmo, telescope, airmass, aerosol, pwv, ozone):
                                      name=name,
                                      wave_unit=u.nm)
         sncosmo.registry.register(bandcosmo, force=True)
-        
-def register_bands_sncosmo_new(sncosmo,telescope,bandname,band,
-                               airmass,pwv,ozone,aerosol):
+
+
+def register_bands_sncosmo(sncosmo, telescope, bandname, band,
+                           airmass, pwv, ozone, aerosol):
     """
     Function to register throughputs in sncosmo
 
@@ -2968,6 +2970,8 @@ def register_bands_sncosmo_new(sncosmo,telescope,bandname,band,
         DESCRIPTION.
     telescope : Throughputs
         instance of the class.
+    bandname: str
+        band name for sncosmo
     airmass : float
         airmass value.
     aerosol : float
@@ -2996,6 +3000,7 @@ def register_bands_sncosmo_new(sncosmo,telescope,bandname,band,
                                  name=bandname,
                                  wave_unit=u.nm)
     sncosmo.registry.register(bandcosmo, force=True)
+
 
 def get_val(var):
     """
