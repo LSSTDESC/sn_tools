@@ -2947,7 +2947,7 @@ def register_bands_sncosmo_old(sncosmo, telescope,
     telescope.new_atmosphere(site_name=telescope.site_name,
                              airmass=airmass,
                              aerosol=aerosol,
-                             pwv=pwv, oz=ozone)
+                             pwv=pwv, ozone=ozone)
     for band in 'grizy':
         name = '{}::{}_{}'.format(
             telescope.site_name, band, int(10*airmass))
@@ -2993,7 +2993,7 @@ def register_bands_sncosmo(sncosmo, telescope, bandname, band,
     telescope.new_atmosphere(site_name=telescope.site_name,
                              airmass=airmass,
                              aerosol=aerosol,
-                             pwv=pwv, oz=ozone)
+                             pwv=pwv, ozone=ozone)
     throughput = telescope.throughputs[band]
     bandcosmo = sncosmo.Bandpass(throughput.wavelen,
                                  throughput.sb,
