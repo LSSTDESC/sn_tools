@@ -14,12 +14,13 @@ class CoaddStacker:
     def __init__(self, col_sum=['numExposures', 'visitTime'],
                  col_mean=['observationStartMJD', 'fieldRA', 'fieldDec',
                            'pixRA', 'pixDec',
-                           'healpixID', 'season'],
-                 col_median=['airmass', 'sky', 'moonPhase',
+                           'healpixID', 'season', 'airmass'],
+                 col_median=['sky', 'moonPhase',
                              'seeingFwhmEff', 'seeingFwhmGeom'],
                  col_group=['note', 'filter', 'night', 'visitExposureTime'],
                  col_coadd='fiveSigmaDepth',
-                 col_visit='visitExposureTime'):
+                 col_visit='visitExposureTime',
+                 atmos_col=['pwv', 'ozone', 'aerosol']):
 
         self.col_sum = col_sum
         self.col_mean = col_mean
@@ -27,10 +28,11 @@ class CoaddStacker:
         self.col_coadd = col_coadd
         self.col_group = col_group
         self.col_visit = col_visit
+        self.atmos_col = atmos_col
 
         # self.exptimeCol = col_coadd[1]
 
-    def _run(self, simData, cols_present=False):
+    def _run(self, simData, cols_present=False, atmosType='const'):
         """Main run method
 
         Parameters
@@ -74,7 +76,7 @@ class CoaddStacker:
 
         df[self.col_visit] = df[self.col_visit].astype(int)
 
-        #groups = df.groupby(self.col_group)
+        # groups = df.groupby(self.col_group)
         listref = df.columns
         # get sum values
         """
@@ -93,7 +95,10 @@ class CoaddStacker:
         """
 
         tt = df.groupby(self.col_group).apply(
-            lambda x: self.stackIt_all(x, col_sum, col_mean, col_median)).reset_index()
+            lambda x: self.stackIt_all(x, col_sum,
+                                       col_mean,
+                                       col_median,
+                                       atmosType=atmosType)).reset_index()
 
         tt = tt[tt.columns.drop(list(tt.filter(regex='level')))]
 
@@ -103,7 +108,7 @@ class CoaddStacker:
 
         return tt.to_records(index=False)
 
-    def stackIt_all(self, grp, col_sum, col_mean, col_median):
+    def stackIt_all(self, grp, col_sum, col_mean, col_median, atmosType='const'):
         """
         Method to estimate all quantities for coadd
 
@@ -143,6 +148,19 @@ class CoaddStacker:
         res = grp[self.col_visit].sum()
 
         dictout['{}_sum'.format(self.col_visit)] = [res]
+
+        # atmos columns
+        for vv in self.atmos_col:
+            vv_sigma = 'sigma_{}'.format(vv)
+            if atmosType != 'const':
+                weights = 1./grp[vv_sigma]**2
+                weights_sum = np.sum(weights)
+                res = np.sum(grp[vv]*weights)/weights_sum
+                dictout[vv] = [res]
+                dictout[vv_sigma] = [1./np.sqrt(weights_sum)]
+            else:
+                dictout[vv] = [np.mean(grp[vv])]
+                dictout[vv_sigma] = [0.0]
 
         df = pd.DataFrame.from_dict(dictout)
 
