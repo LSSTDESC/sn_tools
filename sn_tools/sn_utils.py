@@ -3027,3 +3027,29 @@ def get_val(var):
         var = list(map(int, var))
 
     return var
+
+
+def load_config(yaml_config):
+    """
+
+
+    Parameters
+    ----------
+    yaml_config : str
+        yaml fine name
+
+    Returns
+    -------
+    config : dict
+        dict of the yaml file
+
+    """
+    import yaml
+    config = {}
+    if isinstance(yaml_config, dict):
+        config = yaml_config
+    else:
+        with open(yaml_config) as file:
+            config = yaml.full_load(file)
+
+    return config
