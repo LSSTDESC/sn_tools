@@ -1,5 +1,5 @@
 from astropy import (units as u, constants as const)
-from astropy.cosmology import FlatLambdaCDM
+from astropy.cosmology import w0waCDM
 import numpy as np
 
 STERADIAN2SQDEG = 180.**2 / np.pi**2
@@ -35,6 +35,7 @@ class SN_Rate:
 
     def __init__(self, rate='Perrett', H0=70., H0_err=2.,
                  Om0=0.25, Om0_err=0.025,
+                 w0=-1.0, wa=0.0,
                  min_rf_phase=-15., max_rf_phase=30.,
                  error_params=False):
 
@@ -42,7 +43,7 @@ class SN_Rate:
         self.H0_err = H0_err
         self.Om0 = Om0
         self.Om0_err = Om0_err
-        self.astropy_cosmo = FlatLambdaCDM(H0=H0, Om0=Om0)
+        self.astropy_cosmo = w0waCDM(H0=H0, Om0=Om0, Ode0=1.-Om0, w0=w0, wa=wa)
         self.rate = rate
         self.min_rf_phase = min_rf_phase
         self.max_rf_phase = max_rf_phase
