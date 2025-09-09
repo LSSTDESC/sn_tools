@@ -18,5 +18,6 @@ setup(
     # All files from folder sn_script_input
     package_data={'sn_script_input': ['*.txt']},
     python_requires='>=3.5',
-    zip_safe=False
+    zip_safe=False,
+    install_requires=['astropy_healpix>=1.0','descartes>=1.0'],
 )
