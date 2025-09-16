@@ -281,8 +281,8 @@ class GenerateSample:
       name of the column corresponding to filter
       Default : 'filter'
     area : float, opt
-       area of the survey (in deg\^2)
-       Default : 9.6 deg\^2
+       area of the survey (in deg2)
+       Default : 9.6 deg2
 
     """
 
@@ -3053,3 +3053,23 @@ def load_config(yaml_config):
             config = yaml.full_load(file)
 
     return config
+
+def clean_level(tt):
+    """
+    Function to clean the level
+
+    Parameters
+    ----------
+    tt : pandas df
+        Data to process.
+
+    Returns
+    -------
+    tt : pandas df
+        cleaned df.
+
+    """
+
+    tt = tt[tt.columns.drop(list(tt.filter(regex='level')))]
+
+    return tt
