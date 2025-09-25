@@ -3981,7 +3981,6 @@ def getFields(observations, fieldType='WFD', fieldIds=None,
     if 'target_name' in observations.dtype.names:
         noteCol = 'target_name'
 
-    print('here 4')
     for pName in ['proposalId', 'survey_id']:
         if pName in observations.dtype.names:
 
@@ -4079,7 +4078,6 @@ def getDD_from_note(observations, nside, RACol, DecCol, fieldName=''):
     if 'target_name' in observations.dtype.names:
         noteCol = 'target_name'
 
-    print('here 5')
     if noteCol in observations.dtype.names:
         ido = np.core.defchararray.find(
             observations[noteCol].astype(str), 'DD')
@@ -4164,9 +4162,16 @@ def renameDDF(obser, lookup_ddf='',
     for i, row in lookup.iterrows():
         key = row['simuName']
         vals = row['DDName']
-        idx = np.in1d(bb, [key])
+        idx = np.flatnonzero(np.char.chararray.find(bb, vals) != -1)
+        # idx = np.in1d(bb, [key])
         bb[idx] = vals
 
+    """
+    print('resultat', bb)
+    print('rename ddf', noteCol, np.unique(obser[noteCol]))
+    print(np.unique(obser['scheduler_note']))
+    print(test)
+    """
     obser[noteCol] = bb
 
     # print('jjjj', len(obser))
