@@ -4164,14 +4164,20 @@ def renameDDF(obser, lookup_ddf='',
         vals = row['DDName']
         idx = np.flatnonzero(np.char.chararray.find(bb, vals) != -1)
         # idx = np.in1d(bb, [key])
+        sel = bb[idx]
+        if len(sel) == 0:
+            # new for v5 simulations: XMM-LSS -> XMM_LSS
+            idx = np.flatnonzero(np.char.chararray.find(
+                bb, vals.replace('-', '_')) != -1)
         bb[idx] = vals
 
     """
-    print('resultat', bb)
+    print('resultat', np.unique(bb))
     print('rename ddf', noteCol, np.unique(obser[noteCol]))
     print(np.unique(obser['scheduler_note']))
     print(test)
     """
+
     obser[noteCol] = bb
 
     # print('jjjj', len(obser))
