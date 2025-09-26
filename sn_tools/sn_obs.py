@@ -4492,13 +4492,13 @@ def get_fields(obs, lookuptable,
     for i, row in lookup.iterrows():
         key = row['simuName']
         vals = '{}:{}'.format(prefix, row['DDName'])
-        idx = np.flatnonzero(np.char.chararray.find(bb, vals) != -1)
+        idx = np.flatnonzero(np.char.chararray.find(bb, key) != -1)
         # idx = np.in1d(bb, [key])
         sel = bb[idx]
         if len(sel) == 0:
             # new for v5 simulations: XMM-LSS -> XMM_LSS
             idx = np.flatnonzero(np.char.chararray.find(
-                bb, vals.replace('-', '_')) != -1)
+                bb, key.replace('-', '_')) != -1)
         ddf_res = obs[idx]
         # ddf_res[colName] = row['DDName']
         # ddf_res['field'] = row['DDName']
