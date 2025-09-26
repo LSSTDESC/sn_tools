@@ -6,7 +6,7 @@ import numpy.lib.recfunctions as rf
 import h5py
 from astropy.table import Table, Column, vstack
 from scipy.interpolate import CloughTocher2DInterpolator
-from sn_tools.sn_obs import renameFields, getFields
+from sn_tools.sn_obs import renameFields, getFields, get_fields
 from sn_tools.sn_obs import getObservations
 import pandas as pd
 from sn_tools.sn_obs import DataInside, season
@@ -2298,73 +2298,3 @@ class Survey_time:
             dfb = pd.concat((dfb, df_y))
 
         return dfb
-
-
-def get_fields(obs, lookuptable,
-               fieldType='DDF', prefix='DD',
-               colName='scheduler_note',
-               obsCol='observationId'):
-    """
-    Function to extract field observations
-
-    Parameters
-    ----------
-    obs : numpy array
-        array of observations.
-    lookuptable : str
-        lookup table for the DDFs (csv file).
-    fieldType : str, optional
-        field type to extract (DDF/WFD). The default is 'DDF'.
-    prefix : str, optional
-        prefix for DDF names. The default is 'DD'.
-    colName : str, optional
-        column name for field extraction. The default is 'scheduler_note'.
-    obsCol : str, optional
-        obs id column. The default is 'observationId'.
-
-    Returns
-    -------
-    res : TYPE
-        DESCRIPTION.
-
-    """
-
-    import numpy.lib.recfunctions as rf
-
-    bb = obs[colName]
-    lookup = pd.read_csv(lookuptable, comment='#')
-
-    # grab ddfs here
-    res = None
-    for i, row in lookup.iterrows():
-        key = row['simuName']
-        vals = '{}:{}'.format(prefix, row['DDName'])
-        idx = np.flatnonzero(np.char.chararray.find(bb, vals) != -1)
-        # idx = np.in1d(bb, [key])
-        sel = bb[idx]
-        if len(sel) == 0:
-            # new for v5 simulations: XMM-LSS -> XMM_LSS
-            idx = np.flatnonzero(np.char.chararray.find(
-                bb, vals.replace('-', '_')) != -1)
-        ddf_res = obs[idx]
-        # ddf_res[colName] = row['DDName']
-        # ddf_res['field'] = row['DDName']
-        ddf_res = rf.append_fields(
-            ddf_res, 'field', [row['DDName']]*len(ddf_res))
-        # bb[idx] = vals
-
-        if res is None:
-            res = ddf_res
-        else:
-            res = np.concatenate((res, ddf_res))
-
-    if fieldType == 'DDF':
-        return res
-    if fieldType == 'WFD':
-        obsIds = res[obsCol].to_list()
-        idx = obs[np.in1d(obs[obsCol], obsIds)]
-        res = obs[~idx]
-        # res[colName] = 'WFD'
-        res['field'] = 'WFD'
-        res = rf.append_fields(res, 'field', ['WFD']*len(ddf_res))
-    return res

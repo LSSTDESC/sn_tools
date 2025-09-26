@@ -402,7 +402,7 @@ class PavingSky:
 
     def plot(self):
         """
-        Method to plot/check the result of the class
+        Method to plot/the result of the class
 
         On the plot should be visible the initial area (red edges) with diamonds (blue edges)
         whose centers (black point) are located inside the initial area
@@ -4319,6 +4319,7 @@ def get_obs(fieldType, dbDir, dbName, dbExtens, lookup_ddf='',
     """
     # noteCol = colNote
 
+    """
     if noteCol in observations.dtype.names and fieldType != 'Fake':
         ido = np.core.defchararray.find(
             observations[noteCol].astype(str), 'DD')
@@ -4338,6 +4339,13 @@ def get_obs(fieldType, dbDir, dbName, dbExtens, lookup_ddf='',
                     return wfd
             if fieldType == 'DD':
                 return renameDDF(observations[~ies], lookup_ddf, noteCol=noteCol)
+    """
+    if fieldType != 'Fake':
+        obs = get_fields(observations, lookup_ddf,
+                         fieldType=fieldType, prefix='DD',
+                         colName='scheduler_note',
+                         obsCol='observationId')
+        return obs
     else:
         return observations
 
@@ -4440,4 +4448,76 @@ def ebv_pixels(healpix):
     res['healpixID'] = res['healpixID'].astype(int)
     res['ebvofMW'] = ebvofMW
 
+    return res
+
+
+def get_fields(obs, lookuptable,
+               fieldType='DD', prefix='DD',
+               colName='scheduler_note',
+               obsCol='observationId'):
+    """
+    Function to extract field observations
+
+    Parameters
+    ----------
+    obs : numpy array
+        array of observations.
+    lookuptable : str/pandas df
+        lookup table for the DDFs (csv file).
+    fieldType : str, optional
+        field type to extract (DDF/WFD). The default is 'DDF'.
+    prefix : str, optional
+        prefix for DDF names. The default is 'DD'.
+    colName : str, optional
+        column name for field extraction. The default is 'scheduler_note'.
+    obsCol : str, optional
+        obs id column. The default is 'observationId'.
+
+    Returns
+    -------
+    res : TYPE
+        DESCRIPTION.
+
+    """
+
+    import numpy.lib.recfunctions as rf
+
+    bb = obs[colName]
+    lookup = lookuptable
+    if isinstance(lookup, str):
+        lookup = pd.read_csv(lookuptable, comment='#')
+
+    # grab ddfs here
+    res = None
+    for i, row in lookup.iterrows():
+        key = row['simuName']
+        vals = '{}:{}'.format(prefix, row['DDName'])
+        idx = np.flatnonzero(np.char.chararray.find(bb, vals) != -1)
+        # idx = np.in1d(bb, [key])
+        sel = bb[idx]
+        if len(sel) == 0:
+            # new for v5 simulations: XMM-LSS -> XMM_LSS
+            idx = np.flatnonzero(np.char.chararray.find(
+                bb, vals.replace('-', '_')) != -1)
+        ddf_res = obs[idx]
+        # ddf_res[colName] = row['DDName']
+        # ddf_res['field'] = row['DDName']
+        ddf_res = rf.append_fields(
+            ddf_res, 'field', [row['DDName']]*len(ddf_res))
+        # bb[idx] = vals
+
+        if res is None:
+            res = ddf_res
+        else:
+            res = np.concatenate((res, ddf_res))
+
+    if fieldType == 'DD':
+        return res
+    if fieldType == 'WFD':
+        obsIds = res[obsCol].tolist()
+        idx = np.in1d(obs[obsCol], obsIds)
+        res = obs[~idx]
+        # res[colName] = 'WFD'
+        # res['field'] = 'WFD'
+        res = rf.append_fields(res, 'field', ['WFD']*len(res))
     return res
