@@ -474,15 +474,16 @@ class FP2pixels:
           fieldName to select
 
         """
+        """
         noteCol = 'note'
         if 'scheduler_note' in observations.dtype.names:
             noteCol = 'scheduler_note'
 
         if 'target_name' in observations.dtype.names:
             noteCol = 'target_name'
-
+        """
         if self.fieldType == 'DD':
-            idx = np.in1d(observations[noteCol], fieldName)
+            idx = np.in1d(observations['field'], fieldName)
             observations = observations[idx]
             return observations
 
