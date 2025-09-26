@@ -872,7 +872,8 @@ class Stat_DD_night:
       prefix to tag DD fields in data (default: DD)
     """
 
-    def __init__(self, dbDir, dbName, dbExtens, prefix='DD'):
+    def __init__(self, dbDir, dbName, dbExtens, prefix='DD',
+                 lookuptable='input/simulation/lookup_ddf.csv'):
 
         self.dbDir = dbDir
         self.dbName = dbName
@@ -880,8 +881,9 @@ class Stat_DD_night:
         self.prefix = prefix
 
         self.obs = self.load()
-        self.obs_DD = self.get_DD()
-        print('DDF', len(self.obs_DD))
+
+        self.obs_DD = get_fields(self.obs, lookuptable)
+
         budget = time_budget(self.obs, self.obs_DD)
         nDD_night = nvisits_DD_night(self.obs_DD)
 
@@ -898,15 +900,9 @@ class Stat_DD_night:
         params['filterCol'] = 'band'
         params['list_moon'] = ['moonAz', 'moonRA',
                                'moonDec', 'moonDistance', 'season', 'moonPhase']
-
-        fieldColb = 'note'
-        for vv in ['scheduler_note', 'target_name']:
-            if vv in self.obs_DD.dtype.names:
-                fieldColb = vv
-
-        params['fieldColdb'] = fieldColb
+        params['fieldColdb'] = 'field'
         res = multiproc(
-            np.unique(self.obs_DD[fieldColb]), params, ana_DDF, 6)
+            np.unique(self.obs_DD['field']), params, ana_DDF, 6)
 
         tab = Table.from_pandas(res)
         tab.meta = dict(zip(['dbName'], [dbName]))
@@ -943,14 +939,19 @@ class Stat_DD_night:
         """
 
         colName = 'note'
-        for vv in ['scheduler_note', 'target_name']:
+        for vv in ['scheduler_note']:
             if vv in self.obs.dtype.names:
                 colName = vv
 
         field_list = np.unique(self.obs[colName])
+
         self.field_DD = list(
             filter(lambda x: x.startswith(self.prefix), field_list))
 
+        """
+        ido = np.core.defchararray.find(
+            self.obs[colName].astype(str), 'DD:COSMOS')
+        """
         # select DD only
         id_ddf = np.in1d(self.obs[colName], self.field_DD)
 
@@ -968,7 +969,7 @@ def stat_DD_night_pixel_deprecated(obsPixelDir, dbName, nproc=8):
     dbName: str
       OS name
     nproc: int, opt
-      number of procs for multiprocessing (default: 8)
+      number of procs for multiprocessing(default: 8)
 
     Returns
     -----------
@@ -1001,7 +1002,7 @@ def stat_DD_night_pixel(pixels, dbName, nproc=8):
     dbName: str
       OS name
     nproc: int, opt
-      number of procs for multiprocessing (default: 8)
+      number of procs for multiprocessing(default: 8)
 
     Returns
     -----------
@@ -1050,12 +1051,7 @@ def time_budget(obs, obs_DD):
     time budget (float)
     """
 
-    colName = 'note'
-    for vv in ['scheduler_note', 'target_name']:
-        if vv in obs_DD.dtype.names:
-            colName = vv
-
-    fields = np.unique(obs_DD[colName])
+    fields = np.unique(obs_DD['field'])
 
     dictout = {}
 
@@ -1064,7 +1060,7 @@ def time_budget(obs, obs_DD):
     dictout['time_budget'] = DD_time/obs_time
 
     for fi in fields:
-        idx = obs_DD[colName] == fi
+        idx = obs_DD['field'] == fi
         sel = obs_DD[idx]
         fi_time = np.sum(sel['numExposures']*sel['exptime'])
         dictout['time_budget_{}'.format(fi)] = fi_time/obs_time
@@ -1087,7 +1083,8 @@ def nvisits_DD_night(obs):
 
     """
 
-    tt = pd.DataFrame(obs)
+    print('allo', len(obs))
+    tt = pd.DataFrame.from_records(obs)
     rr = tt.groupby(['night']).size()
 
     return np.mean(rr)
@@ -2301,3 +2298,73 @@ class Survey_time:
             dfb = pd.concat((dfb, df_y))
 
         return dfb
+
+
+def get_fields(obs, lookuptable,
+               fieldType='DDF', prefix='DD',
+               colName='scheduler_note',
+               obsCol='observationId'):
+    """
+    Function to extract field observations
+
+    Parameters
+    ----------
+    obs : numpy array
+        array of observations.
+    lookuptable : str
+        lookup table for the DDFs (csv file).
+    fieldType : str, optional
+        field type to extract (DDF/WFD). The default is 'DDF'.
+    prefix : str, optional
+        prefix for DDF names. The default is 'DD'.
+    colName : str, optional
+        column name for field extraction. The default is 'scheduler_note'.
+    obsCol : str, optional
+        obs id column. The default is 'observationId'.
+
+    Returns
+    -------
+    res : TYPE
+        DESCRIPTION.
+
+    """
+
+    import numpy.lib.recfunctions as rf
+
+    bb = obs[colName]
+    lookup = pd.read_csv(lookuptable, comment='#')
+
+    # grab ddfs here
+    res = None
+    for i, row in lookup.iterrows():
+        key = row['simuName']
+        vals = '{}:{}'.format(prefix, row['DDName'])
+        idx = np.flatnonzero(np.char.chararray.find(bb, vals) != -1)
+        # idx = np.in1d(bb, [key])
+        sel = bb[idx]
+        if len(sel) == 0:
+            # new for v5 simulations: XMM-LSS -> XMM_LSS
+            idx = np.flatnonzero(np.char.chararray.find(
+                bb, vals.replace('-', '_')) != -1)
+        ddf_res = obs[idx]
+        # ddf_res[colName] = row['DDName']
+        # ddf_res['field'] = row['DDName']
+        ddf_res = rf.append_fields(
+            ddf_res, 'field', [row['DDName']]*len(ddf_res))
+        # bb[idx] = vals
+
+        if res is None:
+            res = ddf_res
+        else:
+            res = np.concatenate((res, ddf_res))
+
+    if fieldType == 'DDF':
+        return res
+    if fieldType == 'WFD':
+        obsIds = res[obsCol].to_list()
+        idx = obs[np.in1d(obs[obsCol], obsIds)]
+        res = obs[~idx]
+        # res[colName] = 'WFD'
+        res['field'] = 'WFD'
+        res = rf.append_fields(res, 'field', ['WFD']*len(ddf_res))
+    return res
