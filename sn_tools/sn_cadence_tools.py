@@ -885,6 +885,7 @@ class Stat_DD_night:
         self.obs_DD = get_fields(self.obs, lookuptable)
 
         budget = time_budget(self.obs, self.obs_DD)
+        nvisits = len(self.obs)
         nDD_night = nvisits_DD_night(self.obs_DD)
 
         print('DD budget', budget, len(self.obs), nDD_night)
@@ -908,6 +909,7 @@ class Stat_DD_night:
         tab.meta = dict(zip(['dbName'], [dbName]))
         tab.meta = {**tab.meta, **budget}
         tab.meta['nDD_night'] = nDD_night
+        tab.meta['nvisits'] = nvisits
         self.summary = tab
 
     def load(self):
@@ -1058,6 +1060,7 @@ def time_budget(obs, obs_DD):
     DD_time = np.sum(obs_DD['numExposures']*obs_DD['exptime'])
     obs_time = np.sum(obs['numExposures']*obs['exptime'])
     dictout['time_budget'] = DD_time/obs_time
+    dictout['nvisits'] = len(obs)
 
     for fi in fields:
         idx = obs_DD['field'] == fi
@@ -1301,6 +1304,7 @@ def Stat_DD_season(data_tab, cols=['field', 'season']):
     res['dbName'] = data_tab.meta['dbName']
     res['time_budget'] = np.round(data_tab.meta['time_budget'], 3)
     res['nDD_night'] = data_tab.meta['nDD_night']
+    res['nvisits'] = data_tab.meta['nvisits']
     return res
 
 
