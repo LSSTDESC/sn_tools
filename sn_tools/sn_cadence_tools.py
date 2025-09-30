@@ -1264,7 +1264,7 @@ def seas_cad(obs, meta={}):
     # get gaps_stat
     df_diff = pd.DataFrame(diff, columns=['cad'])
     gapvals = [5, 10, 15, 20, 25, 30, 100]
-    group = df_diff.groupby(pd.cut(df_diff.cad, np.array(gapvals)))
+    group = df_diff.groupby(pd.cut(df_diff.cad, np.array(gapvals)),observed=True)
 
     for group_name, df_group in group:
         gmin = group_name.left
