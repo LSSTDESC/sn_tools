@@ -105,7 +105,7 @@ class FP2pixels:
 
         assert (self.RAmin <= self.RAmax)
 
-        # loading data (complete file)
+        # loading observations (complete file)
         observations = get_obs(fieldType, dbDir, dbName, dbExtens,
                                lookup_ddf, noteCol)
 
