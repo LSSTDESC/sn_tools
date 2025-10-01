@@ -1801,7 +1801,7 @@ class DataToPixels:
 
     def match_multiproc_gnomonic(self, obsid, params, j=0, output_q=None):
         """
-        Method to grab matched pixels for the gnomonic proj 
+        Method to grab matched pixels for the gnomonic proj
         using multiprocessing
 
         Parameters
@@ -2101,7 +2101,8 @@ class ProcessPixels:
 
         """
         for metric in self.metricList:
-            search_path = '{}/*_{}_{}*'.format(self.outDir, metric.name, self.num)
+            search_path = '{}/*_{}_{}*'.format(self.outDir,
+                                               metric.name, self.num)
             print('cleaning',search_path)
             listf = glob.glob(search_path)
             if len(listf) > 0:
@@ -2116,7 +2117,7 @@ class ProcessPixels:
         Parameters
         --------------
         pixels: pandas df
-          containing list of pixels (healpixID, pixRA, pixDec) with 
+          containing list of pixels (healpixID, pixRA, pixDec) with
           corresponding observations (self.RACol, self.DecCol)
         observations: array
            array of observations (from the scheduler)
@@ -3641,7 +3642,7 @@ class ProcessPixels_metric:
         Parameters
         --------------
         pixels: pandas df
-          containing list of pixels (healpixID, pixRA, pixDec) with 
+          containing list of pixels (healpixID, pixRA, pixDec) with
           corresponding observations (self.RACol, self.DecCol)
         observations: array
            array of observations (from the scheduler)
@@ -4352,7 +4353,7 @@ def get_obs(fieldType, dbDir, dbName, dbExtens, lookup_ddf='',
 
 def getObservations(dbDir, dbName, dbExtens):
     """
-    Function to extract observations: 
+    Function to extract observations:
     from an initial db from the scheduler, get a numpy array of observations
 
     Parameters
@@ -4399,7 +4400,7 @@ def getObservations(dbDir, dbName, dbExtens):
             outDir = dbDir.replace('/db', '/npy')
             if not os.path.isdir(outDir):
                 os.mkdir(outDir)
-                
+
             path = '{}/{}.npy'.format(outDir, dbName)
             if not os.path.isfile(path):
                 np.save(path, observations)
@@ -4451,10 +4452,10 @@ def ebv_pixels(healpix):
     return res
 
 
-def get_fields(obs, lookuptable,
-               fieldType='DD', prefix='DD',
-               colName='scheduler_note',
-               obsCol='observationId'):
+def get_fields_old(obs, lookuptable,
+                   fieldType='DD', prefix='DD',
+                   colName='scheduler_note',
+                   obsCol='observationId'):
     """
     Function to extract field observations
 
@@ -4520,4 +4521,64 @@ def get_fields(obs, lookuptable,
         # res[colName] = 'WFD'
         # res['field'] = 'WFD'
         res = rf.append_fields(res, 'field', ['WFD']*len(res))
+    return res
+
+
+def get_fields(obsb, lookuptable,
+               fieldType='DD', prefix='DD',
+               colName='scheduler_note',
+               obsCol='observationId'):
+    """
+    Function to extract field observations
+
+    Parameters
+    ----------
+    obs : numpy array
+        array of observations.
+    lookuptable : str/pandas df
+        lookup table for the DDFs (csv file).
+    fieldType : str, optional
+        field type to extract (DDF/WFD). The default is 'DDF'.
+    prefix : str, optional
+        prefix for DDF names. The default is 'DD'.
+    colName : str, optional
+        column name for field extraction. The default is 'scheduler_note'.
+    obsCol : str, optional
+        obs id column. The default is 'observationId'.
+
+    Returns
+    -------
+    res : TYPE
+        DESCRIPTION.
+
+    """
+
+    # import numpy.lib.recfunctions as rf
+
+    obs = pd.DataFrame.from_records(obsb)
+
+    lookup = lookuptable
+    if isinstance(lookup, str):
+        lookup = pd.read_csv(lookuptable, comment='#')
+
+    # grab ddfs here
+
+    obs['field'] = 'WFD'
+    obs['fieldType'] = 'WFD'
+    for i, row in lookup.iterrows():
+        key = row['simuName']
+        vals = row['DDName']
+        idx = obs[colName].str.contains(key)
+        obs.loc[idx, 'field'] = vals
+        obs.loc[idx, 'fieldType'] = 'DD'
+
+    # select the field type here
+    idxb = obs['fieldType'] == fieldType
+
+    df_res = pd.DataFrame(obs[idxb])
+    df_res = df_res.drop(columns=['fieldType'])
+    res = df_res.to_records(index=False)
+
+    del df_res
+    del obs
     return res
