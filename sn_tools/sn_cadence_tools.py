@@ -857,32 +857,36 @@ def Match_DD(fields_DD, df, radius=5):
 
 
 class Stat_DD_night:
-    """
-    class to estimate statistical estimator related to DD fields per night
+    def __init__(self, dbName, obs, obs_DD):
+        """
+        class for statistical estimator related to DD fields per night
 
-    Parameters
-    --------------
-    dbDir: str
-      db directory
-    dbName: str
-      db name
-    dbExtens: str
-      db extension
-    prefix: str, opt
-      prefix to tag DD fields in data (default: DD)
-    """
+        Parameters
+        ----------
+        dbName : str
+            OS name.
+        obs : array
+            array of observations.
+        obs_DD : array
+            array of DD observations.
 
-    def __init__(self, dbDir, dbName, dbExtens, prefix='DD',
-                 lookuptable='input/simulation/lookup_ddf.csv'):
+        Returns
+        -------
+        None.
 
+        """
+        """
         self.dbDir = dbDir
         self.dbName = dbName
         self.dbExtens = dbExtens
         self.prefix = prefix
+        """
+        self.dbName = dbName
+        self.obs = obs
 
-        self.obs = self.load()
+        # self.obs_DD = get_fields(self.obs, lookuptable)
 
-        self.obs_DD = get_fields(self.obs, lookuptable)
+        self.obs_DD = obs_DD
 
         budget = time_budget(self.obs, self.obs_DD)
         nvisits = len(self.obs)
@@ -1183,6 +1187,7 @@ def ana_visits(obs, field, Nvisits,
     for night in np.unique(obs[nightCol]):
         idx = obs[nightCol] == night
         obs_night = obs[idx]
+
         # estimate the number of filter changes per night
         obs_night.sort(order=mjdCol)
         diff = np.diff(obs_night[mjdCol])
@@ -1196,6 +1201,10 @@ def ana_visits(obs, field, Nvisits,
         dd['Nfc'] = len(diff[idx])
         dd['time_budget_night'] = len(obs_night)/Nvisits
         dd['nvisits_DD'] = len(obs_night)
+        dd['RA_mean'] = np.mean(obs['RA'])
+        dd['RA_std'] = np.std(obs['RA'])
+        dd['Dec_mean'] = np.mean(obs['Dec'])
+        dd['Dec_std'] = np.std(obs['Dec'])
         if list_moon:
             for ll in list_moon:
                 dd[ll] = np.median(obs_night[ll])
@@ -1244,6 +1253,22 @@ def summary(res):
 
 
 def seas_cad(obs, meta={}):
+    """
+    Function to analyze a season
+
+    Parameters
+    ----------
+    obs : pandas df
+        observations.
+    meta : dict, optional
+        metadata dict. The default is {}.
+
+    Returns
+    -------
+    TYPE
+        DESCRIPTION.
+
+    """
 
     dictout = {}
 
@@ -1263,11 +1288,14 @@ def seas_cad(obs, meta={}):
     dictout['cadence_std'] = [cad_std]
     dictout['season_length'] = [seas_length]
     dictout['time_budget_field_season'] = [np.sum(obs['time_budget_night'])]
+    dictout['RA_mean_std_night'] = [np.mean(obs['RA_std'])]
+    dictout['Dec_mean_std_night'] = [np.mean(obs['Dec_std'])]
 
     # get gaps_stat
     df_diff = pd.DataFrame(diff, columns=['cad'])
     gapvals = [5, 10, 15, 20, 25, 30, 100]
-    group = df_diff.groupby(pd.cut(df_diff.cad, np.array(gapvals)),observed=True)
+    group = df_diff.groupby(
+        pd.cut(df_diff.cad, np.array(gapvals)), observed=True)
 
     for group_name, df_group in group:
         gmin = group_name.left
@@ -1287,9 +1315,9 @@ def seas_cad(obs, meta={}):
     return pd.DataFrame.from_dict(dictout)
 
 
-def Stat_DD_season(data_tab, cols=['field', 'season']):
+def Stat_DD_season_night(data_tab, cols=['field', 'season']):
     """
-    Method to analyze a set of observing data per obs night
+    Method to analyze a set of observing data per season from nightly parameters
 
     Parameters
     --------------
@@ -2302,3 +2330,100 @@ class Survey_time:
             dfb = pd.concat((dfb, df_y))
 
         return dfb
+
+
+def load_observations(dbDir, dbName, dbExtens):
+    """
+    Function to load observations
+
+    Returns
+    ----------
+    numpy array of data
+    """
+
+    from sn_tools.sn_obs import getObservations
+    """
+     fName = '{}/{}.{}'.format(self.dbDir, self.dbName, self.dbExtens)
+     data = np.load(fName, allow_pickle=True)
+     """
+    data = getObservations(dbDir, dbName, dbExtens)
+
+    return data
+
+
+def stat_dd_season(obs_o, cols=['field', 'season']):
+    """
+    Function to estimate obs parameters per season
+
+    Parameters
+    ----------
+    obs_o : array
+        array of observations.
+    cols : list(str), optional
+        list of columns for the groupby. The default is ['field', 'season'].
+
+    Returns
+    -------
+    dfb : pandas df
+        Output data.
+
+    """
+
+    obs = None
+    fields = np.unique(obs_o['field'])
+
+    for field in fields:
+        idx = obs_o['field'] == field
+        sel = season(obs_o[idx], mjdCol='mjd')
+        if obs is None:
+            obs = sel
+        else:
+            obs = np.concat((obs, sel))
+
+    df = pd.DataFrame.from_records(obs)
+
+    print(df.columns)
+    dfb = df.groupby(cols).apply(lambda x: get_dither(x),
+                                 include_groups=False).reset_index()
+
+    return dfb
+
+
+def get_dither(grp, ccols=['RA', 'Dec'],
+               ccols_filter=['fiveSigmaDepth'], filters='ugrizy'):
+    """
+    Function to estimate OS parameters per field/season
+
+    Parameters
+    ----------
+    grp : pandas df
+        Data to process.
+    ccols : list(str), optional
+        List of columns to process. The default is ['RA', 'Dec'].
+    ccols_filter : list(str), optional
+        List of columns to process for filters. The default is ['fiveSigmaDepth'].
+    filters : str, optional
+        filter list. The default is 'ugrizy'.
+
+    Returns
+    -------
+    pandas df
+        output data.
+
+    """
+
+    corresp = dict(zip(['fiveSigmaDepth'], ['m5']))
+    dd = {}
+    for vv in ccols:
+        dd['{}_mean'.format(vv)] = [grp[vv].mean()]
+        dd['{}_std'.format(vv)] = [grp[vv].std()]
+
+    for f in filters:
+        idx = grp['filter'] == f
+        sel = grp[idx]
+        for vv in ccols_filter:
+            dd['{}_{}_mean'.format(corresp[vv], f)] = [sel[vv].mean()]
+            dd['{}_{}_std'.format(corresp[vv], f)] = [sel[vv].std()]
+            dd['{}_{}_med'.format(corresp[vv], f)] = [sel[vv].median()]
+
+    return pd.DataFrame.from_dict(dd)
