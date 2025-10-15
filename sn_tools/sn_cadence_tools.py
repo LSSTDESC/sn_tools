@@ -2378,7 +2378,7 @@ def stat_dd_season(obs_o, cols=['field', 'season']):
         if obs is None:
             obs = sel
         else:
-            obs = np.concat((obs, sel))
+            obs = np.concatenate((obs, sel))
 
     df = pd.DataFrame.from_records(obs)
 
