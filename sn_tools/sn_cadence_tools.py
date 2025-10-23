@@ -1201,10 +1201,11 @@ def ana_visits(obs, field, Nvisits,
         dd['Nfc'] = len(diff[idx])
         dd['time_budget_night'] = len(obs_night)/Nvisits
         dd['nvisits_DD'] = len(obs_night)
-        dd['RA_mean'] = np.mean(obs['RA'])
-        dd['RA_std'] = np.std(obs['RA'])
-        dd['Dec_mean'] = np.mean(obs['Dec'])
-        dd['Dec_std'] = np.std(obs['Dec'])
+        dd['RA_mean'] = np.mean(obs_night['RA'])
+        dd['RA_std'] = np.std(obs_night['RA'])
+        dd['Dec_mean'] = np.mean(obs_night['Dec'])
+        dd['Dec_std'] = np.std(obs_night['Dec'])
+
         if list_moon:
             for ll in list_moon:
                 dd[ll] = np.median(obs_night[ll])
