@@ -147,3 +147,54 @@ class BatchIt:
         self.script.close()
         # os.system("sh "+scriptName)
         os.system("sbatch "+self.scriptName)
+
+def open_script(scriptName):
+    """
+    Function to open a script
+
+    Parameters
+    ----------
+    fName : str
+        script name.
+
+    Returns
+    -------
+    script : file
+        script file.
+
+    """
+
+    # fill the script
+    script = open(scriptName, "w")
+
+    script.write("#!/bin/env bash\n")
+    # script.write(cmd+'\n')
+
+    return script
+
+
+def add_script(script, main_cmd, pp):
+    """
+    Function to fill the script
+
+    Parameters
+    ----------
+    script : file
+        script to fill.
+    main_cmd : str
+        cmd .
+    pp : dict
+        parameter dict for cmd.
+
+    Returns
+    -------
+    None.
+
+    """
+
+    cmd = 'python {}'.format(main_cmd)
+
+    for key, vals in pp.items():
+        cmd += ' --{}={}'.format(key, vals)
+
+    script.write(cmd+'\n')
