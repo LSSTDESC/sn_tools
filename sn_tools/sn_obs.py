@@ -2152,6 +2152,7 @@ class ProcessPixels:
             idf = pixels['healpixID'] == vv
             selpix = pixels[idf]
 
+            print('getting pixel data')
             dataPixels = self.getData(data, selpix)
             # print(vv, len(dataPixels))
             if len(dataPixels) < 11:
@@ -3760,18 +3761,18 @@ class ProcessPixels_metric:
           set of data used as input to the metric
 
         """
-
         resdict = {}
         # run the metrics on these data
         if len(dataPixel) <= 5:
             return
+        data_rec = dataPixel.to_records(index=False)
+
         for metric in self.metricList:
             """
             resdict[metric.name] = metric.run(
                 season(dataPixel.to_records(index=False)), imulti=self.num)
             """
-            resdict[metric.name] = metric.run(
-                dataPixel.to_records(index=False), imulti=self.num)
+            resdict[metric.name] = metric.run(data_rec, imulti=self.num)
             # print('running',len(resdict[metric.name]))
 
         # concatenate the results
