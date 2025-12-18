@@ -5,6 +5,7 @@ import pprint
 import multiprocessing
 from sn_tools.sn_io import geth5Data, getLC, getFile
 import os
+import pandas as pd
 
 
 def sigma_x0_x1_color(resu, restab, params=['x0', 'x1', 'color']):
@@ -436,3 +437,132 @@ def sigma_x0_x1_color_loop(lcList, params=['x0', 'x1', 'color']):
 
     return restab
 """
+
+
+def coadd_lc(lc_orig):
+    """
+    Function to coadd lc fluxes
+
+    Parameters
+    ----------
+    lc_orig : astropy table
+        lc to coadd.
+
+    Returns
+    -------
+    lcb : astropy table
+        coadded lc.
+
+    """
+
+    # save metadata
+
+    lc_meta = lc_orig.meta
+
+    # move to pandas
+    ccols = ['night', 'mean_wave', 'band',
+             'time', 'band_cosmo', 'zpsys', 'flux', 'fluxerr',
+             'snr_m5', 'snr', 'filter']
+    for vv in ['zp', 'pwv', 'aerosol', 'ozone', 'airmass']:
+        ccols.append(vv)
+        ccols.append('sigma_{}'.format(vv))
+    df = lc_orig[ccols].to_pandas()
+    lc = df.groupby(['filter', 'night']).apply(
+        lambda x: coadd_night_filter(x)).reset_index()
+    # round here
+    for vv in ['airmass', 'pwv', 'ozone', 'aerosol']:
+        round_value = int(np.mean(lc_orig['round_{}'.format(vv)]))
+        lc = lc.round({vv: round_value})
+
+    tel_site_name = np.unique(lc_orig['tel_site_name'])[0]
+    lc['band_cosmo'] = tel_site_name+'::' +\
+        lc['filter']+'_' +\
+        lc['airmass'].astype(str)+'_' +\
+        lc['pwv'].astype(str)+'_' +\
+        lc['ozone'].astype(str)+'_' +\
+        lc['aerosol'].astype(str)
+    lc['band'] = lc['band_cosmo']
+
+    lcb = Table.from_pandas(lc)
+    lcb.meta = lc_meta
+
+    return lcb
+
+
+def coadd_night_filter(grp,
+                       col_means_weighted=[
+                           ('flux', 'fluxerr'),
+                           ('zp', 'sigma_zp'),
+                           ('pwv', 'sigma_pwv'),
+                           ('ozone', 'sigma_ozone'),
+                           ('aerosol', 'sigma_aerosol'),
+                           ('airmass', 'sigma_airmass')],
+                       col_means=['mean_wave', 'zp', 'time', 'snr_m5', 'snr'],
+                       col_round=['airmass', 'pwv', 'ozone',
+                                  'aerosol'],
+                       round_vals=[2, 3, 3, 3],
+                       col_unique=['zpsys']):
+    """
+    Method to coadd light-curve points per night/filter
+
+    Parameters
+    ----------
+    grp : pandas df
+        Data to process.
+    col_means_weighted : list(str), optional
+        list of cols for weighted mean estimation.
+        The default is [('flux','fluxerr')].
+    col_means : list(str), optional
+        list of cols for mean estimation.
+        The default is ['airmass','pwv','ozone','aerosol',
+                        'mean_wave','zp','time'].
+    col_round : list(str), optional
+        list of cols to round.
+        The default is ['airmass','pwv','ozone',
+                        'aerosol','zp','mean_wave'].
+    round_vals : list(int), optional
+        list of rounding values corresponding to col_round.
+        The default is [2,1,1,1,2,2].
+    col_unique : list(str), optional
+        list of cols with unique value. The default is ['zpsys'].
+
+    Returns
+    -------
+    astropy table
+    output value
+
+    """
+
+    """
+    print('in coadd', len(grp))
+    print(grp[['flux', 'fluxerr']])
+    """
+
+    # grp['weight_flux'] = 1./grp['fluxerr']**2
+
+    dictout = {}
+    for vv in col_means_weighted:
+        pp = vv[0]
+        pp_err = vv[1]
+        pp_weight = 'weight_{}'.format(pp)
+        grp[pp_weight] = 1./grp[pp_err]**2
+        weight_sum = np.sum(grp[pp_weight])
+        mean_weighted = np.sum(grp[pp]*grp[pp_weight])/weight_sum
+        dictout[pp] = [mean_weighted]
+        dictout[vv[1]] = [1./np.sqrt(weight_sum)]
+
+    for vv in col_means:
+        val = grp[vv].mean()
+        dictout[vv] = [val]
+
+    for vv in col_unique:
+        dictout[vv] = grp[vv].unique().tolist()
+
+    res_df = pd.DataFrame.from_dict(dictout)
+    res_df['snr'] = res_df['flux']/res_df['fluxerr']
+
+    """
+    print('finally')
+    print(res_df[['flux', 'fluxerr']])
+    """
+    return res_df
