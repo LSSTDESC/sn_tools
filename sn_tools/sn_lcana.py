@@ -462,10 +462,13 @@ def coadd_lc(lc_orig):
     # move to pandas
     ccols = ['night', 'mean_wave', 'band',
              'time', 'band_cosmo', 'zpsys', 'flux', 'fluxerr',
-             'snr_m5', 'snr', 'filter']
+             'snr_m5', 'snr', 'filter', 'tel_site_name']
     for vv in ['zp', 'pwv', 'aerosol', 'ozone', 'airmass']:
         ccols.append(vv)
         ccols.append('sigma_{}'.format(vv))
+        if vv != 'zp':
+            ccols.append('round_{}'.format(vv))
+
     df = lc_orig[ccols].to_pandas()
     lc = df.groupby(['filter', 'night']).apply(
         lambda x: coadd_night_filter(x)).reset_index()
@@ -497,7 +500,11 @@ def coadd_night_filter(grp_orig,
                            ('ozone', 'sigma_ozone'),
                            ('aerosol', 'sigma_aerosol'),
                            ('airmass', 'sigma_airmass')],
-                       col_means=['mean_wave', 'zp', 'time', 'snr_m5', 'snr'],
+                       col_means=['mean_wave', 'zp', 'time', 'snr_m5', 'snr',
+                                  'sigma_airmass', 'sigma_pwv',
+                                  'sigma_aerosol', 'sigma_ozone',
+                                  'round_airmass', 'round_pwv',
+                                  'round_aerosol', 'round_ozone', 'sigma_zp'],
                        col_round=['airmass', 'pwv', 'ozone',
                                   'aerosol'],
                        round_vals=[2, 3, 3, 3],
@@ -546,16 +553,28 @@ def coadd_night_filter(grp_orig,
     if len(grp) == 0:
         return pd.DataFrame()
 
+    tel_site_name = grp['tel_site_name'].to_list()[0]
     dictout = {}
     for vv in col_means_weighted:
         pp = vv[0]
         pp_err = vv[1]
-        pp_weight = 'weight_{}'.format(pp)
-        grp[pp_weight] = 1./grp[pp_err]**2
-        weight_sum = np.sum(grp[pp_weight])
-        mean_weighted = np.sum(grp[pp]*grp[pp_weight])/weight_sum
+        # check if all errors are 0 - if yes modify the way of estimating values
+        idx = grp[pp_err] <= 0.0
+        sel = grp[idx]
+        if len(sel) == len(grp):
+            mean_weighted = np.mean(grp[pp])
+            weight_sum = -1.
+        else:
+            pp_weight = 'weight_{}'.format(pp)
+            grp[pp_weight] = 1./grp[pp_err]**2
+            weight_sum = np.sum(grp[pp_weight])
+            mean_weighted = np.sum(grp[pp]*grp[pp_weight])/weight_sum
+
         dictout[pp] = [mean_weighted]
-        dictout[vv[1]] = [1./np.sqrt(weight_sum)]
+        if vv[0] == 'flux':
+            dictout[vv[1]] = [1./np.sqrt(weight_sum)]
+        else:
+            dictout['sigma_meas_{}'.format(vv[0])] = [1./np.sqrt(weight_sum)]
 
     for vv in col_means:
         val = grp[vv].mean()
@@ -566,7 +585,7 @@ def coadd_night_filter(grp_orig,
 
     res_df = pd.DataFrame.from_dict(dictout)
     res_df['snr'] = res_df['flux']/res_df['fluxerr']
-
+    res_df['tel_site_name'] = tel_site_name
     """
     print('finally')
     print(res_df[['flux', 'fluxerr']])

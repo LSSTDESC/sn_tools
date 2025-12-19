@@ -897,8 +897,8 @@ class Process(FP2pixels):
         if self.nproc_pixels > 0:
             self.process_pixel_multiobs(self.pixels, df_fp)
         else:
-            self.process_pixel_multipix(self.pixels,df_fp)
-        #elf.process_multipix(self.pixels, df_fp)
+            self.process_pixel_multipix(self.pixels, df_fp)
+        # elf.process_multipix(self.pixels, df_fp)
 
     def process_pixel_multiobs(self, pixels, df_fp):
         """
@@ -950,14 +950,14 @@ class Process(FP2pixels):
                 continue
             print('processing pixel', pix['healpixID'], len(obs_pix))
             procpix(obs_pix)
-
+            print('end of processing', time.time()-time_ref)
             npixels_processed += 1
 
             if npixels_processed == self.npixels:
                 break
 
         procpix.finish()
-        
+
     def process_pixel_multipix(self, pixels, df_fp):
         """
         Method to process a set of pixels 
@@ -968,17 +968,16 @@ class Process(FP2pixels):
 
         """
         from sn_tools.sn_utils import multiproc
-    
+
         procpix = ProcessPixels_metric(self.metricList, 0,
                                        outDir=self.outDir, dbName=self.dbName,
                                        saveData=self.saveData)
         params = {}
         params['df_fp'] = df_fp
         params['procpix'] = procpix
-        
-        
-        multiproc(pixels,params,self.process_pixels,self.nproc)
-        
+
+        multiproc(pixels, params, self.process_pixels, self.nproc)
+
     def process_pixels(self, pixels, params, j=0, output_q=None):
         """
         Method to process a set of pixels 
@@ -988,10 +987,9 @@ class Process(FP2pixels):
         None.
 
         """
-        
+
         df_fp = params['df_fp']
         procpix = params['procpix']
-        
 
         # loop on pixels
         obsCol = 'observationId'
@@ -1023,11 +1021,11 @@ class Process(FP2pixels):
             if len(obs) == 0:
                 continue
             params = {}
-            obs_pix = self.proj_pixel(obs,ppars)
+            obs_pix = self.proj_pixel(obs, ppars)
 
             if len(obs_pix) == 0:
                 continue
-            print('processing pixel', j,pix['healpixID'], len(obs_pix))
+            print('processing pixel', j, pix['healpixID'], len(obs_pix))
             procpix(obs_pix)
 
             npixels_processed += 1
@@ -1036,11 +1034,12 @@ class Process(FP2pixels):
                 break
 
         procpix.finish()
-        
+
         if output_q is not None:
             return output_q.put({j: 1})
         else:
             return 1
+
     def proj_pixel(self, obs, params, j=0, output_q=None):
         """
         Method to get pixel proj
