@@ -489,7 +489,7 @@ def coadd_lc(lc_orig):
     return lcb
 
 
-def coadd_night_filter(grp,
+def coadd_night_filter(grp_orig,
                        col_means_weighted=[
                            ('flux', 'fluxerr'),
                            ('zp', 'sigma_zp'),
@@ -501,13 +501,13 @@ def coadd_night_filter(grp,
                        col_round=['airmass', 'pwv', 'ozone',
                                   'aerosol'],
                        round_vals=[2, 3, 3, 3],
-                       col_unique=['zpsys']):
+                       col_unique=['zpsys'], snr_min=1):
     """
     Method to coadd light-curve points per night/filter
 
     Parameters
     ----------
-    grp : pandas df
+    grp_orig : pandas df
         Data to process.
     col_means_weighted : list(str), optional
         list of cols for weighted mean estimation.
@@ -525,6 +525,8 @@ def coadd_night_filter(grp,
         The default is [2,1,1,1,2,2].
     col_unique : list(str), optional
         list of cols with unique value. The default is ['zpsys'].
+    snr_min: float, optional
+      min snr for coadd. The default is 1.
 
     Returns
     -------
@@ -538,7 +540,11 @@ def coadd_night_filter(grp,
     print(grp[['flux', 'fluxerr']])
     """
 
-    # grp['weight_flux'] = 1./grp['fluxerr']**2
+    idx = grp_orig['snr'] >= snr_min
+    grp = grp_orig[idx]
+
+    if len(grp) == 0:
+        return pd.DataFrame()
 
     dictout = {}
     for vv in col_means_weighted:
