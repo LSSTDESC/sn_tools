@@ -472,19 +472,23 @@ def coadd_lc(lc_orig):
     df = lc_orig[ccols].to_pandas()
     lc = df.groupby(['filter', 'night']).apply(
         lambda x: coadd_night_filter(x)).reset_index()
-    # round here
-    for vv in ['airmass', 'pwv', 'ozone', 'aerosol']:
-        round_value = int(np.mean(lc_orig['round_{}'.format(vv)]))
-        lc = lc.round({vv: round_value})
 
-    tel_site_name = np.unique(lc_orig['tel_site_name'])[0]
-    lc['band_cosmo'] = tel_site_name+'::' +\
-        lc['filter']+'_' +\
-        lc['airmass'].astype(str)+'_' +\
-        lc['pwv'].astype(str)+'_' +\
-        lc['ozone'].astype(str)+'_' +\
-        lc['aerosol'].astype(str)
-    lc['band'] = lc['band_cosmo']
+    if len(lc) > 0:
+
+        # round here
+        for vv in ['airmass', 'pwv', 'ozone', 'aerosol']:
+            round_value = int(np.mean(lc_orig['round_{}'.format(vv)]))
+            lc = lc.round({vv: round_value})
+
+        tel_site_name = np.unique(lc_orig['tel_site_name'])[0]
+
+        lc['band_cosmo'] = tel_site_name+'::' +\
+            lc['filter']+'_' +\
+            lc['airmass'].astype(str)+'_' +\
+            lc['pwv'].astype(str)+'_' +\
+            lc['ozone'].astype(str)+'_' +\
+            lc['aerosol'].astype(str)
+        lc['band'] = lc['band_cosmo']
 
     lcb = Table.from_pandas(lc)
     lcb.meta = lc_meta
