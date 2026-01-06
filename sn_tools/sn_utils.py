@@ -9,7 +9,6 @@ import h5py
 from scipy.interpolate import InterpolatedUnivariateSpline as Spline1d
 from scipy.interpolate import griddata, interp2d
 import pandas as pd
-import multiprocessing
 import pprint
 import operator
 
@@ -30,6 +29,7 @@ def multiproc(data, params, func, nproc):
       number of processes
 
     """
+    import multiprocessing
     # method = multiprocessing.get_start_method()
     # print('multiproc method', method)
     nproc = min([len(data), nproc])
@@ -3053,6 +3053,7 @@ def load_config(yaml_config):
             config = yaml.full_load(file)
 
     return config
+
 
 def clean_level(tt):
     """
