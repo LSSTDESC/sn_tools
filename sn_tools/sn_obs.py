@@ -4583,3 +4583,29 @@ def get_fields(obsb, lookuptable,
     del df_res
     del obs
     return res
+
+
+def load_season(seasons):
+    """
+    Function to get the list of seasons
+
+    Parameters
+    ----------
+    seasons : str
+          list of seasons.
+
+    Returns
+    -------
+    season : list(int)
+       list of seasons to process
+
+    """
+    if '-' not in seasons or seasons[0] == '-':
+        season = list(map(int, seasons.split(',')))
+    else:
+        seasl = seasons.split('-')
+        seasmin = int(seasl[0])
+        seasmax = int(seasl[1])
+        season = list(range(seasmin, seasmax+1))
+
+    return season
