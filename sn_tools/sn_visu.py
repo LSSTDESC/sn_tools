@@ -1196,13 +1196,14 @@ def plot_pixels(data, rot=(0., 0., 0.), imin=1, imax=5,
     cbar = fig.colorbar(cax, ticks=bounds,
                         orientation='horizontal')
 
-    boundsb = [0.5, 1.5, 2.5, 3.5, 4.5,5.5]
+    boundsb = [0.5, 1.5, 2.5, 3.5, 4.5, 5.5]
     cbar.set_ticks(boundsb)
     cbar.ax.set_xticklabels(xticklabels, fontweight='bold')
     cbar.ax.tick_params(size=0)
     # cbar.set_label(label='Survey', weight='bold')
     hp.graticule(coord='C')
-    
+
+
 def pix_coord(df, nside=64):
     """
     Function to add (RA,Dec) of pixels given healpixIDs
@@ -1230,6 +1231,7 @@ def pix_coord(df, nside=64):
     df['pixDec'] = pixDec
 
     return df
+
 
 def get_all_pixels(nside=64):
     """
