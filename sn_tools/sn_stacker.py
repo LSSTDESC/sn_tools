@@ -20,7 +20,7 @@ class CoaddStacker:
                  col_group=['note', 'filter', 'night', 'visitExposureTime'],
                  col_coadd='fiveSigmaDepth',
                  col_visit='visitExposureTime',
-                 atmos_col=['pwv', 'ozone', 'aerosol']):
+                 col_atmos=['pwv', 'ozone', 'aerosol']):
 
         self.col_sum = col_sum
         self.col_mean = col_mean
@@ -28,7 +28,7 @@ class CoaddStacker:
         self.col_coadd = col_coadd
         self.col_group = col_group
         self.col_visit = col_visit
-        self.atmos_col = atmos_col
+        self.col_atmos = col_atmos
 
         # self.exptimeCol = col_coadd[1]
 
@@ -150,7 +150,7 @@ class CoaddStacker:
         dictout['{}_sum'.format(self.col_visit)] = [res]
 
         # atmos columns
-        for vv in self.atmos_col:
+        for vv in self.col_atmos:
             vv_sigma = 'sigma_{}'.format(vv)
             if atmosType != 'const':
                 weights = 1./grp[vv_sigma]**2
