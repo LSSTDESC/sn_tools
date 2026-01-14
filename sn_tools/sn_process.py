@@ -1091,6 +1091,7 @@ class Process(FP2pixels):
                 obs = rf.append_fields(
                     obs, vv, pix_arr[vv].tolist(), usemask=False)
 
+
         if output_q is not None:
             return output_q.put({j: obs})
         else:
