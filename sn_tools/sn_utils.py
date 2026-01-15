@@ -3249,3 +3249,27 @@ class SN_simu_params:
             df = pd.read_hdf(fName)
         else:
             return df
+
+
+def test_multiproc(index='outa'):
+    """
+    Function useful to test multiprocessing
+
+    Parameters
+    ----------
+    index : str, optional
+        index string. The default is 'outa'.
+
+    Returns
+    -------
+    None.
+
+    """
+
+    print('starting', index)
+
+    for i in range(3000):
+        for j in range(3000):
+            k = i+j
+
+    print('finishing', index)
