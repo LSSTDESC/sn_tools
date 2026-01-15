@@ -39,7 +39,7 @@ def multiproc(data, params, func, nproc):
             del sys.modules[val]
     """
     import multiprocessing
-    #multiprocessing.set_start_method('forkserver')
+    # multiprocessing.set_start_method('forkserver')
     # method = multiprocessing.get_start_method()
     # print('multiproc method', method)
     nproc = min([len(data), nproc])
@@ -62,12 +62,11 @@ def multiproc(data, params, func, nproc):
     for i in range(nproc):
         resultdict.update(result_queue.get())
 
-    
     for p in multiprocessing.active_children():
         p.join()
-    
+
     restot = gather_results(resultdict)
-        
+
     return restot
 
 
@@ -3086,7 +3085,8 @@ def clean_level(tt):
 
     return tt
 
-def list_columns(list_col,col='PWV'):
+
+def list_columns(list_col, col='PWV'):
     """
     Function to retrieve list(str) with col inside
 
@@ -3108,145 +3108,144 @@ def list_columns(list_col,col='PWV'):
 
     return res
 
-def simu_params_file(obs, seas,simuParamsFile):
-    """
-    function to grab simu parameters from input file
 
-    Parameters
-    ----------
-    obs : numpy array
-        array of observations.
-    seas : int
-        season to process.
-    simuParamsFile: pandas df
-      simu parameters from file
+class SN_simu_params:
+    def __init__(self, sn_params, cosmo_params,
+                 mjdCol, area, web_path, seasonCol='season'):
+        """
+        Wrapper class to estimate SN simulation parameters
 
-    Returns
-    -------
-    sel : numpy array
-        array of simu parameters.
+        Parameters
+        ----------
+        sn_params : dict
+            SN parameters.
+        cosmo_params : dict
+            cosmo parameters.
+        mjdCol : str
+            mjd col name.
+        area : float
+            pixel area.
+        web_path : str
+            web path link.
+        seasonCol : str, optional
+            season col name. The default is 'season'.
 
-    """
+        Returns
+        -------
+        None.
 
-    healpixID = np.unique(obs['healpixID'])
+        """
 
-    idx = simuParamsFile['healpixID'] == healpixID
-    idx &= simuParamsFile['season'] == seas
+        self.seasonCol = seasonCol
+        simuFile = sn_params['simuFile']
+        self.simuParamsFile = self.simu_params_from_file(simuFile)
+        self.gen_simu = SimuParameters(sn_params, cosmo_params,
+                                       mjdCol=mjdCol, area=area,
+                                       web_path=web_path)
 
-    sel = simuParamsFile[idx]
+    def __call__(self, obs, seas):
+        """
+        Main method: estimation of simulation parameters
 
-    return sel
+        Parameters
+        ----------
+        obs : numpy array
+            Observations.
+        seas : int
+            season number.
 
-def simu_params_season(obs, seas,gen_par,seasonCol='season'):
-    """
-    Function to grab simu params (estimated from obs) for a season
+        Returns
+        -------
+        gen_pars : numpy array
+            List of simulation parameters.
 
-    Parameters
-    ----------
-    obs : numpy array
-        Observations
-    seas : int
-        season of observation.
-    gen_par: SimuParameters instance
-      class to generate simu parameters
-    seasonCol: str, opt.
-      season col name. The default is 'season'
+        """
 
-    Returns
-    -------
-    gen_pars : numpy array
-        simulation parameters.
+        if len(self.simuParamsFile) == 0:
+            gen_pars = self.get_params_season(obs, seas)
+        else:
+            gen_pars = self.get_params_from_file(obs, seas)
 
-    """
-
-    idxa = obs[seasonCol] == seas
-    obs_season = obs[idxa]
-    print('gen params')
-    gen_pars = gen_par.simuparams(obs_season)
-
-    if gen_pars is None:
         return gen_pars
 
-    gen_pars = rf.append_fields(gen_pars,
-                                'season',
-                                [seas]*len(gen_pars))
+    def get_params_from_file(self, obs, seas):
+        """
+        Method to grab simu parameters from input file
 
-    return gen_pars
+        Parameters
+        ----------
+        obs : numpy array
+            array of observations.
+        seas : int
+            season to process.
 
-def simu_params(obs, seasons,simuParamsFile,gen_par):
-    """
-    Function to get simu parameters for all seasons
+        Returns
+        -------
+        sel : numpy array
+            array of simu parameters.
 
-    Parameters
-    ----------
-    obs: array
-       observations.
-    seasons: list(int)
-      list of seasons
-    simuParamsFile: pandas df
-       simu parameters from file
-    gen_par: SimuParameters instance
-       class to estimate simu parameters
+        """
 
-    Returns
-    -------
-    array
-     simulation parameters.
+        healpixID = np.unique(obs['healpixID'])
 
-    """
+        idx = self.simuParamsFile['healpixID'] == healpixID
+        idx &= self.simuParamsFile['season'] == seas
 
-    gp = None
-    for seas in seasons:
+        sel = self.simuParamsFile[idx]
 
-        if len(simuParamsFile) == 0:
-            gen_pars = simu_params_season(obs, seas,gen_par)
-        else:
-            gen_pars = simu_params_file(obs, seas)
+        return sel
+
+    def get_params_season(self, obs, seas):
+        """
+        Method to grab simu params (estimated from obs) for a season
+
+        Parameters
+        ----------
+        obs : numpy array
+            Observations
+        seas : int
+            season of observation.
+
+        Returns
+        -------
+        gen_pars : numpy array
+            simulation parameters.
+
+        """
+
+        idxa = obs[self.seasonCol] == seas
+        obs_season = obs[idxa]
+
+        gen_pars = self.gen_simu.simuparams(obs_season)
 
         if gen_pars is None:
-            continue
+            return gen_pars
 
-        if gp is None:
-            gp = gen_pars
+        gen_pars = rf.append_fields(gen_pars,
+                                    'season',
+                                    [seas]*len(gen_pars))
+
+        return gen_pars
+
+    def simu_params_from_file(self, fName):
+        """
+        Method to grab simu parameters from file
+
+        Parameters
+        ----------
+        fName: str
+          file name to load.
+
+        Returns
+        -------
+        numpy array
+            array with simu parameters
+
+        """
+        # sn simu parameters from file
+        df = pd.DataFrame()
+
+        if fName != 'None':
+            df = pd.read_hdf(fName)
         else:
-            gp = np.concatenate((gp, gen_pars))
-
-    return gp
-
-def simu_params_from_file(sn_parameters):
-    """
-    Method to grab simu parameters from file
-
-    Parameters
-    ----------
-    sn_parameters: dict
-      sn parameters.
-
-    Returns
-    -------
-    numpy array
-        array with simu parameters
-
-    """
-    # sn simu parameters from file
-    df = pd.DataFrame()
-    simuFile = sn_parameters['simuFile']
-
-    if simuFile != 'None':
-        df = pd.read_hdf(simuFile)
-    else:
-        return df
-
-    # complete df with other simulation parameters
-    ccols = ['healpixID', 'season', 'z', 'daymax', 'x1', 'color',
-             'epsilon_x0', 'epsilon_x1',
-             'epsilon_color', 'epsilon_daymax', 'SNID']
-    if 'weight' in df.columns:
-        ccols += ['weight']
-    ccolsb = ['minRFphase', 'maxRFphase',
-              'minRFphaseQual', 'maxRFphaseQual']
-
-    for vv in ccolsb:
-        df[vv] = sn_parameters[vv]
-
-    return df[ccols+ccolsb].to_records(index=False)
+            return df
