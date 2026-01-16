@@ -3186,14 +3186,14 @@ class SN_simu_params:
 
         """
 
-        healpixID = np.unique(obs['healpixID'])
+        healpixID = obs['healpixID'].mean()
 
         idx = self.simuParamsFile['healpixID'] == healpixID
         idx &= self.simuParamsFile['season'] == seas
 
         sel = self.simuParamsFile[idx]
 
-        return sel
+        return sel.to_records(index=False)
 
     def get_params_season(self, obs, seas):
         """
@@ -3247,8 +3247,8 @@ class SN_simu_params:
 
         if fName != 'None':
             df = pd.read_hdf(fName)
-        else:
-            return df
+
+        return df
 
 
 def test_multiproc(index='outa'):
