@@ -512,7 +512,7 @@ def coadd_night_filter(grp_orig,
                        col_round=['airmass', 'pwv', 'ozone',
                                   'aerosol'],
                        round_vals=[2, 3, 3, 3],
-                       col_unique=['zpsys'], snr_min=1):
+                       col_unique=['zpsys'], snr_min=0):
     """
     Method to coadd light-curve points per night/filter
 
