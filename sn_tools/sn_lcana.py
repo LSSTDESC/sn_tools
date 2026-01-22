@@ -504,7 +504,8 @@ def coadd_night_filter(grp_orig,
                            ('ozone', 'sigma_ozone'),
                            ('aerosol', 'sigma_aerosol'),
                            ('airmass', 'sigma_airmass')],
-                       col_means=['mean_wave', 'zp', 'time', 'snr_m5', 'snr',
+                       col_means=['mean_wave',
+                                  'zp', 'time', 'snr_m5', 'snr',
                                   'sigma_airmass', 'sigma_pwv',
                                   'sigma_aerosol', 'sigma_ozone',
                                   'round_airmass', 'round_pwv',
@@ -552,7 +553,11 @@ def coadd_night_filter(grp_orig,
     """
 
     idx = grp_orig['snr'] >= snr_min
+    idx &= grp_orig['flux'] >= 0
+    idx &= grp_orig['fluxerr'] > 0
     grp = grp_orig[idx]
+
+    # remove LC points with flux < 0 or fluxerr <0
 
     if len(grp) == 0:
         return pd.DataFrame()
@@ -567,7 +572,7 @@ def coadd_night_filter(grp_orig,
         sel = grp[idx]
         if len(sel) == len(grp):
             mean_weighted = np.mean(grp[pp])
-            weight_sum = -1.
+            weight_sum = 1.
         else:
             pp_weight = 'weight_{}'.format(pp)
             grp[pp_weight] = 1./grp[pp_err]**2
