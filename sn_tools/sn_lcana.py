@@ -552,9 +552,11 @@ def coadd_night_filter(grp_orig,
     print(grp[['flux', 'fluxerr']])
     """
 
+    """
     idx = grp_orig['snr'] >= snr_min
     idx &= grp_orig['flux'] >= 0
-    idx &= grp_orig['fluxerr'] > 0
+    """
+    idx = grp_orig['fluxerr'] > 0
     grp = grp_orig[idx]
 
     # remove LC points with flux < 0 or fluxerr <0
