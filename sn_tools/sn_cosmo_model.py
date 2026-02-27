@@ -18,7 +18,7 @@ class DDE_FLRW(FLRW):
     def __init__(self, H0, Om0, Ode0=None, 
                  model="CPL", 
                  de_params=dict(zip(["w0","wa"],[-1,0])), 
-                 de_eos=None):
+                 de_eos="w0+wa*z/(1+z)"):
        
         Ode0 = Ode0 if Ode0 is not None else 1.0 - Om0
         # Call parent FLRW constructor
@@ -28,6 +28,7 @@ class DDE_FLRW(FLRW):
         self.de_params = de_params
         self.de_eos = de_eos
         # Check parameters depending on the model
+        """
         if model == "CPL":
             if "w0" not in self.params or "wa" not in self.params:
                 raise ValueError("CPL requires w0 and wa")
@@ -36,7 +37,7 @@ class DDE_FLRW(FLRW):
                 raise ValueError("Free model requires DE equation-of-state")
         else:
             raise ValueError("Model must be CPL or free")
-
+        """
     # Dark energy equation of state w(z)
     def w(self, z):
         """
@@ -54,13 +55,16 @@ class DDE_FLRW(FLRW):
 
         """
         a = 1.0 / (1.0 + z) # Scale factor
+        """
         if self.model == "CPL":
             # CPL formula: w(z) = w0 + wa*(1-a)
             return self.de_params["w0"] + self.de_params["wa"] * (1.0 - a)
         elif self.model == "free":
             # Evaluate a custom expression for w(z)
             return eval(self.de_eos, {"np": np, "z": z, "a": a}, self.de_params)
-
+        """
+        return eval(self.de_eos, {"np": np, "z": z, "a": a}, self.de_params)
+        
     # Dark energy density evolution
     def de_density_scale(self, z):
         """
@@ -77,7 +81,7 @@ class DDE_FLRW(FLRW):
             DE energy scale
 
         """
-
+        """
         if self.model == "CPL":
             # Analytic expression for CPL
             w0 = self.params["w0"]
@@ -93,8 +97,15 @@ class DDE_FLRW(FLRW):
                 return np.exp(3 * quad(integrand, 0, z)[0])
             else:
                 return np.array([np.exp(3 * quad(integrand, 0, zi)[0]) for zi in z])
+        """
+        def integrand(x):
+            return (1+self.w(x))/(1+x)
 
-    # E(z) = H(z)/H0
+        if np.isscalar(z):
+            return np.exp(3 * quad(integrand, 0, z)[0])
+        else:
+            return np.array([np.exp(3 * quad(integrand, 0, zi)[0]) for zi in z])
+
     def efunc(self, z):
         """
         Returns E(z) = H(z)/H0
@@ -116,7 +127,7 @@ class DDE_FLRW(FLRW):
             + self.Ode0*self.de_density_scale(z) # Dark energy contribution
             + self.Ok0*(1+z)**2    # Curvature contribution
         )
-    # Inverse of E(z)
+    
     def inv_efunc(self, z):
         """
         Inverse of efunc 
