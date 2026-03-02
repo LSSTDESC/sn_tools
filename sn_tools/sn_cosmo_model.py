@@ -13,6 +13,7 @@ from scipy.integrate import quad
 from astropy.cosmology.parameter import Parameter
 from astropy.cosmology._src.utils import aszarr
 from astropy.cosmology._src.flrw import scalar_inv_efuncs
+import sympy as sp
 
 class DDE_FLRW(FLRW):
     def __init__(self, H0, Om0, Ode0=None, 
@@ -27,6 +28,11 @@ class DDE_FLRW(FLRW):
         self.model = model
         self.de_params = de_params
         self.de_eos = de_eos
+        
+        z = sp.Symbol('z')
+        self.de_density_scale_sym = self.de_density_scale_symbol(z)
+        
+        self.w_z = self.w_zinterpol()
         # Check parameters depending on the model
         """
         if model == "CPL":
@@ -39,6 +45,23 @@ class DDE_FLRW(FLRW):
             raise ValueError("Model must be CPL or free")
         """
     # Dark energy equation of state w(z)
+    def w_zinterpol(self):
+        
+        zint = sp.Symbol('z')
+        res = self.w_symbol(zint)
+        
+        rr = []
+        z = np.arange(0.01,1.15,0.05)
+        
+        for zv in z:
+            ro = res.subs(zint,zv)
+            rr.append(ro)
+            
+        from scipy import interpolate
+        vv = interpolate.interp1d(z,rr,bounds_error=False, fill_value=0.)
+            
+        return vv
+    
     def w(self, z):
         """
         Method to estimate w(z)
@@ -54,7 +77,7 @@ class DDE_FLRW(FLRW):
             w(z).
 
         """
-        a = 1.0 / (1.0 + z) # Scale factor
+        #a = 1.0 / (1.0 + z) # Scale factor
         """
         if self.model == "CPL":
             # CPL formula: w(z) = w0 + wa*(1-a)
@@ -63,8 +86,17 @@ class DDE_FLRW(FLRW):
             # Evaluate a custom expression for w(z)
             return eval(self.de_eos, {"np": np, "z": z, "a": a}, self.de_params)
         """
-        return eval(self.de_eos, {"np": np, "z": z, "a": a}, self.de_params)
         
+        #res = eval(self.de_eos, {"np": np, "z": z}, self.de_params)
+        """
+        zint = sp.Symbol('z')
+        res = self.w_symbol(zint)
+        print('rrrr',res,z)
+        ro = res.subs(zint,z)
+        return ro
+        """
+        return self.w_z(z)
+    
     # Dark energy density evolution
     def de_density_scale(self, z):
         """
@@ -101,11 +133,64 @@ class DDE_FLRW(FLRW):
         def integrand(x):
             return (1+self.w(x))/(1+x)
 
+        from scipy import integrate
+        
         if np.isscalar(z):
             return np.exp(3 * quad(integrand, 0, z)[0])
         else:
             return np.array([np.exp(3 * quad(integrand, 0, zi)[0]) for zi in z])
+    
+    def w_symbol(self,z):
+        #symbolic estimation
+        #x = sp.Symbol('x')
+        #z = sp.Symbol('z')
+        
+        w = eval(self.de_eos, {"np": np,"z":z}, self.de_params)
+        
+        print('aaalllo',w)
+        return w
+        
+    def de_density_scale_symbol(self,z):
+        
+        x = sp.Symbol('x')
+        z = sp.Symbol('z')
+        ws =self.w_symbol(z)
+        print('there',ws)
+        integrand = (1+ws.subs('z','x'))/(1+x)
+        
+        print('thereb',integrand)
+        integral=sp.integrate(integrand,(x,0,z))
+        
+        print('there c',integral)
+        res = sp.exp(3*integral)
+        
+        return res
+        
+        
+        
 
+
+    def efunc_nosymbol(self, z):
+        """
+        Returns E(z) = H(z)/H0
+        Astropy uses this function for all distance calculations.
+        
+        Parameters
+        ----------
+        z : float or array-like
+            Redshift
+            
+        Returns
+        -------
+        float or np.ndarray
+            E(z) = H(z)/H0
+        """
+        #print("custom  efunc called",z) 
+        return np.sqrt(
+            self.Om0*(1+z)**3                    # Matter contribution
+            + self.Ode0*self.de_density_scale(z) # Dark energy contribution
+            + self.Ok0*(1+z)**2    # Curvature contribution
+        )
     def efunc(self, z):
         """
         Returns E(z) = H(z)/H0
@@ -121,13 +206,14 @@ class DDE_FLRW(FLRW):
         float or np.ndarray
             E(z) = H(z)/H0
         """
-        #print("custom  efunc called") 
-        return np.sqrt(
-            self.Om0*(1+z)**3                    # Matter contribution
-            + self.Ode0*self.de_density_scale(z) # Dark energy contribution
-            + self.Ok0*(1+z)**2    # Curvature contribution
-        )
-    
+        zint = sp.Symbol('z')
+         
+        res = self.Om0*(1+z)**3                    # Matter contribution
+        res = float(self.Ode0*self.de_density_scale_sym.subs('z',z)) # Dark energy contribution
+        res += self.Ok0*(1+z)**2 #curvature
+        
+        return np.sqrt(res)
+            
     def inv_efunc(self, z):
         """
         Inverse of efunc 
