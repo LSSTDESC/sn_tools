@@ -10,16 +10,37 @@ import numpy as np
 import astropy.units as u
 from astropy.cosmology import FLRW
 from scipy.integrate import quad
-from astropy.cosmology.parameter import Parameter
-from astropy.cosmology._src.utils import aszarr
-from astropy.cosmology._src.flrw import scalar_inv_efuncs
-import sympy as sp
+
+
 
 class DDE_FLRW(FLRW):
     def __init__(self, H0, Om0, Ode0=None, 
                  model="CPL", 
                  de_params=dict(zip(["w0","wa"],[-1,0])), 
                  de_eos="w0+wa*z/(1+z)"):
+        """
+        custom cosmo class using symbolic sympy
+
+        Parameters
+        ----------
+        H0 : float
+            H0 parameter.
+        Om0 : float
+            Omega_matter parameter.
+        Ode0 : float, optional
+            Omege_de parameter. The default is None.
+        model : str, optional
+            cosmo model. The default is "CPL".
+        de_params : dict, optional
+            DE parameter eos. The default is dict(zip(["w0","wa"],[-1,0])).
+        de_eos : str, optional
+            DE eos. The default is "w0+wa*z/(1+z)".
+
+        Returns
+        -------
+        None.
+
+        """
        
         Ode0 = Ode0 if Ode0 is not None else 1.0 - Om0
         # Call parent FLRW constructor
@@ -28,39 +49,6 @@ class DDE_FLRW(FLRW):
         self.model = model
         self.de_params = de_params
         self.de_eos = de_eos
-        
-        z = sp.Symbol('z')
-        self.de_density_scale_sym = self.de_density_scale_symbol(z)
-        
-        self.w_z = self.w_zinterpol()
-        # Check parameters depending on the model
-        """
-        if model == "CPL":
-            if "w0" not in self.params or "wa" not in self.params:
-                raise ValueError("CPL requires w0 and wa")
-        elif model == "free":
-            if self.de_eos is None:
-                raise ValueError("Free model requires DE equation-of-state")
-        else:
-            raise ValueError("Model must be CPL or free")
-        """
-    # Dark energy equation of state w(z)
-    def w_zinterpol(self):
-        
-        zint = sp.Symbol('z')
-        res = self.w_symbol(zint)
-        
-        rr = []
-        z = np.arange(0.01,1.15,0.05)
-        
-        for zv in z:
-            ro = res.subs(zint,zv)
-            rr.append(ro)
-            
-        from scipy import interpolate
-        vv = interpolate.interp1d(z,rr,bounds_error=False, fill_value=0.)
-            
-        return vv
     
     def w(self, z):
         """
@@ -77,23 +65,198 @@ class DDE_FLRW(FLRW):
             w(z).
 
         """
-        #a = 1.0 / (1.0 + z) # Scale factor
+        a = 1.0 / (1.0 + z) # Scale factor
+        
+        res = eval(self.de_eos, {"np": np, "z": z}, self.de_params)
+        
+        return res
+    
+    # Dark energy density evolution
+    def de_density_scale(self, z):
         """
-        if self.model == "CPL":
-            # CPL formula: w(z) = w0 + wa*(1-a)
-            return self.de_params["w0"] + self.de_params["wa"] * (1.0 - a)
-        elif self.model == "free":
-            # Evaluate a custom expression for w(z)
-            return eval(self.de_eos, {"np": np, "z": z, "a": a}, self.de_params)
+        Method to estimate DE density scale.
+
+        Parameters
+        ----------
+        z : float array
+            Redshifts.
+
+        Returns
+        -------
+        array(float)
+            DE energy scale
+
+        """
+        def integrand(x):
+            return (1+self.w(x))/(1+x)
+
+        from scipy import integrate
+        
+        if np.isscalar(z):
+            return np.exp(3 * quad(integrand, 0, z)[0])
+        else:
+            return np.array([np.exp(3 * quad(integrand, 0, zi)[0]) for zi in z])
+    
+
+
+    def efunc(self, z):
+        """
+        Returns E(z) = H(z)/H0
+        Astropy uses this function for all distance calculations.
+        
+        Parameters
+        ----------
+        z : float or array-like
+            Redshift
+            
+        Returns
+        -------
+        float or np.ndarray
+            E(z) = H(z)/H0
+        """
+        return np.sqrt(
+            self.Om0*(1+z)**3                    # Matter contribution
+            + self.Ode0*self.de_density_scale(z) # Dark energy contribution
+            + self.Ok0*(1+z)**2    # Curvature contribution
+        )
+            
+    def inv_efunc(self, z):
+        """
+        Inverse of efunc 
+
+        Parameters
+        ----------
+        z : float array
+            Redshifts.
+
+        Returns
+        -------
+        float array
+            1/efunc(z)
+
+        """
+        return 1.0 / self.efunc(z)
+    
+    def q_parameter(self, z):
+        """
+        Method to estimate the decelaration parameter
+
+        Parameters
+        ----------
+        z : float array
+            Redshifts.
+
+        Returns
+        -------
+        float array
+            Deceleration parameter.
+
+        """
+        dz = 1e-5   # Step for numerical derivative
+        if np.isscalar(z):
+            Hz = self.H(z)
+            dHdz = (self.H(z+dz)-Hz)/dz
+            return (1+z)/Hz*dHdz - 1
+        else:
+            # Handle array of z
+            return np.array([(1+zi)/self.H(zi)*(self.H(zi+dz)-self.H(zi))/dz - 1 for zi in z])
+
+class DDE_FLRW_symbol(FLRW):
+    def __init__(self, H0, Om0, Ode0=None, 
+                 model="CPL", 
+                 de_params=dict(zip(["w0","wa"],[-1,0])), 
+                 de_eos="w0+wa*z/(1+z)"):
+        """
+        custom cosmo class using symbolic sympy
+
+        Parameters
+        ----------
+        H0 : float
+            H0 parameter.
+        Om0 : float
+            Omega_matter parameter.
+        Ode0 : float, optional
+            Omege_de parameter. The default is None.
+        model : str, optional
+            cosmo model. The default is "CPL".
+        de_params : dict, optional
+            DE parameter eos. The default is dict(zip(["w0","wa"],[-1,0])).
+        de_eos : str, optional
+            DE eos. The default is "w0+wa*z/(1+z)".
+
+        Returns
+        -------
+        None.
+
         """
         
-        #res = eval(self.de_eos, {"np": np, "z": z}, self.de_params)
+        Ode0 = Ode0 if Ode0 is not None else 1.0 - Om0
+        # Call parent FLRW constructor
+        super().__init__(H0=H0, Om0=Om0, Ode0=Ode0)
+        # Store model info
+        self.model = model
+        self.de_params = de_params
+        self.de_eos = de_eos
+        
+        #z = sp.Symbol('z')
+        #self.de_density_scale_sym = self.de_density_scale_symbol(z)
+        
+        w_z,de_z = self.w_zinterpol()
+        
+        self.w_z = w_z
+        self.de_z = de_z
+       
+    def w_zinterpol(self):
         """
+        Method to estimate w and de_density intepolator
+
+        Returns
+        -------
+        vv : 1d interpolator
+            w(z) values.
+        vvb : 1d interpolator
+            de_density_scale(z) values.
+
+        """
+        import sympy as sp
         zint = sp.Symbol('z')
-        res = self.w_symbol(zint)
-        print('rrrr',res,z)
-        ro = res.subs(zint,z)
-        return ro
+        x = sp.Symbol('x')
+        ws = self.w_symbol(zint)
+        integrand = (1+ws.subs('z','x'))/(1+x)
+        integral=sp.integrate(integrand,(x,0,zint))
+        de_density = sp.exp(3*integral)
+        
+        rr = []
+        rb = []
+        z = np.arange(0.01,1.2,0.1)
+        
+       
+        for zv in z:
+            ro = ws.subs(zint,zv)
+            rr.append(ro)
+            res = de_density.subs(zint,zv)
+            rb.append(res)
+        
+        from scipy import interpolate
+        vv = interpolate.interp1d(z,rr,bounds_error=False, fill_value=0.)
+        vvb = interpolate.interp1d(z,rb,bounds_error=False, fill_value=0.) 
+        
+        return vv,vvb
+    
+    def w(self, z):
+        """
+        Method to estimate w(z)
+
+        Parameters
+        ----------
+        z : float array
+            Redshifts.
+
+        Returns
+        -------
+        array(float)
+            w(z).
+
         """
         return self.w_z(z)
     
@@ -113,23 +276,7 @@ class DDE_FLRW(FLRW):
             DE energy scale
 
         """
-        """
-        if self.model == "CPL":
-            # Analytic expression for CPL
-            w0 = self.params["w0"]
-            wa = self.params["wa"]
-            return (1+z)**(3*(1+w0+wa)) * np.exp(-3*wa*z/(1+z))
-
-        elif self.model == "free":
-            # Numerical integration for free model
-            def integrand(x):
-                return (1+self.w(x))/(1+x)
-
-            if np.isscalar(z):
-                return np.exp(3 * quad(integrand, 0, z)[0])
-            else:
-                return np.array([np.exp(3 * quad(integrand, 0, zi)[0]) for zi in z])
-        """
+       
         def integrand(x):
             return (1+self.w(x))/(1+x)
 
@@ -146,51 +293,30 @@ class DDE_FLRW(FLRW):
         #z = sp.Symbol('z')
         
         w = eval(self.de_eos, {"np": np,"z":z}, self.de_params)
-        
-        print('aaalllo',w)
+    
         return w
         
     def de_density_scale_symbol(self,z):
+        """
+        Method to estimate de_density_scale
+
+        Parameters
+        ----------
+        z : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        res : TYPE
+            DESCRIPTION.
+
+        """
         
-        x = sp.Symbol('x')
-        z = sp.Symbol('z')
-        ws =self.w_symbol(z)
-        print('there',ws)
-        integrand = (1+ws.subs('z','x'))/(1+x)
-        
-        print('thereb',integrand)
-        integral=sp.integrate(integrand,(x,0,z))
-        
-        print('there c',integral)
-        res = sp.exp(3*integral)
+        res = self.de_z(z)
         
         return res
         
-        
-        
 
-
-    def efunc_nosymbol(self, z):
-        """
-        Returns E(z) = H(z)/H0
-        Astropy uses this function for all distance calculations.
-        
-        Parameters
-        ----------
-        z : float or array-like
-            Redshift
-            
-        Returns
-        -------
-        float or np.ndarray
-            E(z) = H(z)/H0
-        """
-        #print("custom  efunc called",z) 
-        return np.sqrt(
-            self.Om0*(1+z)**3                    # Matter contribution
-            + self.Ode0*self.de_density_scale(z) # Dark energy contribution
-            + self.Ok0*(1+z)**2    # Curvature contribution
-        )
     def efunc(self, z):
         """
         Returns E(z) = H(z)/H0
@@ -206,10 +332,11 @@ class DDE_FLRW(FLRW):
         float or np.ndarray
             E(z) = H(z)/H0
         """
-        zint = sp.Symbol('z')
+        #zint = sp.Symbol('z')
          
         res = self.Om0*(1+z)**3                    # Matter contribution
-        res = float(self.Ode0*self.de_density_scale_sym.subs('z',z)) # Dark energy contribution
+        #res = float(self.Ode0*self.de_density_scale_sym.subs('z',z)) # Dark energy contribution
+        res += self.Ode0*self.de_density_scale_symbol(z)
         res += self.Ok0*(1+z)**2 #curvature
         
         return np.sqrt(res)
@@ -332,7 +459,9 @@ class w0waDDE(FLRW):
     .. [2] Linder, E. (2003). Exploring the Expansion History of the
            Universe. Phys. Rev. Lett., 90, 091301.
     """
+    from astropy.cosmology.parameter import Parameter
 
+    
     w0 = Parameter(doc="Dark energy equation of state at z=0.",
                    fvalidate="float")
     wa = Parameter(
@@ -371,7 +500,9 @@ class w0waDDE(FLRW):
         self.w0 = w0
         self.wa = wa
         self.model = model
-
+        from astropy.cosmology._src.utils import aszarr
+        from astropy.cosmology._src.flrw import scalar_inv_efuncs
+        
         # Please see :ref:`astropy-cosmology-fast-integrals` for discussion
         # about what is being done here.
         if self.Tcmb0.value == 0:
@@ -536,3 +667,90 @@ class w0waDDE(FLRW):
         """
 
         return (1.+self.w(x))/(1.+x)
+
+def cosmo_wrapper(params):
+    """
+    Cosmology wrapper
+
+    Parameters
+    ----------
+    params : dict
+        cosmology parameters.
+
+    Returns
+    -------
+    cosmology : class instance
+        instance of the cosmology class
+
+    """
+    
+    to_import = 'from {} import {}'.format(params['class_loc'],params['de_class'])
+    print('importing',to_import)
+    exec(to_import,globals())
+    global cosmology
+    if 'astropy' in params['class_loc']:
+        to_eval = '{}('.format(params['de_class'])
+        for vv in ['H0','Om0','Ode0']:
+            to_eval += '{}={},'.format(vv,params[vv])
+        for key,vals in params['de_params'].items():
+            to_eval += '{}={},'.format(key,vals)
+        to_eval += ')'
+        cosmology = eval(to_eval)
+    
+    if 'sn_cosmo_model' in params['class_loc']:
+        to_eval = '{}('.format(params['de_class'])
+        for vv in ['H0','Om0','Ode0']:
+            to_eval += '{}={},'.format(vv,params[vv])
+        to_eval += 'de_params={},'.format(params['de_params'])
+        to_eval += 'de_eos=\"{}\"'.format(str(params['de_eos']))
+        to_eval += ')'
+        
+        cosmology = eval(to_eval)
+        """
+        distmod = cosmology.distmod(z).value
+        print(distmod)
+        """
+    
+    return cosmology
+    
+def cosmo_values(params, z=np.arange(0.01, 1.15, 0.05)):
+    """
+    method to estimate cosmology parameters (dL(z),w(z),...)
+
+    Parameters
+    ----------
+    params : dict
+        cosmo parameters.
+    config : TYPE
+        DESCRIPTION.
+    z : list(float), optional
+        Redshifts. The default is np.arange(0.01, 1.101, 0.05).
+
+    Returns
+    -------
+    res : pandas df
+        output data.
+
+    """
+    import pandas as pd
+    cosmology = cosmo_wrapper(params)
+    distmod = cosmology.distmod(z).value
+    lumidist = cosmology.luminosity_distance(z).value*1.e3
+    wz = cosmology.w(z)
+
+    res = pd.DataFrame(z, columns=['z'])
+    res['mu'] = distmod
+    de_params = params['de_params'].keys()
+    de_params = ','.join(de_params)
+    de_values = params['de_params'].values()
+    de_values = map(str,de_values)
+    de_values = ','.join(de_values)
+    res['de_params'] = de_params
+    res['de_values'] = de_values
+    for key,vals in params['de_params'].items():
+        res[key] = vals
+    res['de_eos'] = params['de_eos']
+    res['dl'] = lumidist
+    res['w'] = wz
+
+    return res   
