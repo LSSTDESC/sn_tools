@@ -685,7 +685,6 @@ def cosmo_wrapper(params):
     """
     
     to_import = 'from {} import {}'.format(params['class_loc'],params['de_class'])
-    print('importing',to_import)
     exec(to_import,globals())
     global cosmology
     if 'astropy' in params['class_loc']:
