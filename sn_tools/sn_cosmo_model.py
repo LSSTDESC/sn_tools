@@ -747,8 +747,10 @@ def cosmo_values(params, z=np.arange(0.01, 1.15, 0.05)):
     de_values = ','.join(de_values)
     res['de_params'] = de_params
     res['de_values'] = de_values
+    """
     for key,vals in params['de_params'].items():
         res[key] = vals
+    """
     res['de_eos'] = params['de_eos']
     res['dl'] = lumidist
     res['w'] = wz
