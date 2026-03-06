@@ -753,5 +753,7 @@ def cosmo_values(params, z=np.arange(0.01, 1.15, 0.05)):
     res['de_eos'] = params['de_eos']
     res['dl'] = lumidist
     res['w'] = wz
+    for vv in ['de_eos','de_class','class_loc','de_model']:
+        res[vv] = params[vv]
 
     return res   
