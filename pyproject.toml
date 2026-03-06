@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "sn_tools"
 version = "1.0.2"
 requires-python = ">=3.5"
-dependencies = ['astropy_healpix>=1.0','descartes>=1.0','sncosmo>=1.0','aplpy']
+dependencies = ['astropy_healpix>=0.6','descartes>=1.0','sncosmo>=1.0','aplpy']
 authors = [
   {name = "Philippe Gris", email = "philippe.gris@clermont.in2p3.fr"}
 ]
