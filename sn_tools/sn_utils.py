@@ -1513,7 +1513,10 @@ class X0_norm:
     x0_norm: float, x0 value
     """
 
-    def __init__(self, salt2Dir='SALT2_Files', model='salt2-extended', version='1.0', absmag=-19.0906, outfile='reference_files/X0_norm.npy'):
+    def __init__(self, salt2Dir='SALT2_Files', 
+                 model='salt2-extended', 
+                 version='1.0', absmag=-19.0906, 
+                 outfile='reference_files/X0_norm.npy'):
 
         self.salt2Dir = salt2Dir
         self.model = model
@@ -1531,7 +1534,13 @@ class X0_norm:
             model_max = 11501.
             wave_min = model_min
             wave_max = model_max
-
+            
+        if model == 'salt3':
+           model_min = 300.
+           model_max = 180000.
+           wave_min = 2000.
+           wave_max = 11000.
+           
         self.wave = np.arange(wave_min, wave_max, 1.)
 
         # estimate flux at 10pc
@@ -1539,13 +1548,64 @@ class X0_norm:
         source = sncosmo.get_source(self.model, version=self.version)
         self.SN = sncosmo.Model(source=source)
         r = []
+        
+        x1 = np.arange(-3., 3., 0.01)
+        color = np.arange(-0.3, 0.3, 0.01)
+        
+        dfa = pd.DataFrame(x1,columns=['x1'])
+        dfb = pd.DataFrame(color,columns=['color'])
+        
+        df = dfa.merge(dfb,how='cross')
+        
+        from sn_tools.sn_utils import multiproc
+        
+        params = {}
+        r = multiproc(df,params,self.process,nproc=8)
+        """
         for x1 in np.arange(-3., 3., 0.01):
             for color in np.arange(-0.3, 0.3, 0.01):
                 r.append((x1, color, self.flux_at_10pc, self.X0_norm(x1, color)))
+        """
         tab = np.rec.fromrecords(
             r, names=['x1', 'color', 'flux_10pc', 'x0_norm'])
 
         np.save(outfile, tab)
+
+    def process(self,data,params,j=0,output_q=None):
+        """
+        Method to process data using multiprocessing
+
+        Parameters
+        ----------
+        data : pandas df
+            Data to process.
+        params : dict
+            parameters.
+        j : int, optional
+            tag for multiprocessing. The default is 0.
+        output_q : multiprocessing queue, optional
+            where to put the results. The default is None.
+
+        Returns
+        -------
+        list
+            result.
+
+        """
+        
+        
+        r = []
+        
+        for i,row in data.iterrows():
+            x1 = row['x1']
+            color = row['color']
+            r.append((x1, color, self.flux_at_10pc, self.X0_norm(x1, color)))
+        
+        if output_q is not None:
+            return output_q.put({j: r})
+        else:
+            return r
+        
 
     def flux_10pc(self):
         """
@@ -1567,6 +1627,7 @@ class X0_norm:
 
         os.environ[name] = thedir+'/Instruments/Landolt'
 
+        """
         from sn_tools.sn_throughputs import Throughputs
         self.trans_standard = Throughputs(through_dir='STANDARD',
                                           telescope_files=[],
@@ -1576,23 +1637,33 @@ class X0_norm:
                                           filterlist=('A'),
                                           wave_min=3559,
                                           wave_max=5559)
-
+        """
+        
+        from sn_telmodel.sn_telescope import Telescope
+        
+        self.trans_standard = Telescope(tel_dir='SALT2_Files/Instruments/Landolt',
+                                        tel_optical_files=[],
+                                        tel_filter_files=['sb_-41A.dat'],
+                                        tel_wave_min=3559,
+                                        tel_wave_max=5559)
+        
+        
         mag, spectrum_file = self.getMag(
             thedir+'/MagSys/VegaBD17-2008-11-28.dat',
-            np.string_(name),
-            np.string_(band))
+            np.bytes_(name),
+            np.bytes_(band))
 
         sourcewavelen, sourcefnu = self.readSED_fnu(
             filename=thedir+'/'+spectrum_file)
         CLIGHT_A_s = 2.99792458e18         # [A/s]
         HPLANCK = 6.62606896e-27
 
-        from rubin_sim.photUtils import Sed
+        from rubin_sim.phot_utils import Sed
         sedb = Sed(wavelen=sourcewavelen, flambda=sourcewavelen *
                    sourcefnu/(CLIGHT_A_s * HPLANCK))
 
         flux = self.calcInteg(
-            bandpass=self.trans_standard.system['A'],
+            bandpass=self.trans_standard.tel_trans['A'],
             signal=sedb.flambda,
             wavelen=sedb.wavelen)
 
@@ -1627,16 +1698,16 @@ class X0_norm:
         fluxes = 10.*self.SN.flux(0., self.wave)
 
         wavelength = self.wave/10.
-        from rubin_sim.photUtils import Sed, PhotometricParameters, Bandpass
+        from rubin_sim.phot_utils import Sed, PhotometricParameters, Bandpass
         SED_time = Sed(wavelen=wavelength, flambda=fluxes)
 
         expTime = 30.
         photParams = PhotometricParameters(nexp=expTime/15.)
         trans = Bandpass(
-            wavelen=self.trans_standard.system['A'].wavelen/10.,
-            sb=self.trans_standard.system['A'].sb)
+            wavelen=self.trans_standard.tel_trans['A'].wavelen/10.,
+            sb=self.trans_standard.tel_trans['A'].sb)
         # number of ADU counts for expTime
-        e_per_sec = SED_time.calcADU(bandpass=trans, photParams=photParams)
+        e_per_sec = SED_time.calc_adu(bandpass=trans, phot_params=photParams)
         # e_per_sec = sed.calcADU(bandpass=self.transmission.lsst_atmos[filtre], photParams=photParams)
         e_per_sec /= expTime/photParams.gain*photParams.effarea
 
@@ -1666,7 +1737,7 @@ class X0_norm:
         sfile = open(filename, 'rb')
         spectrum_file = 'unknown'
         for line in sfile.readlines():
-            if np.string_('SPECTRUM') in line:
+            if np.bytes_('SPECTRUM') in line:
                 spectrum_file = line.decode().split(' ')[1].strip()
             if name in line and band in line:
                 sfile.close()
@@ -1710,7 +1781,7 @@ class X0_norm:
 
         x = np.core.function_base.linspace(range_inf, range_sup, n_steps)
 
-        return integrate.simps(integrand, x=waves)
+        return integrate.simpson(integrand, x=waves)
 
     def readSED_fnu(self, filename, name=None):
         """
