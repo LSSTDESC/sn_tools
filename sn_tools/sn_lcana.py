@@ -602,3 +602,28 @@ def coadd_night_filter(grp_orig,
     print(res_df[['flux', 'fluxerr']])
     """
     return res_df
+
+def get_bands_vs_z(z):
+    """
+    Function to get useful bands vs z
+
+    Parameters
+    ----------
+    z : float
+        redshift.
+
+    Returns
+    -------
+    vals : str
+        list of useful bands.
+
+    """
+    
+    rr = [(0.01,0.1),(0.1,0.35),(0.35,0.65),(0.65,1.1)]
+    bb = ['gri','griz','rizy',('izy')]
+    dd = dict(zip(rr,bb))
+    
+    bands = 'unknown'
+    for key,vals in dd.items():
+        if z >= key[0] and z < key[1]:
+            return vals
