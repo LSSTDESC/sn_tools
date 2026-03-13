@@ -117,10 +117,13 @@ class BatchIt:
         script.write(" cd " + self.cwd + "\n")
         # this is required for conda
         if self.conda_activate:
+            """
             cond = '/pbs/throng/lsst/users/gris/anaconda3/etc/profile.d/conda.sh'
             src = 'source {}'.format(cond)
             script.write('{}'.format(src)+'\n')
             script.write('conda activate myenv'+'\n')
+            """
+            script.write('source setup_conda.sh \n')
         script.write(" export MKL_NUM_THREADS=1 \n")
         script.write(" export NUMEXPR_NUM_THREADS=1 \n")
         script.write(" export OMP_NUM_THREADS=1 \n")
