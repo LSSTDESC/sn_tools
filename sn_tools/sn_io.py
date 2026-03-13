@@ -1427,3 +1427,52 @@ def load_OS_df(dbDir, dbName, runType, timescale_file='year',
         df = pd.concat((df, dfa))
         # break
     return df
+
+def get_table(file,path):
+    """
+    Parameters
+    ----------
+    path : str
+        hdf5 path for light curve.
+
+    Returns
+    -------
+    AstropyTable
+        Returns the reading of an .hdf5 file as an AstropyTable.
+    """
+
+    tab = Table()
+    try:
+        tab = astropy.io.misc.hdf5.read_table_hdf5(
+            file, path=path, character_as_bytes=False)
+    except (OSError, KeyError):
+        pass
+
+    return tab
+
+def load_astro_table(fName):
+    """
+    Function to load sn flux
+
+    Parameters
+    ----------
+    fName : str
+        File name.
+
+    Returns
+    -------
+    data : astropy table
+        output data.
+
+    """
+    
+    fFile = h5py.File(fName, 'r')
+    keys = list(fFile.keys())
+    
+    data = Table()
+    for key in keys:
+        tab = get_table(fFile,key)
+        #data = vstack([data, Table.read(fFile, path=key)])
+        data = vstack([data,tab])
+        
+    return data
