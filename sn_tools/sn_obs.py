@@ -4073,6 +4073,7 @@ def getFields(observations, fieldType='WFD', fieldIds=None,
 
 def getDD_from_note(observations, nside, RACol, DecCol, fieldName=''):
 
+    print('tytttt',nside)
     noteCol = 'note'
     if '' in observations.dtype.names:
         noteCol = 'scheduler_note'
@@ -4570,9 +4571,11 @@ def get_fields(obsb, lookuptable,
         key = row['simuName']
         vals = row['DDName']
         idx = obs[colName].str.contains(key)
-        obs.loc[idx, 'field'] = vals
-        obs.loc[idx, 'fieldType'] = 'DD'
-
+        sel = obs[idx]
+        if len(sel) > 0:
+            obs.loc[idx, 'field'] = vals
+            obs.loc[idx, 'fieldType'] = 'DD'
+            
     # select the field type here
     idxb = obs['fieldType'] == fieldType
 
