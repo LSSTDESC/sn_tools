@@ -493,7 +493,8 @@ class NSN:
         self.max_rf_phase = max_rf_phase
 
         self.rateSN = SN_Rate(rate=rate, H0=self.H0, Om0=self.Om0,
-                              min_rf_phase=self.min_rf_phase, max_rf_phase=self.max_rf_phase)
+                              min_rf_phase=self.min_rf_phase, 
+                              max_rf_phase=self.max_rf_phase)
 
     def __call__(self, zmin, zmax, dz, season_length, survey_area,
                  account_for_edges=True, scale_factor=1):
@@ -532,3 +533,68 @@ class NSN:
         res = scale_factor*np.cumsum(nsn)[-1]
 
         return res
+    
+def get_nsn(rate='Perrett', H0=70, Om0=0.3,
+           zmin=0.01, zmax=1.1, dz=0.01,
+           season_length=180,
+           survey_area=9.6, account_for_edges=False,
+           min_rf_phase=-15, max_rf_phase=30):
+    """
+    Function to estimate the number of SNe Ia
+
+    Parameters
+    ----------
+    rate : str, optional
+        Rate used. The default is 'Perrett'.
+    H0 : float, optional
+        H0 value. The default is 70.
+    Om0 : float, optional
+        Omega_0 parameter. The default is 0.3.
+    zmin : float, optional
+        min redshift. The default is 0.01.
+    zmax : float, optional
+        max redshift. The default is 1.1.
+    dz : float, optional
+        z step. The default is 0.01.
+    season_length : float, optional
+        season length. The default is 180.
+    survey_area : float, optional
+        survey_area. The default is 9.6.
+    account_for_edges : bool, optional
+        to account for edges. The default is False.
+    min_rf_phase : float, optional
+        min rf phase. The default is -15.
+    max_rf_phase : float, optional
+        max rf phase. The default is 30.
+
+    Returns
+    -------
+    res : pandas df
+        Result.
+
+    """
+
+    sn_rate = SN_Rate(rate=rate, H0=H0, Om0=Om0,
+                      min_rf_phase=min_rf_phase,
+                      max_rf_phase=max_rf_phase)
+    zmax += dz/2
+
+    zz, rateb, err_rate, nsn, err_nsn, age_universe = sn_rate(
+        zmin=zmin, zmax=zmax, dz=dz,
+        account_for_edges=account_for_edges,
+        duration=season_length, survey_area=survey_area)
+
+    nsn_sum = np.cumsum(nsn)
+    err_nsn_sum = np.sqrt(np.cumsum(err_nsn**2))
+
+    import pandas as pd
+    res = pd.DataFrame(nsn_sum, columns=['nsn'])
+    res['err_nsn'] = err_nsn_sum
+    res['z'] = zz
+    res['age_universe'] = age_universe
+    res['rate'] = rate
+    res['edges'] = account_for_edges
+    res['min_rf_phase'] = min_rf_phase
+    res['max_rf_phase'] = max_rf_phase
+
+    return res
