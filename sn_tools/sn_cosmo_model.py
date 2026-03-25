@@ -734,7 +734,7 @@ def cosmo_values(params, z=np.arange(0.01, 1.15, 0.05)):
     import pandas as pd
     cosmology = cosmo_wrapper(params)
     distmod = cosmology.distmod(z).value
-    lumidist = cosmology.luminosity_distance(z).value*1.e3
+    lumidist = cosmology.luminosity_distance(z).value #MpC
     wz = cosmology.w(z)
 
     res = pd.DataFrame(z, columns=['z'])
@@ -751,7 +751,7 @@ def cosmo_values(params, z=np.arange(0.01, 1.15, 0.05)):
         res[key] = vals
     """
     res['de_eos'] = params['de_eos']
-    res['dl'] = lumidist
+    res['dL [Mpc]'] = lumidist
     res['w'] = wz
     for vv in ['de_eos','de_class','class_loc','de_model']:
         res[vv] = params[vv]
