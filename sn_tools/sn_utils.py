@@ -316,7 +316,7 @@ class GenerateSample:
         from sn_tools.sn_rate import SN_Rate
         self.sn_rate = SN_Rate(rate=self.params['z']['rate'],
                                H0=cosmo_parameters['H0'],
-                               Om0=cosmo_parameters['Om'],
+                               Om0=cosmo_parameters['Om0'],
                                min_rf_phase=self.params['minRFphaseQual'],
                                max_rf_phase=self.params['maxRFphaseQual'])
 
@@ -678,7 +678,7 @@ class SimuParameters:
         from sn_tools.sn_rate import SN_Rate
         self.sn_rate = SN_Rate(rate=self.params['z']['rate'],
                                H0=cosmo_parameters['H0'],
-                               Om0=cosmo_parameters['Om'],
+                               Om0=cosmo_parameters['Om0'],
                                min_rf_phase=self.params['minRFphaseQual'],
                                max_rf_phase=self.params['maxRFphaseQual'])
         from scipy.interpolate import interp1d
