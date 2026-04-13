@@ -1476,3 +1476,4 @@ def load_astro_table(fName):
         data = vstack([data,tab])
         
     return data
+
