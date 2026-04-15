@@ -1477,3 +1477,37 @@ def load_astro_table(fName):
         
     return data
 
+def load_cosmo_params_from_script(cosmo_par):
+    """
+    Function to load cosmo parameters from script values
+
+    Parameters
+    ----------
+    cosmo_par : dict
+        cosmo parameters from script.
+
+    Returns
+    -------
+    params : dict
+        cosmo parameter dict.
+
+    """
+    
+    
+    de_values = cosmo_par['devalues'].split(',')
+    de_params = cosmo_par['deparams'].split(',')
+
+    de_values = list(map(float,de_values))
+    
+    params = {}
+    params['de_params'] = dict(zip(de_params,de_values))
+    params['de_class'] = cosmo_par['declass']
+    params['class_loc'] = cosmo_par['classloc']
+    params['de_model'] = cosmo_par['demodel']  
+    params['de_eos'] = cosmo_par['deeos']
+    params['H0'] = cosmo_par['H0']
+    params['Om0'] = cosmo_par['Om0']
+    params['Ode0'] = cosmo_par['Ode0']
+    
+    return params
+    
