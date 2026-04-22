@@ -132,6 +132,25 @@ class BatchIt:
         self.script = script
 
     def add_batch(self, thescript, params):
+        """
+        Method to add script to execute
+
+        Parameters
+        ----------
+        thescript : str
+            the script.
+        params : dict
+            script parameters.
+
+        Returns
+        -------
+        None.
+
+        """
+        
+        for vv in params.keys():
+            if isinstance(params[vv],str):
+                params[vv] = '\'{}\''.format(params[vv])
 
         cmd = 'python {}'.format(thescript)
 
