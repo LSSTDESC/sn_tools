@@ -150,8 +150,10 @@ class BatchIt:
         
         for vv in params.keys():
             if isinstance(params[vv],str):
-                params[vv] = '\'{}\''.format(params[vv])
-
+                if '(' in params[vv] and '\'' not in params[vv]:
+                    print('aooo',params[vv])
+                    params[vv] = '\'{}\''.format(params[vv])
+        
         cmd = 'python {}'.format(thescript)
 
         for key, vals in params.items():
