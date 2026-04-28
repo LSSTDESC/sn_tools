@@ -6,14 +6,13 @@ Created on Mon Apr 27 11:04:16 2026
 @author: philippe.gris@clarmont.in2p3.fr
 """
 from astropy.table import Table
-import pandas as pd
 from scipy.interpolate import RegularGridInterpolator
 import numpy as np
 
 __all__=['RegularGrid_interp']
 
 class RegularGrid_interp:
-    def __init__(self,df_tot,ccols,zcol='distmod'):
+    def __init__(self,df_tot,ccols,zcol='distmod',method='linear'):
         """
         class to build a regulargrid interpolator
 
@@ -25,6 +24,8 @@ class RegularGrid_interp:
             List of columns for the interpolator.
         zcol : str, optional
             interpolator resuls. The default is 'distmod'.
+        method: str, optional
+            method to be used for interpolation. The default is 'nearest'
 
         Returns
         -------
@@ -36,6 +37,7 @@ class RegularGrid_interp:
         self.data = Table.from_pandas(df_tot)
         self.ccols = ccols
         self.zcol = zcol
+        self.method = method
     
     def __call__(self):
         """
@@ -78,7 +80,7 @@ class RegularGrid_interp:
         index = np.lexsort(tup)
         distmod = np.reshape(tab[index][self.zcol], ntup)
         
-        interp = RegularGridInterpolator(vtup,distmod,method='nearest', 
+        interp = RegularGridInterpolator(vtup,distmod,method=self.method, 
                                          bounds_error=False, fill_value=-1.0)
             
         return interp
