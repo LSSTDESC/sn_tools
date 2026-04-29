@@ -268,7 +268,7 @@ class SN_Rate:
         expn_z_1_3 = -0.5
 
         my_z = np.copy(z)
-        idx = my_z < 1
+        idx = my_z < 0.95
         rate_sn_z_1 = rate_z_1 * np.power(1+my_z[idx], expn_z_1)
         rate_sn_z_1_3 = rate_z_1_3 * np.power(1+my_z[~idx], expn_z_1_3)
         rate_sn = np.concatenate((rate_sn_z_1, rate_sn_z_1_3))
@@ -588,7 +588,8 @@ def get_nsn(rate='Perrett', H0=70, Om0=0.3,
     err_nsn_sum = np.sqrt(np.cumsum(err_nsn**2))
 
     import pandas as pd
-    res = pd.DataFrame(nsn_sum, columns=['nsn'])
+    res = pd.DataFrame(nsn_sum, columns=['nsn_cumsum'])
+    res['nsn'] = nsn
     res['err_nsn'] = err_nsn_sum
     res['z'] = zz
     res['age_universe'] = age_universe
