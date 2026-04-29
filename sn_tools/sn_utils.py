@@ -7,7 +7,7 @@ from scipy import interpolate, integrate
 import sncosmo
 import h5py
 from scipy.interpolate import InterpolatedUnivariateSpline as Spline1d
-from scipy.interpolate import griddata, interp2d
+from scipy.interpolate import griddata, interp2d,interp1d
 import pandas as pd
 import pprint
 import operator
@@ -917,12 +917,14 @@ class SimuParameters:
                 zmin=zmin, zmax=zmax,
                 duration=duration,
                 survey_area=self.area,
-                account_for_edges=True, dz=1.e-5)
+                account_for_edges=True, dz=1.e-3)
+            
             # get number of supernovae
-            N_SN = np.cumsum(nsn)[-1]
+            N_SN = np.sum(nsn)
             N_SN *= NSN_factor
             N_SN = int(N_SN)
-            weight_z = np.cumsum(nsn)/np.sum(np.cumsum(nsn))
+            #weight_z = np.cumsum(nsn)/np.sum(np.cumsum(nsn))
+            #weight_z = nsn/np.sum(nsn)
             if NSN_absolute > 0:
                 N_SN = NSN_absolute
                 # weight_z = [1./len(zz)]*len(zz)
@@ -939,8 +941,15 @@ class SimuParameters:
 
             if weight_sn_z == 'flat':
                 weight_z = [1./len(zz)]*len(zz)
+                zzb = np.random.uniform(zmin,zmax,len(weight_z))
+                zvals = np.random.choice(zzb, N_SN)
 
-            zvals = np.random.choice(zz, N_SN, p=weight_z)
+            #zvals = np.random.choice(zz, N_SN,weight_z.tolist())
+            if weight_sn_z == 'sn_rate':
+                zvals = self.get_rate_zbins(zz,nsn,NSN_factor)
+            
+                #self.check_rate_prod(zvals,duration,NSN_factor)
+                
 
             """
             if NSN_absolute <= 0:
@@ -951,6 +960,118 @@ class SimuParameters:
             """
 
         return pd.DataFrame(zvals, columns=['z'])
+
+    def get_rate_zbins(self,zz,nsn,factor):
+        """
+        Grab the number of sn per z bin
+
+        Parameters
+        ----------
+        zz : list(float)
+            redshift values.
+        nsn : list(float)
+            nsn per bin.
+        factor : float
+            norm factor.
+
+        Returns
+        -------
+        zvals : list(float)
+            DESCRIPTION.
+
+        """
+        
+        dd = pd.DataFrame(zz, columns=['z'])
+        dd['nsn'] = nsn
+        
+        dd['nsn'] *= factor
+        zmin=0.01
+        zmax=1.1
+        dz = 0.01
+        bins = np.arange(zmin,zmax+dz,dz)
+        
+        #dd['group'] = dd.groupby(pd.cut(dd['z'], bins))
+        
+        dd['group'] = pd.cut(dd['z'], bins)
+        
+        zvals = dd.groupby(['group']).apply(lambda x:self.z_bin_grp(x))
+        
+        return zvals['z'].to_list()
+        
+    def z_bin_grp(self,grp):
+        """
+        Generate zvalues per z-bin
+
+        Parameters
+        ----------
+        grp : pandas df
+            Data to process.
+
+        Returns
+        -------
+        res : pandas df
+            z redshifts.
+
+        """
+        
+        nsn = int(np.round(grp['nsn'].sum()))
+        
+        zmin = grp.name.left
+        zmax = grp.name.right
+        
+        res = pd.DataFrame()
+        if nsn > 0:
+            zz = np.random.uniform(zmin,zmax,1000)
+            zrand = np.random.choice(zz,nsn)
+            res = pd.DataFrame(zrand,columns=['z'])
+        
+        
+        return res
+        
+
+    def check_rate_prod(self,zvals,duration,factor):
+        """
+        Check nsn vs z
+
+        Parameters
+        ----------
+        zvals: list(float)
+            List of resdhift values.
+        duration : float
+            Season length
+        factor : float
+            norm factor.
+
+        Returns
+        -------
+        None.
+
+        """
+        
+        zz, rate, err_rate, nsn, err_nsn, age_univ = self.sn_rate(
+                zmin=0.01, zmax=1.1,
+                duration=duration,
+                survey_area=self.area*factor,
+                account_for_edges=True, dz=1.e-2)
+
+        import matplotlib.pyplot as plt
+        
+        fig, ax = plt.subplots()
+        
+        bins=np.arange(0.01,1.11,0.01)
+        
+        #ax.hist(dd,histtype='step')
+        
+        ax.hist(zvals,color='b',bins=bins)
+        
+        nsn = list(map(int,nsn.tolist()))
+        ax.plot(zz,nsn)
+        
+        print('hello',np.sum(nsn))
+        print(zz)
+        print(nsn)
+        plt.show()
+
 
     def zdist_new(self, duration):
         """
