@@ -917,7 +917,7 @@ class SimuParameters:
                 zmin=zmin, zmax=zmax,
                 duration=duration,
                 survey_area=self.area,
-                account_for_edges=True, dz=1.e-3)
+                account_for_edges=True, dz=1.e-5)
             
             # get number of supernovae
             N_SN = np.sum(nsn)
@@ -948,7 +948,7 @@ class SimuParameters:
             if weight_sn_z == 'sn_rate':
                 zvals = self.get_rate_zbins(zz,nsn,NSN_factor)
             
-                #self.check_rate_prod(zvals,duration,NSN_factor)
+                #self.check_rate_prod(zvals,duration,NSN_factor,zmax)
                 
 
             """
@@ -986,17 +986,27 @@ class SimuParameters:
         
         dd['nsn'] *= factor
         zmin=0.01
-        zmax=1.1
-        dz = 0.01
-        bins = np.arange(zmin,zmax+dz,dz)
+        zmax=dd['z'].max()
         
-        #dd['group'] = dd.groupby(pd.cut(dd['z'], bins))
+        zref = [0.01,0.2,0.4,0.7,1.1]
+        nlin_ref = [1,2,5,7,10]
+        
+        for i in range(len(zref)-1):
+            if zmax >= zref[i] and zmax < zref[i+1]:
+                nlin = nlin_ref[i]
+        
+        bins = np.linspace(zmin,zmax,nlin,endpoint=True)
         
         dd['group'] = pd.cut(dd['z'], bins)
         
         zvals = dd.groupby(['group']).apply(lambda x:self.z_bin_grp(x))
         
-        return zvals['z'].to_list()
+        if len(zvals) > 0:
+            res = zvals['z'].to_list()
+        else:
+            res = []
+            
+        return res
         
     def z_bin_grp(self,grp):
         """
@@ -1006,6 +1016,8 @@ class SimuParameters:
         ----------
         grp : pandas df
             Data to process.
+        zmax: float
+            max z to consider.
 
         Returns
         -------
@@ -1014,22 +1026,27 @@ class SimuParameters:
 
         """
         
-        nsn = int(np.round(grp['nsn'].sum()))
+        nsn = np.round(grp['nsn'].sum())
         
         zmin = grp.name.left
         zmax = grp.name.right
         
+        #print(zmin,zmax,nsn,int(nsn))
+        
+        grp['weight'] = grp['nsn']/grp['nsn'].sum()
+        
         res = pd.DataFrame()
         if nsn > 0:
-            zz = np.random.uniform(zmin,zmax,1000)
-            zrand = np.random.choice(zz,nsn)
+            #zz = np.random.uniform(zmin,zmax,1000)
+            #zrand = np.random.choice(zz,nsn)
+            #res = pd.DataFrame(zrand,columns=['z'])
+            zrand = np.random.choice(grp['z'].to_list(),int(nsn),grp['weight'].to_list())
             res = pd.DataFrame(zrand,columns=['z'])
-        
         
         return res
         
 
-    def check_rate_prod(self,zvals,duration,factor):
+    def check_rate_prod(self,zvals,duration,factor,zmax=0.7):
         """
         Check nsn vs z
 
@@ -1049,29 +1066,49 @@ class SimuParameters:
         """
         
         zz, rate, err_rate, nsn, err_nsn, age_univ = self.sn_rate(
-                zmin=0.01, zmax=1.1,
+                zmin=0.01, zmax=zmax,
                 duration=duration,
                 survey_area=self.area*factor,
-                account_for_edges=True, dz=1.e-2)
+                account_for_edges=False, dz=1.e-5)
+        
+        df = pd.DataFrame(zz,columns=['z'])
+        df['nsn'] = nsn
 
         import matplotlib.pyplot as plt
         
         fig, ax = plt.subplots()
         
-        bins=np.arange(0.01,1.11,0.01)
+        bins=np.arange(0.01,zmax,0.05)
+        
+        df['group'] = pd.cut(df['z'],bins)
+        
+        dfb = df.groupby(['group']).apply(lambda x : self.stattt(x))
         
         #ax.hist(dd,histtype='step')
         
         ax.hist(zvals,color='b',bins=bins)
         
         nsn = list(map(int,nsn.tolist()))
-        ax.plot(zz,nsn)
+        ax.plot(dfb['z'],dfb['nsn'],color='k')
         
-        print('hello',np.sum(nsn))
-        print(zz)
-        print(nsn)
+        print('nsn',dfb['nsn'].sum())
+        print(dfb['z'].to_list())
+        print(dfb['nsn'].to_list())
         plt.show()
 
+    def stattt(self,grp):
+        
+        zmin = grp.name.left
+        zmax = grp.name.right
+        
+        zv = 0.5*(zmin+zmax)
+        
+        df = pd.DataFrame([zv],columns=['z'])
+        
+        df['nsn'] = grp['nsn'].sum()
+        
+        return df
+        
 
     def zdist_new(self, duration):
         """
