@@ -867,6 +867,7 @@ class SimuParameters:
         zmax_simu = self.params['z']['maxsimu']
         zmin = self.params['z']['min']
         zmax = self.params['z']['max']
+        nbins_z = self.params['z']['nbins']
 
         """
         if zmin < zmin_simu:
@@ -946,7 +947,7 @@ class SimuParameters:
 
             #zvals = np.random.choice(zz, N_SN,weight_z.tolist())
             if weight_sn_z == 'sn_rate':
-                zvals = self.get_rate_zbins(zz,nsn,NSN_factor)
+                zvals = self.get_rate_zbins(zz,nsn,NSN_factor,nbins_z)
             
                 #self.check_rate_prod(zvals,duration,NSN_factor,zmax)
                 
@@ -961,7 +962,7 @@ class SimuParameters:
 
         return pd.DataFrame(zvals, columns=['z'])
 
-    def get_rate_zbins(self,zz,nsn,factor):
+    def get_rate_zbins(self,zz,nsn,factor,nbins_z):
         """
         Grab the number of sn per z bin
 
@@ -988,14 +989,18 @@ class SimuParameters:
         zmin=0.01
         zmax=dd['z'].max()
         
-        zref = [0.01,0.2,0.4,0.7,1.1]
+        """
+        zref = [0.01,0.2,0.4,0.7,1.2]
         nlin_ref = [1,2,5,7,10]
         
+        nlin = 5
         for i in range(len(zref)-1):
             if zmax >= zref[i] and zmax < zref[i+1]:
                 nlin = nlin_ref[i]
         
-        bins = np.linspace(zmin,zmax,nlin,endpoint=True)
+        print('hello',nlin,nbins_z)
+        """
+        bins = np.linspace(zmin,zmax,nbins_z,endpoint=True)
         
         dd['group'] = pd.cut(dd['z'], bins)
         
