@@ -151,7 +151,6 @@ class BatchIt:
         for vv in params.keys():
             if isinstance(params[vv],str):
                 if '(' in params[vv] and '\'' not in params[vv]:
-                    print('aooo',params[vv])
                     params[vv] = '\'{}\''.format(params[vv])
         
         cmd = 'python {}'.format(thescript)
