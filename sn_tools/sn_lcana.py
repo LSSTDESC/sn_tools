@@ -470,6 +470,10 @@ def coadd_lc(lc_orig):
             ccols.append('round_{}'.format(vv))
 
     df = lc_orig[ccols].to_pandas()
+    df['airmass_bin'] = df['airmass']
+    
+    df = df.round({'airmass_bin':1})
+    
     lc = df.groupby(['filter', 'night']).apply(
         lambda x: coadd_night_filter(x)).reset_index()
 
@@ -508,10 +512,10 @@ def coadd_night_filter(grp_orig,
                                   'zp', 'time', 'snr_m5', 'snr',
                                   'sigma_airmass', 'sigma_pwv',
                                   'sigma_aerosol', 'sigma_ozone',
-                                  'round_airmass', 'round_pwv',
+                                  'round_airmass', 
+                                  'round_pwv',
                                   'round_aerosol', 'round_ozone', 'sigma_zp'],
-                       col_round=['airmass', 'pwv', 'ozone',
-                                  'aerosol'],
+                       col_round=['airmass', 'pwv', 'ozone','aerosol'],
                        round_vals=[2, 3, 3, 3],
                        col_unique=['zpsys'], snr_min=0):
     """
