@@ -60,7 +60,7 @@ class CoaddStacker:
         col_sum = list(set(self.col_sum) & set(names))
         col_median = list(set(self.col_median) & set(names))
         col_mean = list(set(self.col_mean) & set(names))
-
+        
         if cols_present:
             # Column already present in data;
             # assume it is correct and does not need recalculating.
