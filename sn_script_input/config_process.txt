@@ -33,3 +33,4 @@ ebvofMW_pixel -1.0 float #E(B-V) for pixel processing
 lookup_ddf input/simulation/lookup_ddf.csv str #DDF lookup table
 noteCol target_name str #obs col to grab field name
 code new str#code to use (old/new)
+fit_lc 1 int #to fit LC
