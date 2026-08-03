@@ -462,7 +462,7 @@ def coadd_lc(lc_orig):
     # move to pandas
     ccols = ['night', 'mean_wave', 'band',
              'time', 'band_cosmo', 'zpsys', 'flux', 'fluxerr',
-             'snr_m5', 'snr', 'filter', 'tel_site_name']
+             'snr_m5', 'snr', 'filter', 'tel_site_name','sigma_f5','sigma_shot']
     for vv in ['zp', 'pwv', 'aerosol', 'ozone', 'airmass']:
         ccols.append(vv)
         ccols.append('sigma_{}'.format(vv))
@@ -515,6 +515,7 @@ def coadd_night_filter(grp_orig,
                                   'round_airmass', 
                                   'round_pwv',
                                   'round_aerosol', 'round_ozone', 'sigma_zp'],
+                       col_sigmas=['sigma_f5','sigma_shot'],
                        col_round=['airmass', 'pwv', 'ozone','aerosol'],
                        round_vals=[2, 3, 3, 3],
                        col_unique=['zpsys'], snr_min=0):
@@ -597,6 +598,10 @@ def coadd_night_filter(grp_orig,
 
     for vv in col_unique:
         dictout[vv] = grp[vv].unique().tolist()
+        
+    for vv in col_sigmas:
+        val = np.sum(1./grp[vv]**2)
+        dictout[vv] = [1./np.sqrt(val)]
 
     res_df = pd.DataFrame.from_dict(dictout)
     res_df['snr'] = res_df['flux']/res_df['fluxerr']
