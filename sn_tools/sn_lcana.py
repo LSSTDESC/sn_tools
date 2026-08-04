@@ -462,7 +462,8 @@ def coadd_lc(lc_orig):
     # move to pandas
     ccols = ['night', 'mean_wave', 'band',
              'time', 'band_cosmo', 'zpsys', 'flux', 'fluxerr',
-             'snr_m5', 'snr', 'filter', 'tel_site_name','sigma_f5','sigma_shot']
+             'snr_m5', 'snr', 'filter', 'tel_site_name','sigma_f5',
+             'sigma_shot','flux_orig']
     for vv in ['zp', 'pwv', 'aerosol', 'ozone', 'airmass']:
         ccols.append(vv)
         ccols.append('sigma_{}'.format(vv))
@@ -514,7 +515,8 @@ def coadd_night_filter(grp_orig,
                                   'sigma_aerosol', 'sigma_ozone',
                                   'round_airmass', 
                                   'round_pwv',
-                                  'round_aerosol', 'round_ozone', 'sigma_zp'],
+                                  'round_aerosol', 'round_ozone', 'sigma_zp',
+                                  'flux_orig'],
                        col_sigmas=['sigma_f5','sigma_shot'],
                        col_round=['airmass', 'pwv', 'ozone','aerosol'],
                        round_vals=[2, 3, 3, 3],
