@@ -164,6 +164,9 @@ class CoaddStacker:
 
         df = pd.DataFrame.from_dict(dictout)
 
+        #add the number of visits
+        df['nvisits'] = len(grp)
+
         return df
 
     def sum_colvisit(self, grp):

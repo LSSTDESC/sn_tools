@@ -608,6 +608,11 @@ def coadd_night_filter(grp_orig,
     res_df = pd.DataFrame.from_dict(dictout)
     res_df['snr'] = res_df['flux']/res_df['fluxerr']
     res_df['tel_site_name'] = tel_site_name
+    
+    #add the number of visits per filter/night
+    res_df['nvisits'] = len(grp)
+    
+    
     """
     print('finally')
     print(res_df[['flux', 'fluxerr']])
