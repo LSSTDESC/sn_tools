@@ -464,6 +464,10 @@ def coadd_lc(lc_orig):
              'time', 'band_cosmo', 'zpsys', 'flux', 'fluxerr',
              'snr_m5', 'snr', 'filter', 'tel_site_name','sigma_f5',
              'sigma_shot','flux_orig']
+    ccols = ['night', 'mean_wave', 'band',
+             'time', 'band_cosmo', 'zpsys', 'flux',
+             'filter', 'tel_site_name','sigma_f5',
+             'flux_orig','exptime','fluxerr_model']
     for vv in ['zp', 'pwv', 'aerosol', 'ozone', 'airmass']:
         ccols.append(vv)
         ccols.append('sigma_{}'.format(vv))
@@ -503,24 +507,25 @@ def coadd_lc(lc_orig):
 
 def coadd_night_filter(grp_orig,
                        col_means_weighted=[
-                           ('flux', 'fluxerr'),
+                           ('flux', 'sigma_f5'),
                            ('zp', 'sigma_zp'),
                            ('pwv', 'sigma_pwv'),
                            ('ozone', 'sigma_ozone'),
                            ('aerosol', 'sigma_aerosol'),
                            ('airmass', 'sigma_airmass')],
                        col_means=['mean_wave',
-                                  'zp', 'time', 'snr_m5', 'snr',
+                                  'zp', 'time',
                                   'sigma_airmass', 'sigma_pwv',
                                   'sigma_aerosol', 'sigma_ozone',
                                   'round_airmass', 
                                   'round_pwv',
                                   'round_aerosol', 'round_ozone', 'sigma_zp',
                                   'flux_orig'],
-                       col_sigmas=['sigma_f5','sigma_shot'],
+                       col_sigmas=['sigma_f5','fluxerr_model'],
                        col_round=['airmass', 'pwv', 'ozone','aerosol'],
                        round_vals=[2, 3, 3, 3],
-                       col_unique=['zpsys'], snr_min=0):
+                       col_unique=['zpsys'], snr_min=0,
+                       col_sum=['exptime']):
     """
     Method to coadd light-curve points per night/filter
 
@@ -563,7 +568,7 @@ def coadd_night_filter(grp_orig,
     idx = grp_orig['snr'] >= snr_min
     idx &= grp_orig['flux'] >= 0
     """
-    idx = grp_orig['fluxerr'] > 0
+    idx = grp_orig['sigma_f5'] > 0
     grp = grp_orig[idx]
 
     # remove LC points with flux < 0 or fluxerr <0
@@ -604,9 +609,13 @@ def coadd_night_filter(grp_orig,
     for vv in col_sigmas:
         val = np.sum(1./grp[vv]**2)
         dictout[vv] = [1./np.sqrt(val)]
+        
+    for vv in col_sum:
+        val = np.sum(grp[vv])
+        dictout[vv] = [val]
 
     res_df = pd.DataFrame.from_dict(dictout)
-    res_df['snr'] = res_df['flux']/res_df['fluxerr']
+    #res_df['snr'] = res_df['flux']/res_df['fluxerr']
     res_df['tel_site_name'] = tel_site_name
     
     #add the number of visits per filter/night
