@@ -594,10 +594,11 @@ def coadd_night_filter(grp_orig,
             mean_weighted = np.sum(grp[pp]*grp[pp_weight])/weight_sum
 
         dictout[pp] = [mean_weighted]
+        w_sum = 1./np.sqrt(weight_sum)
         if vv[0] == 'flux':
-            dictout[vv[1]] = [1./np.sqrt(weight_sum)]
+            dictout[vv[1]] = [w_sum]
         else:
-            dictout['sigma_meas_{}'.format(vv[0])] = [1./np.sqrt(weight_sum)]
+            dictout['sigma_meas_{}'.format(vv[0])] = [w_sum]
 
     for vv in col_means:
         val = grp[vv].mean()
@@ -627,6 +628,18 @@ def coadd_night_filter(grp_orig,
     print(res_df[['flux', 'fluxerr']])
     """
     return res_df
+
+
+def coadd_lc_new(lc_orig):
+    
+    
+    print(lc_orig.columns)
+
+    # add sky flux
+    lc_orig['flux_sky'] = 10**(-0.4*(lc_orig['sky']-lc_orig['zp']))  
+    lc_orig['f5'] = 10**(-0.4*(lc_orig['m5']-lc_orig['zp']))
+    print(lc_orig[['flux','flux_sky','f5','sigma_f5']])
+
 
 def get_bands_vs_z(z):
     """
