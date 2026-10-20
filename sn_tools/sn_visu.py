@@ -641,7 +641,11 @@ class MoviePixels:
 
     """
 
-    def __init__(self, dbDir, dbDir_pixels, figDir, movieDir, dbName, saveMovie=False, realTime=False, saveFig=False, nightmin=0, nightmax=365, time_display=5, nside=64, ffmpeg_cmd='ffmpeg', mode='interactive'):
+    def __init__(self, dbDir, dbDir_pixels, figDir, movieDir, 
+                 dbName, saveMovie=False, realTime=False, 
+                 saveFig=False, nightmin=0, nightmax=365, 
+                 time_display=5, nside=64, 
+                 ffmpeg_cmd='ffmpeg', mode='interactive'):
 
         if mode == 'batch':
             # matplotlib backend stuff
