@@ -240,3 +240,94 @@ def getName(df_fields, RA):
     _idx = np.abs(_fields['RA'] - RA).argmin()
 
     return _idx, _fields[_idx]['name']
+
+
+def makeClusters(nclusters, data, x_name, y_name):
+    """
+    Method to identify clusters
+    It uses the KMeans algorithm from scipy
+
+    Parameters
+    ---------------
+
+    nclusters: int
+     number of clusters to find
+    data: numpy array
+      data to process
+    x_name: str
+      x-variable name
+    y_name: str
+      y-variable name
+
+    Returns
+    -----------
+    points: numpy array
+      array of (RA,Dec) of the points
+    y_km: numpy array
+      index of the clusters
+    kmeans.labels_: numpy array
+      kmeans label
+    """
+
+    """
+       r = []
+       for (pixRA, pixDec) in self.data[[self.RA_name,self.Dec_name]]:
+           r.append([pixRA, pixDec])
+
+       points = np.array(r)
+       """
+
+    points = np.array(data[[x_name, y_name]].tolist())
+
+    # create kmeans object
+    kmeans = KMeans(n_clusters=nclusters)
+    # fit kmeans object to data
+    kmeans.fit(points)
+
+    # print location of clusters learned by kmeans object
+    #print('cluster centers', kmeans.cluster_centers_)
+
+    # save new clusters for chart
+    y_km = kmeans.fit_predict(points)
+
+    return points, y_km, kmeans.labels_
+
+
+def anaClusters(nclusters, data, points, clus, labels, x_name, y_name):
+    """
+    Method matching clusters to data
+
+    Parameters
+    ---------------
+    nclusters: int
+     number of clusters to consider
+    data: numpy array
+       data to process
+    points: numpy array
+      array of (RA,Dec) of the points
+    y_km: numpy array
+      index of the clusters
+    kmeans.labels_: numpy array
+      kmeans label
+
+    Returns
+    -----------
+
+    dfcluster: pandas df
+      for each data point considered: X,Y,clusId
+
+    """
+
+    dfcluster = pd.DataFrame()
+
+    for io in range(nclusters):
+
+        X = points[clus == io, 0]
+        Y = points[clus == io, 1]
+        dfclus = pd.DataFrame({x_name: X, y_name: Y})
+        # ax.scatter(RA,Dec, s=10, c=color[io])
+
+        dfclus.loc[:, 'clusId'] = int(io)
+        dfcluster = pd.concat([dfcluster, dfclus], sort=False)
+
+    return dfcluster
