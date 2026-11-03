@@ -14,8 +14,111 @@ import numpy.lib.recfunctions as rf
 import os
 from sn_tools.sn_io import checkDir
 import matplotlib
+from sn_analysis.sn_os_atmos_calib_tools import load_star_calib
 
 class AuxTelSurvey:
+    def __init__(self,obs,dbName,star_list,
+                 year=1,width_ra=10.,dist_min=30,
+                 slew_speed=1.):
+
+        #obs corresponding to this year
+        idx = obs['year'] == year
+        self.obs = pd.DataFrame.from_records(obs[idx])
+        del obs
+        
+
+        #grab reference stars
+        self.ref_stars = load_star_calib(star_list)
+        
+        #parameters
+        self.year=year
+        self.width_ra = width_ra
+        self.dist_min = dist_min
+        self.slew_speed = slew_speed
+    
+    
+    def __call__(self,):
+        
+        df = self.obs.groupby(['night']).apply(lambda x:
+                                               self.auxtel_night(x),
+                                               include_groups=False).reset_index()
+        
+    
+    def auxtel_night(self,grp):
+        
+        #get mjd_min and mjd_max
+        
+        mjd_min = grp['mjd'].min()
+        mjd_max = grp['mjd'].max()
+        
+        #get ra_min and ra_max
+        
+        ra_min = grp['RA'].min()
+        ra_max = grp['RA'].max()
+        
+        self.select_stars(ra_min,ra_max,grp)
+        
+        
+        
+        
+        
+        
+    def select_stars(self,ra_min,ra_max,obs):
+        
+        #select ref stars in [ra_min,ra_max] window
+        
+        idx = self.ref_stars['RA_deg'] >= ra_min+self.width_ra
+        idx &= self.ref_stars['RA_deg'] <= ra_max+self.width_ra
+        
+        stars_night = self.ref_stars[idx]
+        
+        dd = stars_night.groupby('Star_name').apply(lambda x:\
+                                                    self.dist_min_star(x,obs),
+                                               include_groups=False)\
+                                                .reset_index()
+        
+        print(dd)
+        idx = dd['dist_min'] <= self.dist_min
+        
+        print('stars',len(stars_night),len(dd[idx]))
+        fig, ax = plt.subplots()
+        self.plot_night(obs,stars_night,fig=fig,ax=ax)
+        self.plot_night(obs,dd[idx],fig=fig,ax=ax,mfc='r')        
+        
+        plt.show()
+        
+    def plot_night(self,obs,stars,fig=None,ax=None,mfc='None'):
+    
+        if fig is None:
+            fig, ax = plt.subplots()
+         
+        ax.plot(obs['RA'],obs['Dec'],'ko')
+        print('allo mfc',mfc)
+        ax.plot(stars['RA_deg'],stars['Dec_deg'],
+                marker='*',color='r',linestyle='None',mfc=mfc)
+
+        
+
+    def dist_min_star(self,grp_star,obs):
+        
+        ra_ref = grp_star['RA_deg'].to_list()*len(obs)
+        dec_ref = grp_star['Dec_deg'].to_list()*len(obs)
+        ra_obs = obs['RA']
+        dec_obs = obs['Dec']
+        dist_obs_star = dist(ra_obs,dec_obs,ra_ref,dec_ref).to_list()
+        
+        print(type(dist_obs_star))
+        index = dist_obs_star.index(np.min(dist_obs_star))
+        print('allo',np.min(dist_obs_star),np.max(dist_obs_star),index)
+        print(ra_obs.to_list()[index],dec_obs.to_list()[index],
+              ra_ref[0],dec_ref[0])
+        grp_star['dist_min'] = np.min(dist_obs_star)
+        
+        return grp_star
+        
+        
+
+class AuxTelSurvey_visu:
     def __init__(self,obs,dbName,nside=64,figDir='None',
                  movieDir='None',ffmpeg_cmd='ffmpeg',year=1):
         """
@@ -329,7 +432,7 @@ class AuxTelSurvey:
    
 def dist(ra_a,dec_a,ra_b,dec_b):
     dist = ((ra_a-ra_b)*np.cos(np.deg2rad(dec_a)))**2
-    dist =+ (dec_a-dec_b)**2
+    dist += (dec_a-dec_b)**2
     dist = np.sqrt(dist)
     
     return dist
