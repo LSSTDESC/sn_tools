@@ -16,10 +16,13 @@ from sn_tools.sn_io import checkDir
 import matplotlib
 from sn_analysis.sn_os_atmos_calib_tools import load_star_calib
 
+np.set_printoptions(legacy='1.25')
+
 class AuxTelSurvey:
     def __init__(self,obs,dbName,star_list,
                  year=1,width_ra=10.,dist_min=30,
-                 slew_speed=1.):
+                 slew_speed=1.,survey_type='asynchronous',
+                 num_exposures=2,exposure_time=30):
 
         #obs corresponding to this year
         idx = obs['year'] == year
@@ -35,6 +38,9 @@ class AuxTelSurvey:
         self.width_ra = width_ra
         self.dist_min = dist_min
         self.slew_speed = slew_speed
+        self.survey_type = survey_type
+        self.num_exposures = num_exposures
+        self.exposure_time = exposure_time
     
     
     def __call__(self,):
@@ -46,21 +52,16 @@ class AuxTelSurvey:
     
     def auxtel_night(self,grp):
         
-        #get mjd_min and mjd_max
-        
-        mjd_min = grp['mjd'].min()
-        mjd_max = grp['mjd'].max()
         
         #get ra_min and ra_max
         
         ra_min = grp['RA'].min()
         ra_max = grp['RA'].max()
         
-        self.select_stars(ra_min,ra_max,grp)
+        stars_night = self.select_stars(ra_min,ra_max,grp)
         
-        
-        
-        
+        if self.survey_type == 'asynchronous':
+            self.survey_async(stars_night,grp)
         
         
     def select_stars(self,ra_min,ra_max,obs):
@@ -76,17 +77,19 @@ class AuxTelSurvey:
                                                     self.dist_min_star(x,obs),
                                                include_groups=False)\
                                                 .reset_index()
-        
-        print(dd)
         idx = dd['dist_min'] <= self.dist_min
         
-        print('stars',len(stars_night),len(dd[idx]))
+        """
         fig, ax = plt.subplots()
         self.plot_night(obs,stars_night,fig=fig,ax=ax)
         self.plot_night(obs,dd[idx],fig=fig,ax=ax,mfc='r')        
         
         plt.show()
+        """
+        res = pd.DataFrame(dd[idx])
         
+        return res
+    
     def plot_night(self,obs,stars,fig=None,ax=None,mfc='None'):
     
         if fig is None:
@@ -107,17 +110,109 @@ class AuxTelSurvey:
         dec_obs = obs['Dec']
         dist_obs_star = dist(ra_obs,dec_obs,ra_ref,dec_ref).to_list()
         
-        print(type(dist_obs_star))
+        """
         index = dist_obs_star.index(np.min(dist_obs_star))
         print('allo',np.min(dist_obs_star),np.max(dist_obs_star),index)
         print(ra_obs.to_list()[index],dec_obs.to_list()[index],
               ra_ref[0],dec_ref[0])
+        """
         grp_star['dist_min'] = np.min(dist_obs_star)
         
         return grp_star
         
+    def survey_async(self, stars, obs):
         
-
+        #get mjd_min and mjd_max
+        
+        mjd_min = obs['mjd'].min()
+        mjd_max = obs['mjd'].max()
+        
+        #define the order of star observation 
+        #according to the travel salesman problem
+        
+        from sn_analysis.sn_algo_metrop import Metrop_Anneal
+        
+        mm = Metrop_Anneal(stars)
+        
+        dd = mm()
+        
+        dd = dd.sort_values(by='iorder')
+        #add Star_name
+        colsb = ['RA_deg','Dec_deg']
+        cols = ['Star_name']+colsb
+        dd = dd.merge(self.ref_stars[cols],
+                      left_on=colsb,right_on=colsb)
+        print(dd)
+        dist_stars = self.calc_dist(dd)
+        
+        print(dist_stars)
+        mjd_cur = mjd_min
+        
+        ncity = len(dd)
+        r = []
+        corfact = 1./(24*3600)
+        while mjd_cur <= mjd_max:
+            for i,row in dd.iterrows():
+                iorder = row['iorder']
+                #grab the next star in the list
+                iorder_next = (iorder+1)%ncity
+                idx = dd['iorder'] == iorder_next
+                sel = pd.DataFrame(dd[idx])
+                #grab the distance
+                """
+                combi='{}/{}'.format(row['Star_name'],
+                                     sel['Star_name'].to_list()[0])
+                """
+                dist_star = self.get_dist_from_combi(dist_stars,
+                                                     row['Star_name'],
+                                     sel['Star_name'].to_list()[0])
+                print('dist',dist_star)
+                slew_time = self.slew_speed*dist_star
+                
+                r.append((row['Star_name'],int(row['iorder']),
+                          row['RA_deg'],row['Dec_deg'],
+                          self.num_exposures,self.exposure_time,
+                          slew_time,mjd_cur))
+                mjd_cur += self.num_exposures*self.exposure_time*corfact
+                mjd_cur += slew_time*corfact
+               
+                if mjd_cur >= mjd_max:
+                    break
+                
+        cols = ['Star_name','iorder','RA_deg',
+                'Dec_deg','numExposure','exposure_time',
+                'slew_time','mjd']     
+        df = pd.DataFrame(r,columns=cols)
+        
+        return df
+    def get_dist_from_combi(self,dists,star_a,star_b):
+        
+        combi = '{}/{}'.format(star_a,star_b)
+        
+        if combi not in dists.keys():
+            combi = '{}/{}'.format(star_b,star_a)
+        
+        return dists[combi]
+        
+    def calc_dist(self,df):
+        
+        
+        r = {}
+        for i, rowa in df.iterrows():
+            ra_a = rowa['RA_deg']
+            dec_a = rowa['Dec_deg']
+            name_a = rowa['Star_name']
+            for j,rowb in df.iterrows():
+                if j > i:
+                    ra_b = rowb['RA_deg']
+                    dec_b = rowb['Dec_deg']
+                    name_b = rowb['Star_name']
+                    dist_star = dist(ra_a,dec_a,ra_b,dec_b)
+                    combi = '{}/{}'.format(name_a,name_b)
+                    r[combi]=dist_star
+        
+        return r
+        
 class AuxTelSurvey_visu:
     def __init__(self,obs,dbName,nside=64,figDir='None',
                  movieDir='None',ffmpeg_cmd='ffmpeg',year=1):
