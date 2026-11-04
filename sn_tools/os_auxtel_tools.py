@@ -15,6 +15,7 @@ import os
 from sn_tools.sn_io import checkDir
 import matplotlib
 from sn_analysis.sn_os_atmos_calib_tools import load_star_calib
+from sn_tools.sn_utils import multiproc
 
 np.set_printoptions(legacy='1.25')
 
@@ -43,12 +44,30 @@ class AuxTelSurvey:
         self.exposure_time = exposure_time
     
     
-    def __call__(self,):
+    def __call__(self):
         
-        df = self.obs.groupby(['night']).apply(lambda x:
-                                               self.auxtel_night(x),
-                                               include_groups=False).reset_index()
+        params = {}
         
+        nights = self.obs['night'].unique()
+        df = multiproc(nights,params,self.auxtel_nights,nproc=16)
+        
+        return df
+    
+    def auxtel_nights(self,nights,params,j=0,output_q=None):
+        
+        
+        idx = self.obs['night'].isin(nights)
+        
+        obsb = self.obs[idx]
+        
+        
+        df = obsb.groupby(['night']).apply(lambda x:
+                                          self.auxtel_night(x),
+                                          include_groups=False).reset_index()
+        if output_q is not None:
+            return output_q.put({j: df})
+        else:
+            return df       
     
     def auxtel_night(self,grp):
         
@@ -60,9 +79,12 @@ class AuxTelSurvey:
         
         stars_night = self.select_stars(ra_min,ra_max,grp)
         
+        df = pd.DataFrame()
         if self.survey_type == 'asynchronous':
-            self.survey_async(stars_night,grp)
+            df = self.survey_async(stars_night,grp)
         
+        
+        return df
         
     def select_stars(self,ra_min,ra_max,obs):
         
@@ -142,10 +164,10 @@ class AuxTelSurvey:
         cols = ['Star_name']+colsb
         dd = dd.merge(self.ref_stars[cols],
                       left_on=colsb,right_on=colsb)
-        print(dd)
+        #print(dd)
         dist_stars = self.calc_dist(dd)
         
-        print(dist_stars)
+        #print(dist_stars)
         mjd_cur = mjd_min
         
         ncity = len(dd)
@@ -166,7 +188,7 @@ class AuxTelSurvey:
                 dist_star = self.get_dist_from_combi(dist_stars,
                                                      row['Star_name'],
                                      sel['Star_name'].to_list()[0])
-                print('dist',dist_star)
+                #print('dist',dist_star)
                 slew_time = self.slew_speed*dist_star
                 
                 r.append((row['Star_name'],int(row['iorder']),
