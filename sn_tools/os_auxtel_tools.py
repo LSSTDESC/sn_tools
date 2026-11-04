@@ -20,10 +20,42 @@ from sn_tools.sn_utils import multiproc
 np.set_printoptions(legacy='1.25')
 
 class AuxTelSurvey:
-    def __init__(self,obs,dbName,star_list,
+    def __init__(self,obs,star_list,
                  year=1,width_ra=10.,dist_min=30,
                  slew_speed=1.,survey_type='asynchronous',
-                 num_exposures=2,exposure_time=30):
+                 num_exposures=2,exposure_time=30,nproc=8):
+        """
+        class to design an AuxTel survey
+
+        Parameters
+        ----------
+        obs : array
+            observations.
+        star_list : str
+            list of stars to be observed by AuxTel.
+        year : int, optional
+            year of observation. The default is 1.
+        width_ra : float, optional
+            ra width window to select stars. The default is 10..
+        dist_min : float, optional
+            min dist between obs and sel stars. The default is 30.
+        slew_speed : float, optional
+            AuxTel slewing speed. The default is 1..
+        survey_type : str, optional
+            Type of AuxTel survey wrt LSST survey(asynchronous/synchronous).
+            The default is 'asynchronous'.
+        num_exposures : int, optional
+            number of AuxTel exposure. The default is 2.
+        exposure_time : float, optional
+            time per exposure. The default is 30.
+        nproc : int, optional
+            number of procs for multiprocessing. The default is 8.
+
+        Returns
+        -------
+        None.
+
+        """
 
         #obs corresponding to this year
         idx = obs['year'] == year
@@ -42,18 +74,53 @@ class AuxTelSurvey:
         self.survey_type = survey_type
         self.num_exposures = num_exposures
         self.exposure_time = exposure_time
+        self.nproc=nproc
     
+        #misc
+        self.corfact = 1./(24*3600)
     
     def __call__(self):
+        """
+        Main processing method
+
+        Returns
+        -------
+        df : pandas df
+            the AuxTel survey.
+
+        """
         
         params = {}
         
         nights = self.obs['night'].unique()
-        df = multiproc(nights,params,self.auxtel_nights,nproc=16)
+        if self.nproc > 1:
+            df = multiproc(nights,params,self.auxtel_nights,nproc=self.nproc)
+        else:
+            df = self.auxtel_nights(nights,params)
         
         return df
     
     def auxtel_nights(self,nights,params,j=0,output_q=None):
+        """
+        Nights processing using multiproc
+
+        Parameters
+        ----------
+        nights : list(int)
+            List of nights to process.
+        params : dict
+            parameters.
+        j : int, optional
+            internal tag for multiprocessing. The default is 0.
+        output_q : multiprocessing queue, optional
+            where to store output data. The default is None.
+
+        Returns
+        -------
+        pandas df
+            the AuxTel survey corresponding to nights.
+
+        """
         
         
         idx = self.obs['night'].isin(nights)
@@ -70,6 +137,20 @@ class AuxTelSurvey:
             return df       
     
     def auxtel_night(self,grp):
+        """
+        A survey build for a night
+
+        Parameters
+        ----------
+        grp : pandas df
+            observation of that night.
+
+        Returns
+        -------
+        df : pandas df
+            the AuxTel survey of that night.
+
+        """
         
         
         #get ra_min and ra_max
@@ -83,11 +164,31 @@ class AuxTelSurvey:
         if self.survey_type == 'asynchronous':
             df = self.survey_async(stars_night,grp)
         
+        if self.survey_type == 'synchronous':
+            df = self.survey_sync(stars_night,grp)
         
         return df
         
     def select_stars(self,ra_min,ra_max,obs):
-        
+        """
+        Method to select stars in a [ra_min,ra_max] window
+
+        Parameters
+        ----------
+        ra_min : float
+            min ra of the area.
+        ra_max : float
+            max ra of the area.
+        obs : pandas df
+            LSST observations.
+
+        Returns
+        -------
+        res : pandas df
+            selected stars.
+
+        """
+        ['RA','Dec','observationId']
         #select ref stars in [ra_min,ra_max] window
         
         idx = self.ref_stars['RA_deg'] >= ra_min+self.width_ra
@@ -113,18 +214,57 @@ class AuxTelSurvey:
         return res
     
     def plot_night(self,obs,stars,fig=None,ax=None,mfc='None'):
+        """
+        Function to display a night ((ra,dec) dists)
+
+        Parameters
+        ----------
+        obs : pandas df
+            observations.
+        stars : pandas df
+            stars to be observed by AuxTel.
+        fig : matplotlib figure, optional
+            figure for the display. The default is None.
+        ax : matplotlib axis, optional
+            axis for the display. The default is None.
+        mfc : str, optional
+            marker font color. The default is 'None'.
+
+        Returns
+        -------
+        None.
+
+        """
     
         if fig is None:
             fig, ax = plt.subplots()
-         
+        
+        #plot obs
         ax.plot(obs['RA'],obs['Dec'],'ko')
-        print('allo mfc',mfc)
+        
+        #plot stars
         ax.plot(stars['RA_deg'],stars['Dec_deg'],
                 marker='*',color='r',linestyle='None',mfc=mfc)
 
         
 
     def dist_min_star(self,grp_star,obs):
+        """
+        Estimate the min dist of obs to a star
+
+        Parameters
+        ----------
+        grp_star : pandas df
+            the star.
+        obs : pandas df
+            LSST observations.
+
+        Returns
+        -------
+        grp_star : pandas df
+            the star min the min dist to obs.
+
+        """
         
         ra_ref = grp_star['RA_deg'].to_list()*len(obs)
         dec_ref = grp_star['Dec_deg'].to_list()*len(obs)
@@ -143,6 +283,22 @@ class AuxTelSurvey:
         return grp_star
         
     def survey_async(self, stars, obs):
+        """
+        The asynchronous AuxTel survey
+
+        Parameters
+        ----------
+        stars : pandas df
+            list of stars to be observed by AuxTel that night.
+        obs : pandas df
+            List of observations of that night.
+
+        Returns
+        -------
+        df : pandas df
+            the AuxTel survey.
+
+        """
         
         #get mjd_min and mjd_max
         
@@ -207,7 +363,138 @@ class AuxTelSurvey:
         df = pd.DataFrame(r,columns=cols)
         
         return df
+    
+    def survey_sync(self, stars, obs):
+        """
+        the synchronous AuxTel survey
+
+        Parameters
+        ----------
+        stars : pandas df
+            list of stars to be observed by AuxTel that night.
+        obs : pandas df
+            List of observations of that night.
+
+        Returns
+        -------
+        res : pandas df
+            the AuxTel survey.
+
+
+        """
+        
+        #get mjd_min and mjd_max
+        
+        mjd_min = obs['mjd'].min()
+        mjd_max = obs['mjd'].max()
+        
+        #estimate distances between stars
+        
+        #print(dd)
+        cols = ['Star_name','RA_deg','Dec_deg']
+        dd = stars[cols]
+        dist_stars = self.calc_dist(dd)
+        
+        # grab the first FP position
+        idx = obs['mjd'] == mjd_min
+        sel_obs = obs[idx]
+        
+        #grab the nearest star to this first position
+        star_name,star_ra,star_dec = self.nearest_star(stars,sel_obs)
+        
+        mjd_cur = mjd_min
+        
+        r = []
+        cols = ['Star_name','RA_deg',
+                'Dec_deg','numExposure','exposure_time',
+                'slew_time','mjd'] 
+    
+        while mjd_cur <= mjd_max:
+            #grab slew time for next obs
+            # time at the end of exposure time
+            time_exp = self.num_exposures*self.exposure_time*self.corfact
+            mjd_end_pose = mjd_cur+time_exp
+            #where is the LSST FP at that time?
+            obs_closest = self.last_obs(obs,mjd_end_pose)
+            
+            #grab the nearest star
+            star_next, ra_next,dec_next=self.nearest_star(stars,obs_closest)
+            
+            if star_next != star_name:
+                #the next star is different from the current one
+                #get the distance between current star and next star
+                dist_star = self.get_dist_from_combi(dist_stars,
+                                                 star_name,
+                                                 star_next)
+                slew_time = self.slew_speed*dist_star #in sec
+            else:
+                slew_time = 0
+            
+            r.append((star_name,star_ra,star_dec,
+                      self.num_exposures,
+                      self.exposure_time,slew_time,mjd_cur))
+            #going to the next
+            mjd_cur += time_exp+slew_time*self.corfact
+            star_name = star_next
+            star_ra = ra_next
+            star_dec = dec_next
+            
+        res = pd.DataFrame(r,columns=cols)
+        
+        return res
+        
+    def last_obs(self,obs,mjd_ref):
+        """
+        get the latest LSST obs corresponding to mjd_ref
+
+        Parameters
+        ----------
+        obs : pandas df
+            the LSST observations (pointings).
+        mjd_ref : float
+            mjd to grab the last LSST obs..
+
+        Returns
+        -------
+        res : pandas df
+            the latest LSST obs.
+
+        """
+        
+        idx = obs['mjd'] <= mjd_ref
+        sel_obs = obs[idx]
+        #grab max mjd from obs
+        idxmax = sel_obs['mjd'].idxmax()
+        obs_closest = sel_obs.loc[idxmax]
+        ro = []
+        cols = ['RA','Dec','observationId']
+        for vv in cols:
+            ro.append(obs_closest[vv])
+        
+        res = pd.DataFrame([ro],columns=cols)
+        
+        return res
+                
+        
     def get_dist_from_combi(self,dists,star_a,star_b):
+        """
+        Method to get the distance between two stars
+
+        Parameters
+        ----------
+        dists : pandas df
+            array with distances between stars.
+        star_a : str
+            first star name.
+        star_b : str
+            second star name.
+
+        Returns
+        -------
+        pandas serie
+            infos (dist, ...).
+
+        """
         
         combi = '{}/{}'.format(star_a,star_b)
         
@@ -217,6 +504,20 @@ class AuxTelSurvey:
         return dists[combi]
         
     def calc_dist(self,df):
+        """
+        Estimate the distance of a collection of stars
+
+        Parameters
+        ----------
+        df : pandas df
+            the list of stars.
+
+        Returns
+        -------
+        r : dict
+            key: star_a/star_b; value: distance.
+
+        """
         
         
         r = {}
@@ -234,7 +535,46 @@ class AuxTelSurvey:
                     r[combi]=dist_star
         
         return r
+    
+    def nearest_star(self,stars,obs):
+        """
+        Get the nearest star to a LSST obs (pointing)
+
+        Parameters
+        ----------
+        stars : pandas df
+            List of stars.
+        obs : pandas df
+            the LSST obs.
+
+        Returns
+        -------
+        str
+            star name.
+        float
+            star ra.
+        float
+            star dec.
+
+        """
         
+        colsa = ['RA','Dec','observationId']
+        obs_a = obs[colsa]
+        
+        colsb = ['Star_name','RA_deg','Dec_deg']
+        stars_a = stars[colsb]
+        
+        
+        mm = stars_a.merge(obs_a,how='cross')
+        
+        mm['dist'] = dist(mm['RA'],mm['Dec'],mm['RA_deg'],mm['Dec_deg'])
+        
+        idxmin = mm['dist'].idxmin()
+        
+        res = mm.loc[idxmin]
+        
+        return res['Star_name'],res['RA_deg'],res['Dec_deg']
+    
 class AuxTelSurvey_visu:
     def __init__(self,obs,dbName,nside=64,figDir='None',
                  movieDir='None',ffmpeg_cmd='ffmpeg',year=1):
