@@ -888,6 +888,26 @@ class AuxTelSurvey_visu:
          os.system(cmd)
    
 def dist(ra_a,dec_a,ra_b,dec_b):
+    """
+    angular distance estimation
+
+    Parameters
+    ----------
+    ra_a : float
+        RA first source.
+    dec_a : float
+        Dec first source.
+    ra_b : float
+        RA second source.
+    dec_b : float
+        Dec second source.
+
+    Returns
+    -------
+    dist : float
+        angular distance.
+
+    """
     dist = ((ra_a-ra_b)*np.cos(np.deg2rad(dec_a)))**2
     dist += (dec_a-dec_b)**2
     dist = np.sqrt(dist)
