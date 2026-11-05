@@ -5,6 +5,7 @@ import pprint
 import multiprocessing
 from sn_tools.sn_io import geth5Data, getLC, getFile
 import os
+import pandas as pd
 
 
 def sigma_x0_x1_color(resu, restab, params=['x0', 'x1', 'color']):
@@ -436,3 +437,231 @@ def sigma_x0_x1_color_loop(lcList, params=['x0', 'x1', 'color']):
 
     return restab
 """
+
+
+def coadd_lc(lc_orig):
+    """
+    Function to coadd lc fluxes
+
+    Parameters
+    ----------
+    lc_orig : astropy table
+        lc to coadd.
+
+    Returns
+    -------
+    lcb : astropy table
+        coadded lc.
+
+    """
+
+    # save metadata
+
+    lc_meta = lc_orig.meta
+
+    # move to pandas
+    ccols = ['night', 'mean_wave', 'band',
+             'time', 'band_cosmo', 'zpsys', 'flux', 'fluxerr',
+             'snr_m5', 'snr', 'filter', 'tel_site_name','sigma_f5',
+             'sigma_shot','flux_orig']
+    ccols = ['night', 'mean_wave', 'band',
+             'time', 'band_cosmo', 'zpsys', 'flux',
+             'filter', 'tel_site_name','sigma_f5',
+             'flux_orig','exptime','fluxerr_model']
+    for vv in ['zp', 'pwv', 'aerosol', 'ozone', 'airmass']:
+        ccols.append(vv)
+        ccols.append('sigma_{}'.format(vv))
+        if vv != 'zp':
+            ccols.append('round_{}'.format(vv))
+
+    df = lc_orig[ccols].to_pandas()
+    df['airmass_bin'] = df['airmass']
+    
+    df = df.round({'airmass_bin':1})
+    
+    lc = df.groupby(['filter', 'night']).apply(
+        lambda x: coadd_night_filter(x)).reset_index()
+
+    if len(lc) > 0:
+
+        # round here
+        for vv in ['airmass', 'pwv', 'ozone', 'aerosol']:
+            round_value = int(np.mean(lc_orig['round_{}'.format(vv)]))
+            lc = lc.round({vv: round_value})
+
+        tel_site_name = np.unique(lc_orig['tel_site_name'])[0]
+
+        lc['band_cosmo'] = tel_site_name+'::' +\
+            lc['filter']+'_' +\
+            lc['airmass'].astype(str)+'_' +\
+            lc['pwv'].astype(str)+'_' +\
+            lc['ozone'].astype(str)+'_' +\
+            lc['aerosol'].astype(str)
+        lc['band'] = lc['band_cosmo']
+
+    lcb = Table.from_pandas(lc)
+    lcb.meta = lc_meta
+
+    return lcb
+
+
+def coadd_night_filter(grp_orig,
+                       col_means_weighted=[
+                           ('flux', 'sigma_f5'),
+                           ('zp', 'sigma_zp'),
+                           ('pwv', 'sigma_pwv'),
+                           ('ozone', 'sigma_ozone'),
+                           ('aerosol', 'sigma_aerosol'),
+                           ('airmass', 'sigma_airmass')],
+                       col_means=['mean_wave',
+                                  'zp', 'time',
+                                  'sigma_airmass', 'sigma_pwv',
+                                  'sigma_aerosol', 'sigma_ozone',
+                                  'round_airmass', 
+                                  'round_pwv',
+                                  'round_aerosol', 'round_ozone', 'sigma_zp',
+                                  'flux_orig'],
+                       col_sigmas=['sigma_f5','fluxerr_model'],
+                       col_round=['airmass', 'pwv', 'ozone','aerosol'],
+                       round_vals=[2, 3, 3, 3],
+                       col_unique=['zpsys'], snr_min=0,
+                       col_sum=['exptime']):
+    """
+    Method to coadd light-curve points per night/filter
+
+    Parameters
+    ----------
+    grp_orig : pandas df
+        Data to process.
+    col_means_weighted : list(str), optional
+        list of cols for weighted mean estimation.
+        The default is [('flux','fluxerr')].
+    col_means : list(str), optional
+        list of cols for mean estimation.
+        The default is ['airmass','pwv','ozone','aerosol',
+                        'mean_wave','zp','time'].
+    col_round : list(str), optional
+        list of cols to round.
+        The default is ['airmass','pwv','ozone',
+                        'aerosol','zp','mean_wave'].
+    round_vals : list(int), optional
+        list of rounding values corresponding to col_round.
+        The default is [2,1,1,1,2,2].
+    col_unique : list(str), optional
+        list of cols with unique value. The default is ['zpsys'].
+    snr_min: float, optional
+      min snr for coadd. The default is 1.
+
+    Returns
+    -------
+    astropy table
+    output value
+
+    """
+
+    """
+    print('in coadd', len(grp))
+    print(grp[['flux', 'fluxerr']])
+    """
+
+    """
+    idx = grp_orig['snr'] >= snr_min
+    idx &= grp_orig['flux'] >= 0
+    """
+    idx = grp_orig['sigma_f5'] > 0
+    grp = grp_orig[idx]
+
+    # remove LC points with flux < 0 or fluxerr <0
+
+    if len(grp) == 0:
+        return pd.DataFrame()
+
+    tel_site_name = grp['tel_site_name'].to_list()[0]
+    dictout = {}
+    for vv in col_means_weighted:
+        pp = vv[0]
+        pp_err = vv[1]
+        # check if all errors are 0 - if yes modify the way of estimating values
+        idx = grp[pp_err] <= 0.0
+        sel = grp[idx]
+        if len(sel) == len(grp):
+            mean_weighted = np.mean(grp[pp])
+            weight_sum = 1.
+        else:
+            pp_weight = 'weight_{}'.format(pp)
+            grp[pp_weight] = 1./grp[pp_err]**2
+            weight_sum = np.sum(grp[pp_weight])
+            mean_weighted = np.sum(grp[pp]*grp[pp_weight])/weight_sum
+
+        dictout[pp] = [mean_weighted]
+        w_sum = 1./np.sqrt(weight_sum)
+        if vv[0] == 'flux':
+            dictout[vv[1]] = [w_sum]
+        else:
+            dictout['sigma_meas_{}'.format(vv[0])] = [w_sum]
+
+    for vv in col_means:
+        val = grp[vv].mean()
+        dictout[vv] = [val]
+
+    for vv in col_unique:
+        dictout[vv] = grp[vv].unique().tolist()
+        
+    for vv in col_sigmas:
+        val = np.sum(1./grp[vv]**2)
+        dictout[vv] = [1./np.sqrt(val)]
+        
+    for vv in col_sum:
+        val = np.sum(grp[vv])
+        dictout[vv] = [val]
+
+    res_df = pd.DataFrame.from_dict(dictout)
+    #res_df['snr'] = res_df['flux']/res_df['fluxerr']
+    res_df['tel_site_name'] = tel_site_name
+    
+    #add the number of visits per filter/night
+    res_df['nvisits'] = len(grp)
+    
+    
+    """
+    print('finally')
+    print(res_df[['flux', 'fluxerr']])
+    """
+    return res_df
+
+
+def coadd_lc_new(lc_orig):
+    
+    
+    print(lc_orig.columns)
+
+    # add sky flux
+    lc_orig['flux_sky'] = 10**(-0.4*(lc_orig['sky']-lc_orig['zp']))  
+    lc_orig['f5'] = 10**(-0.4*(lc_orig['m5']-lc_orig['zp']))
+    print(lc_orig[['flux','flux_sky','f5','sigma_f5']])
+
+
+def get_bands_vs_z(z):
+    """
+    Function to get useful bands vs z
+
+    Parameters
+    ----------
+    z : float
+        redshift.
+
+    Returns
+    -------
+    vals : str
+        list of useful bands.
+
+    """
+    
+    rr = [(0.01,0.1),(0.1,0.35),(0.35,0.65),(0.65,1.11)]
+    bb = ['gri','griz','rizy',('izy')]
+    dd = dict(zip(rr,bb))
+    
+    bands = 'unknown'
+    for key,vals in dd.items():
+        if z >= key[0] and z < key[1]:
+            return vals

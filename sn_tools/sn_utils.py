@@ -1,21 +1,173 @@
 import numpy as np
-from sn_tools.sn_rate import SN_Rate
-from sn_tools.sn_throughputs import Throughputs
-from sn_tools.sn_telescope import Telescope
 from sn_tools.sn_io import check_get_file
 import os
 import numpy.lib.recfunctions as rf
 from astropy.table import Table, vstack, Column
 from scipy import interpolate, integrate
-from lsst.sims.photUtils import Sed, PhotometricParameters, Bandpass, Sed
 import sncosmo
 import h5py
 from scipy.interpolate import InterpolatedUnivariateSpline as Spline1d
-from scipy.interpolate import griddata, interp2d
+from scipy.interpolate import griddata, interp2d,interp1d
 import pandas as pd
-from scipy.interpolate import RegularGridInterpolator
-import multiprocessing
 import pprint
+import operator
+
+
+def multiproc(data, params, func, nproc):
+    """
+    Function to perform multiprocessing
+
+    Parameters
+    ---------------
+    data: array
+      data to process
+    params: dict
+      fixed parameters of func
+    func: function
+      function to apply for multiprocessing
+    nproc: int
+      number of processes
+
+    """
+    """
+    import sys
+    sysmod = sys.modules
+    sys_keys = sysmod.keys()
+    vv = list_columns(sys_keys,'multiprocessing')
+    for val in vv:
+        if val in sys_keys:
+            del sys.modules[val]
+    """
+    import multiprocessing
+    # multiprocessing.set_start_method('forkserver')
+    # method = multiprocessing.get_start_method()
+    # print('multiproc method', method)
+    nproc = min([len(data), nproc])
+    # multiprocessing parameters
+    nz = len(data)
+    t = np.linspace(0, nz, nproc+1, dtype='int')
+    # print('multi', nz, t)
+    result_queue = multiprocessing.Queue()
+
+    procs = [multiprocessing.Process(name='Subprocess-'+str(j), target=func,
+                                     args=(data[t[j]:t[j+1]], params, j, result_queue,))
+             for j in range(nproc)]
+
+    for p in procs:
+        p.start()
+
+    resultdict = {}
+    # get the results in a dict
+
+    for i in range(nproc):
+        resultdict.update(result_queue.get())
+
+    for p in multiprocessing.active_children():
+        p.join()
+
+    restot = gather_results(resultdict)
+
+    return restot
+
+
+def gather_results(resultdict):
+    """
+    Function to gather results of a directory
+
+    Parameters
+    ----------------
+    resultdict: dict
+      dictory of data
+
+    Returns
+    ----------
+    gathered results. The type is determined from resultdict.
+    Supported types: pd.core.frame.DataFrame, Table, np.ndarray,
+    np.recarray, int
+
+    """
+    supported_types = ['pd.core.frame.DataFrame', 'Table', 'np.ndarray',
+                       'np.recarray', 'int', 'dict']
+
+    # get outputtype here
+    first_value = None
+    for key, vals in resultdict.items():
+        if vals is not None:
+            first_value = vals
+            break
+
+    restot = None
+    if first_value is None:
+        return restot
+
+    if isinstance(first_value, pd.core.frame.DataFrame):
+        restot = pd.DataFrame()
+
+        def concat(a, b):
+            return pd.concat((a, b), sort=False)
+
+    if isinstance(first_value, Table):
+        restot = Table()
+
+        def concat(a, b):
+            return vstack([a, b])
+
+    if isinstance(first_value, np.ndarray) or isinstance(first_value, np.recarray):
+        restot = []
+
+        def concat(a, b):
+            if isinstance(a, list):
+                return b
+            else:
+                if a.size > 0 and b.size > 0:
+                    return np.concatenate((a, b))
+                else:
+                    if b.size == 0:
+                        return a
+                    else:
+                        return b
+
+    if isinstance(first_value, int):
+        restot = 0
+
+        def concat(a, b):
+            return operator.add(a, b)
+
+    if isinstance(first_value, dict):
+        restot = {}
+
+        def concat(a, b):
+            return dict(a, **b)
+
+    if isinstance(first_value, list):
+        restot = []
+
+        def concat(a, b):
+            return a+b
+
+    if isinstance(first_value, tuple):
+        restot = ([], [])
+        tlength = len(first_value)
+        restot = tuple([] for _ in range(tlength))
+
+        def concat(a, b):
+            bo = []
+            for i in range(tlength):
+                bo.append(a[i]+b[i])
+
+            myres = tuple(bo[i] for _ in range(tlength))
+            return myres
+
+    if restot is None:
+        print('Sorry to bother you but: unknown data type', type(first_value))
+        print('Supported types', supported_types)
+        return restot
+
+    # gather the results
+    for key, vals in resultdict.items():
+        restot = concat(restot, vals)
+
+    return restot
 
 
 class MultiProc:
@@ -58,7 +210,7 @@ class MultiProc:
         # multiprocessing parameters
         nz = len(self.toprocess)
         t = np.linspace(0, nz, self.nproc+1, dtype='int')
-        #print('multi', nz, t)
+        # print('multi', nz, t)
         result_queue = multiprocessing.Queue()
 
         procs = [multiprocessing.Process(name='Subprocess-'+str(j), target=self.process,
@@ -139,28 +291,34 @@ class GenerateSample:
       name of the column corresponding to filter
       Default : 'filter'
     area : float, opt
-       area of the survey (in deg\^2)
-       Default : 9.6 deg\^2
+       area of the survey (in deg2)
+       Default : 9.6 deg2
 
     """
 
-    def __init__(self, sn_parameters, cosmo_parameters, mjdCol='mjd', seasonCol='season', filterCol='filter', area=9.6, dirFiles='reference_files', web_path=''):
+    def __init__(self, sn_parameters, cosmo_parameters, mjdCol='mjd',
+                 seasonCol='season', filterCol='filter', area=9.6,
+                 dirFiles='reference_files', web_path=''):
         self.dirFiles = dirFiles
         self.params = sn_parameters
-        self.sn_rate = SN_Rate(rate=self.params['z']['rate'],
-                               H0=cosmo_parameters['H0'],
-                               Om0=cosmo_parameters['Omega_m'])
 
         self.x1_color = self.getDist(self.params['x1_color']['rate'])
         self.mjdCol = mjdCol
         self.seasonCol = seasonCol
         self.filterCol = filterCol
         self.area = area
-        self.min_rf_phase = self.params['min_rf_phase']
-        self.max_rf_phase =self.params['max_rf_phase']
-        self.min_rf_phase_qual = self.params['min_rf_phase_qual']
-        self.max_rf_phase_qual =self.params['max_rf_phase_qual']
+        self.min_rf_phase = self.params['minRFphase']
+        self.max_rf_phase = self.params['maxRFphase']
+        self.min_rf_phase_qual = self.params['minRFphaseQual']
+        self.max_rf_phase_qual = self.params['maxRFphaseQual']
         self.web_path = web_path
+
+        from sn_tools.sn_rate import SN_Rate
+        self.sn_rate = SN_Rate(rate=self.params['z']['rate'],
+                               H0=cosmo_parameters['H0'],
+                               Om0=cosmo_parameters['Om0'],
+                               min_rf_phase=self.params['minRFphaseQual'],
+                               max_rf_phase=self.params['maxRFphaseQual'])
 
     def __call__(self, obs):
         """
@@ -216,7 +374,8 @@ class GenerateSample:
         if len(r) > 0:
             names = ['z', 'x1', 'color', 'daymax',
                      'epsilon_x0', 'epsilon_x1', 'epsilon_color',
-                     'epsilon_daymax', 'min_rf_phase', 'max_rf_phase','min_rf_phase_qual','max_rf_phase_qual']
+                     'epsilon_daymax', 'minRFphase', 'maxRFphase',
+                     'minRFphaseQual', 'maxRFphaseQual']
             types = ['f8']*len(names)
             # params = np.zeros(len(r), dtype=list(zip(names, types)))
             params = np.asarray(r, dtype=list(zip(names, types)))
@@ -276,8 +435,8 @@ class GenerateSample:
 
             if zmin < 1.e-6:
                 zmin = 0.01
-            #print(zmin, zmax, duration, self.area)
-            zz, rate, err_rate, nsn, err_nsn = self.sn_rate(
+            # print(zmin, zmax, duration, self.area)
+            zz, rate, err_rate, nsn, err_nsn, age_univ = self.sn_rate(
                 zmin=zmin, zmax=zmax,
                 duration=duration,
                 survey_area=self.area,
@@ -285,14 +444,14 @@ class GenerateSample:
             # get number of supernovae
             N_SN = int(np.cumsum(nsn)[-1])
             if np.cumsum(nsn)[-1] < 0.5:
-                #print('none',zmin,zmax,duration)
+                # print('none',zmin,zmax,duration)
                 return None
             weight_z = np.cumsum(nsn)/np.sum(np.cumsum(nsn))
 
             if N_SN < 1:
                 N_SN = 1
                 # weight_z = 1
-            #print('nsn', N_SN)
+            # print('nsn', zmin, zmax, survey_area, duration, N_SN)
             for j in range(N_SN):
                 z = self.getVal(self.params['z']['type'], zmin, zz, weight_z)
                 zrange = 'low_z'
@@ -344,7 +503,7 @@ class GenerateSample:
 
                 for T0 in T0_values:
                     r.append((z, x1_color[0], x1_color[1], T0, 0.,
-                              0., 0., 0., self.min_rf_phase, self.max_rf_phase,self.min_rf_phase_qual, self.max_rf_phase_qual))
+                              0., 0., 0., self.min_rf_phase, self.max_rf_phase, self.min_rf_phase_qual, self.max_rf_phase_qual))
 
         if self.params['z']['type'] == 'unique':
             daystep = self.params['daymax']['step']
@@ -359,9 +518,9 @@ class GenerateSample:
                 T0_values = [daymin+21.*(1.+z)]
             for T0 in T0_values:
                 r.append((z, x1_color[0], x1_color[1], T0, 0.,
-                          0., 0., 0., self.min_rf_phase, self.max_rf_phase,self.min_rf_phase_qual, self.max_rf_phase_qual))
+                          0., 0., 0., self.min_rf_phase, self.max_rf_phase, self.min_rf_phase_qual, self.max_rf_phase_qual))
         rdiff = []
-        if self.params['differential_flux']:
+        if self.params['differentialFlux']:
             for rstart in r:
                 for kdiff in [4, -4, 5, -5, 6, -6, 7, -7]:
                     rstartc = list(rstart)
@@ -486,24 +645,67 @@ class SimuParameters:
     """
 
     def __init__(self, sn_parameters, cosmo_parameters,
-                 mjdCol='mjd', seasonCol='season', filterCol='filter',area=9.6, dirFiles='reference_files', web_path=''):
-        self.dirFiles = dirFiles
+                 mjdCol='mjd', seasonCol='season', filterCol='filter',
+                 area=9.6, web_path='',
+                 weights=dict(zip([0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1., 1.1],
+                                  [1000, 1000, 250, 100, 70]+[30]*2+[10]*5))):
+
         self.params = sn_parameters
-        self.sn_rate = SN_Rate(rate=self.params['z']['rate'],
-                               H0=cosmo_parameters['H0'],
-                               Om0=cosmo_parameters['Omega_m'])
+
+        self.dirFiles = None
+        self.distName = None
+
+        self.sigma_param = {}
+        if 'modelPar' in sn_parameters.keys():
+            self.dirFiles = sn_parameters['modelPar']['dirFile']
+            self.distName = sn_parameters['modelPar']['nameFile']
+            self.sigma_param['x1'] = sn_parameters['modelPar']['x1sigma']
+            self.sigma_param['color'] = sn_parameters['modelPar']['colorsigma']
+
         self.web_path = web_path
-        self.x1_color = self.getDist(self.params['x1_color']['rate'])
+        if 'modelPar' in self.params.keys() and \
+                self.params['modelPar']['nameFile'] != 'none':
+            self.modelParDist = self.getDist()
+
         self.mjdCol = mjdCol
         self.seasonCol = seasonCol
         self.filterCol = filterCol
         self.area = area
-        self.min_rf_phase = self.params['min_rf_phase']
-        self.max_rf_phase = self.params['max_rf_phase']
-        self.min_rf_phase_qual = self.params['min_rf_phase_qual']
-        self.max_rf_phase_qual = self.params['max_rf_phase_qual']
+        self.min_rf_phase = self.params['minRFphase']
+        self.max_rf_phase = self.params['maxRFphase']
+        self.min_rf_phase_qual = self.params['minRFphaseQual']
+        self.max_rf_phase_qual = self.params['maxRFphaseQual']
+        from sn_tools.sn_rate import SN_Rate
+        self.sn_rate = SN_Rate(rate=self.params['z']['rate'],
+                               H0=cosmo_parameters['H0'],
+                               Om0=cosmo_parameters['Om0'],
+                               min_rf_phase=self.params['minRFphaseQual'],
+                               max_rf_phase=self.params['maxRFphaseQual'])
+        from scipy.interpolate import interp1d
+        self.weights = interp1d(list(weights.keys()), list(weights.values()),
+                                bounds_error=False, fill_value=0.)
+        self.daymax_restricted = self.params['daymax']['restricted']
 
-    def getDist(self, rate):
+    def getDist(self):
+        """ get (x1,color) distributions
+
+        Returns
+        -----------
+        pandas df of (x1,color) rates with the columns:
+        zrange, param, val, proba
+
+        with
+        zrange = lowz/highz
+        param = x1, color
+
+        """
+        check_get_file(self.web_path, self.dirFiles, self.distName)
+
+        fullName = '{}/{}'.format(self.dirFiles, self.distName)
+
+        return x1_color_dist(fullName, self.sigma_param).proba
+
+    def getDist_deprecated(self, distname, rate):
         """ get (x1,color) distributions
         Parameters
         --------------
@@ -517,25 +719,30 @@ class SimuParameters:
         """
 
         # prefix = os.getenv('SN_UTILS_DIR')+'/input/Dist_X1_Color_'+rate+'_'
+        pars = distname.split('_')
+        para = pars[0]
+        if len(pars) >= 1:
+            parb = pars[1]
 
-        prefix = '{}/Dist_X1_Color_{}'.format(self.dirFiles, rate)
+        prefix = '{}/Dist_{}_{}_{}'.format(self.dirFiles, pars, pars, rate)
         suffix = '.txt'
         # names=['x1','c','weight_x1','weight_c','weight_tot']
-        dtype = np.dtype([('x1', np.float), ('color', np.float),
-                          ('weight_x1', np.float), ('weight_color', np.float),
+        dtype = np.dtype([(para, np.float), (parb, np.float),
+                          ('weight_{}'.format(para),
+                         np.float), ('weight_{}'.format(parb), np.float),
                           ('weight', np.float)])
-        x1_color = {}
+        params = {}
         for val in ['low_z', 'high_z']:
             fName = '{}_{}{}'.format(
                 prefix, val, suffix)
-            fName = 'Dist_X1_Color_{}_{}{}'.format(rate, val, suffix)
+            fName = 'Dist_{}_{}_{}_{}{}'.format(para, parb, rate, val, suffix)
             check_get_file(self.web_path, self.dirFiles, fName)
-            x1_color[val] = np.loadtxt(
+            params[val] = np.loadtxt(
                 '{}/{}'.format(self.dirFiles, fName), dtype=dtype)
 
-        return x1_color
+        return params
 
-    def Params(self, obs):
+    def simuparams(self, obs):
         """
         Method to estimate simulation parameters according to obs and config
 
@@ -553,20 +760,50 @@ class SimuParameters:
         """
 
         # first estimation: z distribution - will rule daymax distribution
+        if len(obs) == 0:
+            return None
+
         daymin = np.min(obs[self.mjdCol])
         daymax = np.max(obs[self.mjdCol])
         duration = daymax-daymin
         pars = self.zdist(duration)
 
         if pars is None:
-            return None
+            return pars
         # add daymax, which is z-dependent (boundaries effects)
 
         pars = self.daymaxdist(pars, daymin, daymax)
 
+        if self.dirFiles is None:
+            pars = self.complete_pars(pars)
+            return pars.to_records(index=False)
+
         if len(pars) == 0:
             return None
 
+        if 'Ia' in self.params['type']:
+            pars = self.add_params(pars)
+
+        pars = self.complete_pars(pars)
+
+        # print('total number of SN to simulate:', len(pars))
+        return pars.to_records(index=False)
+
+    def add_params(self, pars):
+        """
+        Method to add simulation parameters for Ias
+
+        Parameters
+        --------------
+        pars: pandas df with simu parameters
+
+
+        Returns
+        -----------
+        pars: pandas df with simu parameters (Ia params added)
+
+
+        """
         # add x1 dist
         pars = self.pdist(pars, 'x1')
 
@@ -574,7 +811,7 @@ class SimuParameters:
         pars = self.pdist(pars, 'color')
 
         # add epsilon_*
-        if self.params['differential_flux']:
+        if self.params['differentialFlux']:
             epsilon = 1.e-8
             epsi = pd.DataFrame([0]*1+[-1.0, 1.0]+[0.0]*6,
                                 columns=['epsilon_x0'])
@@ -597,17 +834,288 @@ class SimuParameters:
             for pp in ['x0', 'x1', 'color', 'daymax']:
                 pars['epsilon_{}'.format(pp)] = 0.0
 
+        return pars
+
+    def complete_pars(self, pars):
+
         # finally add min and max rf
-        pars['min_rf_phase'] = self.min_rf_phase
-        pars['max_rf_phase'] = self.max_rf_phase
-        pars['min_rf_phase_qual'] = self.min_rf_phase_qual
-        pars['max_rf_phase_qual'] = self.max_rf_phase_qual
+        pars['minRFphase'] = self.min_rf_phase
+        pars['maxRFphase'] = self.max_rf_phase
+        pars['minRFphaseQual'] = self.min_rf_phase_qual
+        pars['maxRFphaseQual'] = self.max_rf_phase_qual
 
+        return pars
+
+    def zdist(self, duration, duration_min_z=20):
+        """
+        Method to estimate the redshift distribution
+
+        Parameters
+        ---------------
+        duration: float
+          duration of the survey (season length)
+        duration_min_z: float, optional.
+           min season legth after phase correction. The default is 20.
+
+        Returns
+        -----------
+        pandas df with z distribution
+
+        """
+        ztype = self.params['z']['type']
+        zmin_simu = self.params['z']['minsimu']
+        zmax_simu = self.params['z']['maxsimu']
+        zmin = self.params['z']['min']
+        zmax = self.params['z']['max']
+        nbins_z = self.params['z']['nbins']
+
+        """
+        if zmin < zmin_simu:
+            print('pb here zmin and zmin_simu')
+
+        if zmax > zmax_simu:
+            print('pb here zmax and zmax_simu')
+        """
+
+        zstep = self.params['z']['step']
+        NSN_factor = self.params['NSNfactor']
+        NSN_absolute = self.params['NSNabsolute']
+        weight_sn_z = self.params['z']['weight']
+
+        if ztype == 'unique':
+            zvals = [zmin]*NSN_absolute
+
+        if ztype == 'uniform':
+            zvals = np.arange(zmin, zmax+zstep, zstep)
+            if zvals[0] < 1.e-6:
+                zvals[0] = 0.01
+            zvals = zvals.tolist()
+            zvals *= NSN_absolute
+
+        if ztype == 'random':
+            """
+            print('duration', duration, zmin, zmax,
+                  self.max_rf_phase_qual, self.min_rf_phase_qual)
+            """
+            zlim = (duration-duration_min_z)
+            zlim /= (self.max_rf_phase_qual-self.min_rf_phase_qual)
+            zlim -= 1
+
+            # print('aoo zlim', duration, zlim, zmin, zmax)
+            if zlim < zmin:
+                return None
+
+            if zlim >= zmin and zlim < zmax:
+                zmax = zlim
+
+            # get sn rate for this z range
+
+            if zmin < 1.e-6:
+                zmin = 0.01
+
+            # print(zmin, zmax, duration, self.area)
+            zz, rate, err_rate, nsn, err_nsn, age_univ = self.sn_rate(
+                zmin=zmin, zmax=zmax,
+                duration=duration,
+                survey_area=self.area,
+                account_for_edges=True, dz=1.e-5)
+            
+            # get number of supernovae
+            N_SN = np.sum(nsn)
+            N_SN *= NSN_factor
+            N_SN = int(N_SN)
+            #weight_z = np.cumsum(nsn)/np.sum(np.cumsum(nsn))
+            #weight_z = nsn/np.sum(nsn)
+            if NSN_absolute > 0:
+                N_SN = NSN_absolute
+                # weight_z = [1./len(zz)]*len(zz)
+            # print('nsn from rate', zmin, zmax,
+            #      duration, self.area, self.min_rf_phase_qual,
+            # self.max_rf_phase_qual, N_SN, NSN_factor)
+
+            if N_SN < 0.5:
+                return None
+
+            if N_SN < 1:
+                N_SN = 1
+                # weight_z = 1
+
+            if weight_sn_z == 'flat':
+                weight_z = [1./len(zz)]*len(zz)
+                zzb = np.random.uniform(zmin,zmax,len(weight_z))
+                zvals = np.random.choice(zzb, N_SN)
+
+            #zvals = np.random.choice(zz, N_SN,weight_z.tolist())
+            if weight_sn_z == 'sn_rate':
+                zvals = self.get_rate_zbins(zz,nsn,NSN_factor,nbins_z)
+            
+                #self.check_rate_prod(zvals,duration,NSN_factor,zmax)
+                
+
+            """
+            if NSN_absolute <= 0:
+                # apply z-selection
+                idx = zvals >= zmin
+                idx &= zvals <= zmax
+                zvals = zvals[idx]
+            """
+
+        return pd.DataFrame(zvals, columns=['z'])
+
+    def get_rate_zbins(self,zz,nsn,factor,nbins_z):
+        """
+        Grab the number of sn per z bin
+
+        Parameters
+        ----------
+        zz : list(float)
+            redshift values.
+        nsn : list(float)
+            nsn per bin.
+        factor : float
+            norm factor.
+
+        Returns
+        -------
+        zvals : list(float)
+            DESCRIPTION.
+
+        """
         
-        #print('total number of SN to simulate:', len(pars))
-        return pars.to_records(index=False)
+        dd = pd.DataFrame(zz, columns=['z'])
+        dd['nsn'] = nsn
+        
+        dd['nsn'] *= factor
+        zmin=0.01
+        zmax=dd['z'].max()
+        
+        """
+        zref = [0.01,0.2,0.4,0.7,1.2]
+        nlin_ref = [1,2,5,7,10]
+        
+        nlin = 5
+        for i in range(len(zref)-1):
+            if zmax >= zref[i] and zmax < zref[i+1]:
+                nlin = nlin_ref[i]
+        
+        print('hello',nlin,nbins_z)
+        """
+        bins = np.linspace(zmin,zmax,nbins_z,endpoint=True)
+        
+        dd['group'] = pd.cut(dd['z'], bins)
+        
+        zvals = dd.groupby(['group']).apply(lambda x:self.z_bin_grp(x))
+        
+        if len(zvals) > 0:
+            res = zvals['z'].to_list()
+        else:
+            res = []
+            
+        return res
+        
+    def z_bin_grp(self,grp):
+        """
+        Generate zvalues per z-bin
 
-    def zdist(self, duration):
+        Parameters
+        ----------
+        grp : pandas df
+            Data to process.
+        zmax: float
+            max z to consider.
+
+        Returns
+        -------
+        res : pandas df
+            z redshifts.
+
+        """
+        
+        nsn = np.round(grp['nsn'].sum())
+        
+        zmin = grp.name.left
+        zmax = grp.name.right
+        
+        #print(zmin,zmax,nsn,int(nsn))
+        
+        grp['weight'] = grp['nsn']/grp['nsn'].sum()
+        
+        res = pd.DataFrame()
+        if nsn > 0:
+            #zz = np.random.uniform(zmin,zmax,1000)
+            #zrand = np.random.choice(zz,nsn)
+            #res = pd.DataFrame(zrand,columns=['z'])
+            zrand = np.random.choice(grp['z'].to_list(),int(nsn),grp['weight'].to_list())
+            res = pd.DataFrame(zrand,columns=['z'])
+        
+        return res
+        
+
+    def check_rate_prod(self,zvals,duration,factor,zmax=0.7):
+        """
+        Check nsn vs z
+
+        Parameters
+        ----------
+        zvals: list(float)
+            List of resdhift values.
+        duration : float
+            Season length
+        factor : float
+            norm factor.
+
+        Returns
+        -------
+        None.
+
+        """
+        
+        zz, rate, err_rate, nsn, err_nsn, age_univ = self.sn_rate(
+                zmin=0.01, zmax=zmax,
+                duration=duration,
+                survey_area=self.area*factor,
+                account_for_edges=False, dz=1.e-5)
+        
+        df = pd.DataFrame(zz,columns=['z'])
+        df['nsn'] = nsn
+
+        import matplotlib.pyplot as plt
+        
+        fig, ax = plt.subplots()
+        
+        bins=np.arange(0.01,zmax,0.05)
+        
+        df['group'] = pd.cut(df['z'],bins)
+        
+        dfb = df.groupby(['group']).apply(lambda x : self.stattt(x))
+        
+        #ax.hist(dd,histtype='step')
+        
+        ax.hist(zvals,color='b',bins=bins)
+        
+        nsn = list(map(int,nsn.tolist()))
+        ax.plot(dfb['z'],dfb['nsn'],color='k')
+        
+        print('nsn',dfb['nsn'].sum())
+        print(dfb['z'].to_list())
+        print(dfb['nsn'].to_list())
+        plt.show()
+
+    def stattt(self,grp):
+        
+        zmin = grp.name.left
+        zmax = grp.name.right
+        
+        zv = 0.5*(zmin+zmax)
+        
+        df = pd.DataFrame([zv],columns=['z'])
+        
+        df['nsn'] = grp['nsn'].sum()
+        
+        return df
+        
+
+    def zdist_new(self, duration):
         """
         Method to estimate the redshift distribution
 
@@ -622,43 +1130,128 @@ class SimuParameters:
 
         """
         ztype = self.params['z']['type']
+        zmin_simu = self.params['z']['minsimu']
+        zmax_simu = self.params['z']['maxsimu']
         zmin = self.params['z']['min']
         zmax = self.params['z']['max']
+
+        if zmin < zmin_simu:
+            print('pb here zmin and zmin_simu')
+
+        if zmax > zmax_simu:
+            print('pb here zmax and zmax_simu')
+
         zstep = self.params['z']['step']
-        NSN_factor = self.params['NSN factor']
+        NSN_factor = self.params['NSNfactor']
+        NSN_absolute = self.params['NSNabsolute']
 
         if ztype == 'unique':
-            zvals = [zmin]
+            zvals = [zmin]*NSN_absolute
 
         if ztype == 'uniform':
             zvals = np.arange(zmin, zmax+zstep, zstep)
+            if zvals[0] < 1.e-6:
+                zvals[0] = 0.01
+            zvals = zvals.tolist()
+            zvals *= NSN_absolute
 
         if ztype == 'random':
             # get sn rate for this z range
 
             if zmin < 1.e-6:
                 zmin = 0.01
-            #print(zmin, zmax, duration, self.area)
-            zz, rate, err_rate, nsn, err_nsn = self.sn_rate(
-                zmin=zmin, zmax=zmax,
+
+            # print(zmin, zmax, duration, self.area)
+            zz, rate, err_rate, nsn, err_nsn, age_univ = self.sn_rate(
+                zmin=zmin_simu, zmax=zmax_simu,
                 duration=duration,
                 survey_area=self.area,
-                account_for_edges=True, dz=0.001)
+                account_for_edges=True, dz=1.e-5)
+
             # get number of supernovae
-            N_SN = int(np.cumsum(nsn)[-1])
-            print('nsn from rate', N_SN)
-            if np.cumsum(nsn)[-1] < 0.5:
-                return None
+            N_SN = np.cumsum(nsn)[-1]
             N_SN *= NSN_factor
-            weight_z = np.cumsum(nsn)/np.sum(np.cumsum(nsn))
+            N_SN = np.rint(N_SN)
+            # weight_z = np.cumsum(nsn)/np.sum(np.cumsum(nsn))
+            if NSN_absolute > 0:
+                N_SN = NSN_absolute
+                weight_z = [1./len(zz)]*len(zz)
+                zvals = np.random.choice(zz, N_SN, p=weight_z)
+                df = pd.DataFrame(zvals, columns=['z'])
+                df['weight'] = 1.
+            else:
+                if N_SN < 1:
+                    return None
+                df = self.get_nsn_bin(nsn, zz,
+                                      zmin=zmin,
+                                      zmax=zmax,
+                                      NSN_factor=NSN_factor)
+                if len(df) == 0:
+                    return None
+            # print('nsn from rate', zmin, zmax,
+            #      duration, self.area, self.min_rf_phase_qual,
+            # self.max_rf_phase_qual, N_SN, NSN_factor)
 
+        return df
+
+    def get_nsn_bin(self, nsn, zz, zmin=0.01, zmax=0.8, NSN_factor=1, deltaz=0.02):
+        """
+        Method to estimate and generate z distrib per z-bin
+
+        Parameters
+        ----------
+        nsn : array
+            nsn diff values.
+        zz : array
+            z diff values.
+        zmin: float, optional
+           zmin value for the survey. The default is 0.01
+        zmax : float, optional
+            zmax value for the survey. The default is 0.8.
+        NSN_factor : int, optional
+            nsn factor for production. The default is 1.
+        deltaz : float, optional
+            delta-z bin width. The default is 0.1.
+
+        Returns
+        -------
+        df : pandas df
+            z values and weights.
+
+        """
+
+        tt = np.cumsum(nsn)
+        df = pd.DataFrame()
+
+        if np.round(zmin, 2) == 0.01:
+            zmin = 0.
+        for ib, zbin in enumerate(np.arange(zmin, zmax, deltaz)):
+            zzmin = zbin
+            zzmax = zzmin+deltaz
+            idx = zz >= zzmin
+            idx &= zz < zzmax
+            vv = tt[idx]
+            N_SN_exp = (vv[-1]-vv[0])
+            NSN_factor = self.weights(zzmax)
+            N_SN = int(np.rint(N_SN_exp*NSN_factor))
             if N_SN < 1:
-                N_SN = 1
-                # weight_z = 1
+                continue
+            zzrand = zz[idx]
+            weight_z = np.cumsum(vv)/np.sum(np.cumsum(vv))
+            zvals = np.random.choice(zzrand, N_SN, p=weight_z).tolist()
+            dfa = pd.DataFrame(zvals, columns=['z'])
+            dfa['weight'] = 1./NSN_factor
+            df = pd.concat((df, dfa))
 
-            zvals = np.random.choice(zz, N_SN, p=weight_z)
+            # print('ttt', zzmin, zzmax, NSN_factor, len(dfa), N_SN_exp)
 
-        return pd.DataFrame(zvals, columns=['z'])
+        """
+        import matplotlib.pyplot as plt
+        plt.hist(df['z'], histtype='step', bins=np.arange(
+            0.01, zmax+0.05, 0.05))
+        plt.show()
+        """
+        return df
 
     def daymaxdist(self, pars, daymin, daymax):
         """
@@ -679,7 +1272,7 @@ class SimuParameters:
 
         """
 
-        assert('z' in pars.columns)
+        assert ('z' in pars.columns)
 
         daymaxtype = self.params['daymax']['type']
         daymaxstep = self.params['daymax']['step']
@@ -687,12 +1280,11 @@ class SimuParameters:
         if daymaxtype == 'unique':
             daymaxdf = pd.DataFrame(pars)
             daymaxdf['daymax'] = daymin+21*(1.+daymaxdf['z'])
-
         if daymaxtype == 'uniform':
             daymaxdf = pd.DataFrame()
             for z in pars['z'].values:
-                daymax_min = daymin-(1.+z)*self.min_rf_phase_qual
-                daymax_max = daymax-(1.+z)*self.max_rf_phase_qual
+                daymax_min, daymax_max = self.get_day_min_max(
+                    z, daymin, daymax)
                 if daymax_max-daymax_min >= 10:
                     ndaymax = int((daymax_max-daymax_min)/daymaxstep)+1
                     df = pd.DataFrame(np.linspace(
@@ -702,16 +1294,138 @@ class SimuParameters:
 
         if daymaxtype == 'random':
             daymaxdf = pd.DataFrame(pars)
-            daymaxdf['daymax_min'] = daymin-(1.+pars['z'])*self.min_rf_phase_qual
-            daymaxdf['daymax_max'] = daymax-(1.+pars['z'])*self.max_rf_phase_qual
+            daymax_min, daymax_max = self.get_day_min_max(pars['z'],
+                                                          daymin, daymax)
+            daymaxdf['daymax_min'] = daymax_min
+            daymaxdf['daymax_max'] = daymax_max
+
             idx = daymaxdf['daymax_max']-daymaxdf['daymax_min'] >= 10.
             daymaxdf = daymaxdf[idx]
             if len(daymaxdf) > 0:
                 daymaxdf['daymax'] = np.random.uniform(
-                    daymaxdf['daymax_min'], daymaxdf['daymax_max'], size=(1, len(daymaxdf)))[0]
+                    daymaxdf['daymax_min'], daymaxdf['daymax_max'],
+                    size=(1, len(daymaxdf)))[0]
+
                 daymaxdf = daymaxdf.drop(columns=['daymax_min', 'daymax_max'])
 
         return daymaxdf
+
+    def get_day_min_max(self, z, daymin, daymax):
+        """
+        Method to estimate (daymin, daymax) for T0 random choices
+
+        Parameters
+        ----------
+        z : float
+            redshift.
+        daymin : float
+            MJD min of the season.
+        daymax : float
+            MJD max of the season.
+
+        Returns
+        -------
+        day_min : float
+            MJD min value for T0 choice.
+        day_max : float
+            MJD max value for T0 choice.
+
+        """
+
+        if self.daymax_restricted:
+            day_min, day_max = self.get_day_restricted(daymin, daymax)
+        else:
+            day_min, day_max = self.get_day_lims(z, daymin, daymax)
+
+        return day_min, day_max
+
+    def get_day_restricted(self, daymin, daymax):
+        """
+        Method to restrict (daymin, daymax) range for T0 random choices
+        to minimize phase effects
+
+        Parameters
+        ----------
+        daymin : float
+            MJD min season.
+        daymax : float
+            MJD max season.
+
+        Returns
+        -------
+        day_min_rest : float
+            MJD min for the restricted range.
+        day_max_rest : float
+            MJD max for the restricted range.
+
+        """
+
+        zmax = self.get_zmax(daymax-daymin)
+        day_min_rest, day_max_rest = self.get_day_lims(zmax, daymin, daymax)
+
+        return day_min_rest, day_max_rest
+
+    def get_day_lims(self, z, daymin, daymax):
+        """
+        Method to get daymin and daymax for T0 choice with phase effects
+
+        Parameters
+        ----------
+        z : float
+            redshift.
+        daymin : float
+            MJD min of the season.
+        daymax : float
+            MJD max of the season.
+
+        Returns
+        -------
+        day_min_lim : float
+            MJD min for T0 choices.
+        day_max_lim : float
+            MJD max for T0 choices.
+
+        """
+
+        day_min_lim = self.get_day_lim(daymin, z, self.min_rf_phase_qual)
+
+        day_max_lim = self.get_day_lim(daymax, z, self.max_rf_phase_qual)
+
+        return day_min_lim, day_max_lim
+
+    def get_day_lim(self, day_a, z, rf_phase):
+        """
+        Estimation of da (min or max)
+
+        Parameters
+        ----------
+        day_a : float
+            MJD (min or max) of the season.
+        z : float
+            redshift.
+        rf_phase : float
+            rest frame phase selection value.
+
+        Returns
+        -------
+        res : float
+            MJD (min or max) with phase effect included.
+
+        """
+
+        res = day_a-(1.+z)*rf_phase
+
+        return res
+
+    def get_zmax(self, sl, sl_min=60):
+
+        delta = sl-sl_min
+        delta /= (self.max_rf_phase_qual-self.min_rf_phase_qual)
+        zmax = delta-1
+
+        zmax = np.min([zmax, 1.1])
+
+        return zmax
 
     def pdist(self, pars, pname):
         """
@@ -730,7 +1444,7 @@ class SimuParameters:
 
         """
 
-        assert((pname == 'x1') or (pname == 'color'))
+        assert ((pname == 'x1') or (pname == 'color'))
 
         ptype = self.params[pname]['type']
         pmin = self.params[pname]['min']
@@ -755,19 +1469,36 @@ class SimuParameters:
 
         if ptype == 'random':
             pdf = pd.DataFrame()
+            idp = self.modelParDist['param'] == pname
+            selPar = self.modelParDist[idp]
             # if pmin and pmax are different -> random choice in distribution
             if pmax-pmin > 1.e-5:
                 # have to separate between low and high z-range
                 # distributions may be different
-                for key, vv in dict(zip(['low_z', 'high_z'], [[0., 0.1], [0.1, 1.5]])).items():
+                for key, vv in dict(zip(['lowz', 'highz'], [[0., 0.1], [0.1, 1.5]])).items():
                     idx = pars['z'] > vv[0]
-                    idx &= pars['z'] < vv[1]
+                    idx &= pars['z'] <= vv[1]
                     sel = pd.DataFrame(pars[idx])
                     if sel.size > 0:
-                        norm = np.sum(self.x1_color[key]['weight'])
+                        idpb = selPar['zrange'] == key
+                        selParb = selPar[idpb]
+                        """
+                        norm = np.sum(self.modelParDist[key]['weight'])
                         sel[pname] = np.random.choice(
-                            self.x1_color[key][pname], len(sel), p=self.x1_color[key]['weight']/norm)
+                            self.modelParDist[key][pname], len(sel), p=self.modelParDist[key]['weight']/norm)
+                        """
+                        norm = np.sum(selParb['proba'])
+                        sel[pname] = np.random.choice(
+                            selParb['val'], len(sel), p=selParb['proba']/norm)
+
                         pdf = pd.concat((pdf, sel))
+                        """
+                        import matplotlib.pyplot as plt
+                        fig, ax = plt.subplots()
+                        fig.suptitle(pname)
+                        ax.hist(sel[pname],histtype='step')
+                        plt.show()
+                        """
             else:
                 pdf = pd.DataFrame(pars)
                 pdf[pname] = pmin
@@ -945,7 +1676,10 @@ class X0_norm:
     x0_norm: float, x0 value
     """
 
-    def __init__(self, salt2Dir='SALT2_Files', model='salt2-extended', version='1.0', absmag=-19.0906, outfile='reference_files/X0_norm.npy'):
+    def __init__(self, salt2Dir='SALT2_Files', 
+                 model='salt2-extended', 
+                 version='1.0', absmag=-19.0906, 
+                 outfile='reference_files/X0_norm.npy'):
 
         self.salt2Dir = salt2Dir
         self.model = model
@@ -963,7 +1697,13 @@ class X0_norm:
             model_max = 11501.
             wave_min = model_min
             wave_max = model_max
-
+            
+        if model == 'salt3':
+           model_min = 300.
+           model_max = 180000.
+           wave_min = 2000.
+           wave_max = 11000.
+           
         self.wave = np.arange(wave_min, wave_max, 1.)
 
         # estimate flux at 10pc
@@ -971,13 +1711,64 @@ class X0_norm:
         source = sncosmo.get_source(self.model, version=self.version)
         self.SN = sncosmo.Model(source=source)
         r = []
+        
+        x1 = np.arange(-3., 3., 0.01)
+        color = np.arange(-0.3, 0.3, 0.01)
+        
+        dfa = pd.DataFrame(x1,columns=['x1'])
+        dfb = pd.DataFrame(color,columns=['color'])
+        
+        df = dfa.merge(dfb,how='cross')
+        
+        from sn_tools.sn_utils import multiproc
+        
+        params = {}
+        r = multiproc(df,params,self.process,nproc=8)
+        """
         for x1 in np.arange(-3., 3., 0.01):
             for color in np.arange(-0.3, 0.3, 0.01):
                 r.append((x1, color, self.flux_at_10pc, self.X0_norm(x1, color)))
+        """
         tab = np.rec.fromrecords(
             r, names=['x1', 'color', 'flux_10pc', 'x0_norm'])
 
         np.save(outfile, tab)
+
+    def process(self,data,params,j=0,output_q=None):
+        """
+        Method to process data using multiprocessing
+
+        Parameters
+        ----------
+        data : pandas df
+            Data to process.
+        params : dict
+            parameters.
+        j : int, optional
+            tag for multiprocessing. The default is 0.
+        output_q : multiprocessing queue, optional
+            where to put the results. The default is None.
+
+        Returns
+        -------
+        list
+            result.
+
+        """
+        
+        
+        r = []
+        
+        for i,row in data.iterrows():
+            x1 = row['x1']
+            color = row['color']
+            r.append((x1, color, self.flux_at_10pc, self.X0_norm(x1, color)))
+        
+        if output_q is not None:
+            return output_q.put({j: r})
+        else:
+            return r
+        
 
     def flux_10pc(self):
         """
@@ -999,6 +1790,8 @@ class X0_norm:
 
         os.environ[name] = thedir+'/Instruments/Landolt'
 
+        """
+        from sn_tools.sn_throughputs import Throughputs
         self.trans_standard = Throughputs(through_dir='STANDARD',
                                           telescope_files=[],
                                           filter_files=['sb_-41A.dat'],
@@ -1007,22 +1800,33 @@ class X0_norm:
                                           filterlist=('A'),
                                           wave_min=3559,
                                           wave_max=5559)
-
+        """
+        
+        from sn_telmodel.sn_telescope import Telescope
+        
+        self.trans_standard = Telescope(tel_dir='SALT2_Files/Instruments/Landolt',
+                                        tel_optical_files=[],
+                                        tel_filter_files=['sb_-41A.dat'],
+                                        tel_wave_min=3559,
+                                        tel_wave_max=5559)
+        
+        
         mag, spectrum_file = self.getMag(
             thedir+'/MagSys/VegaBD17-2008-11-28.dat',
-            np.string_(name),
-            np.string_(band))
+            np.bytes_(name),
+            np.bytes_(band))
 
         sourcewavelen, sourcefnu = self.readSED_fnu(
             filename=thedir+'/'+spectrum_file)
         CLIGHT_A_s = 2.99792458e18         # [A/s]
         HPLANCK = 6.62606896e-27
 
+        from rubin_sim.phot_utils import Sed
         sedb = Sed(wavelen=sourcewavelen, flambda=sourcewavelen *
                    sourcefnu/(CLIGHT_A_s * HPLANCK))
 
         flux = self.calcInteg(
-            bandpass=self.trans_standard.system['A'],
+            bandpass=self.trans_standard.tel_trans['A'],
             signal=sedb.flambda,
             wavelen=sedb.wavelen)
 
@@ -1057,15 +1861,16 @@ class X0_norm:
         fluxes = 10.*self.SN.flux(0., self.wave)
 
         wavelength = self.wave/10.
+        from rubin_sim.phot_utils import Sed, PhotometricParameters, Bandpass
         SED_time = Sed(wavelen=wavelength, flambda=fluxes)
 
         expTime = 30.
         photParams = PhotometricParameters(nexp=expTime/15.)
         trans = Bandpass(
-            wavelen=self.trans_standard.system['A'].wavelen/10.,
-            sb=self.trans_standard.system['A'].sb)
+            wavelen=self.trans_standard.tel_trans['A'].wavelen/10.,
+            sb=self.trans_standard.tel_trans['A'].sb)
         # number of ADU counts for expTime
-        e_per_sec = SED_time.calcADU(bandpass=trans, photParams=photParams)
+        e_per_sec = SED_time.calc_adu(bandpass=trans, phot_params=photParams)
         # e_per_sec = sed.calcADU(bandpass=self.transmission.lsst_atmos[filtre], photParams=photParams)
         e_per_sec /= expTime/photParams.gain*photParams.effarea
 
@@ -1095,7 +1900,7 @@ class X0_norm:
         sfile = open(filename, 'rb')
         spectrum_file = 'unknown'
         for line in sfile.readlines():
-            if np.string_('SPECTRUM') in line:
+            if np.bytes_('SPECTRUM') in line:
                 spectrum_file = line.decode().split(' ')[1].strip()
             if name in line and band in line:
                 sfile.close()
@@ -1139,7 +1944,7 @@ class X0_norm:
 
         x = np.core.function_base.linspace(range_inf, range_sup, n_steps)
 
-        return integrate.simps(integrand, x=waves)
+        return integrate.simpson(integrand, x=waves)
 
     def readSED_fnu(self, filename, name=None):
         """
@@ -1888,473 +2693,8 @@ class MbCov:
             print(cov_int)
 
 
-def limVals(lc, field):
-    """ Get unique values of a field in  a table
-
-    Parameters
-    --------------
-    lc: Table
-     astropy Table (here probably a LC)
-    field: str
-     name of the field of interest
-
-    Returns
-    -----------
-    vmin: float
-     min value of the field
-    vmax: float
-     max value of the field
-    vstep: float
-     step value for this field (median)
-    nvals: int
-     number of unique values
-
-    """
-
-    lc.sort(field)
-    vals = np.unique(lc[field].data.round(decimals=4))
-    # print(vals)
-    vmin = np.min(vals)
-    vmax = np.max(vals)
-    vstep = np.median(vals[1:]-vals[:-1])
-
-    return vmin, vmax, vstep, len(vals)
-
-
-class GetReference:
-    """
-    Class to load reference data
-    used for the fast SN simulator
-
-    Parameters
-    ----------------
-    templateDir: str
-      location dir of the reference LC files
-    lcName: str
-      name of the reference file to load (lc)
-    gammaDir: str
-       location dir where gamma files are located
-    gammaName: str
-      name of the reference file to load (gamma)
-    web_path: str
-      web adress where files (LC reference and gamma) can be found if not already on disk
-    tel_par: dict
-      telescope parameters
-    param_Fisher : list(str),opt
-      list of SN parameter for Fisher estimation to consider
-      (default: ['x0', 'x1', 'color', 'daymax'])
-
-    Returns
-    -----------
-    The following dict can be accessed:
-
-    mag_to_flux_e_sec : Interp1D of mag to flux(e.sec-1)  conversion
-    flux : dict of RegularGridInterpolator of fluxes (key: filters, (x,y)=(phase, z), result=flux)
-    fluxerr : dict of RegularGridInterpolator of flux errors (key: filters, (x,y)=(phase, z), result=fluxerr)
-    param : dict of dict of RegularGridInterpolator of flux derivatives wrt SN parameters
-                  (key: filters plus param_Fisher parameters; (x,y)=(phase, z), result=flux derivatives)
-    gamma : dict of RegularGridInterpolator of gamma values (key: filters)
-
-
-    """""
-
-    def __init__(self, templateDir, lcName,
-                 gammaDir, gammaName,
-                 web_path, telescope, param_Fisher=['x0', 'x1', 'color', 'daymax']):
-
-        check_get_file(web_path, templateDir, lcName)
-
-        # Load the file - lc reference
-        lcFullName = '{}/{}'.format(templateDir, lcName)
-        f = h5py.File(lcFullName, 'r')
-        keys = list(f.keys())
-        # lc_ref_tot = Table.read(filename, path=keys[0])
-        lc_ref_tot = Table.from_pandas(pd.read_hdf(lcFullName))
-
-        idx = lc_ref_tot['z'] > 0.005
-        lc_ref_tot = np.copy(lc_ref_tot[idx])
-
-        # telescope requested
-        # Load the file - gamma values
-
-        # fgamma = h5py.File(gammaName, 'r')
-        gammas = LoadGamma('grizy', gammaDir, gammaName, web_path, telescope)
-        self.gamma = gammas.gamma
-        self.mag_to_flux = gammas.mag_to_flux
-        # Load references needed for the following
-        self.lc_ref = {}
-        self.gamma_ref = {}
-        # self.gamma = {}
-        self.m5_ref = {}
-        # self.mag_to_flux_e_sec = {}
-
-        self.flux = {}
-        self.fluxerr = {}
-        self.param = {}
-
-        bands = np.unique(lc_ref_tot['band'])
-        mag_range = np.arange(10., 38., 0.01)
-        # exptimes = np.linspace(15.,30.,2)
-        # exptimes = [15.,30.,60.,100.]
-
-        # gammArray = self.loopGamma(bands, mag_range, exptimes,telescope)
-
-        method = 'linear'
-
-        # for each band: load data to be used for interpolation
-        for band in bands:
-            idx = lc_ref_tot['band'] == band
-            lc_sel = Table(lc_ref_tot[idx])
-
-            lc_sel['z'] = lc_sel['z'].data.round(decimals=4)
-            lc_sel['phase'] = lc_sel['phase'].data.round(decimals=4)
-
-            """
-            fluxes_e_sec = telescope.mag_to_flux_e_sec(
-                mag_range, [band]*len(mag_range), [30]*len(mag_range))
-            self.mag_to_flux_e_sec[band] = interpolate.interp1d(
-                mag_range, fluxes_e_sec[:, 1], fill_value=0., bounds_error=False)
-            """
-
-            # these reference data will be used for griddata interp.
-            self.lc_ref[band] = lc_sel
-            self.gamma_ref[band] = lc_sel['gamma'][0]
-            self.m5_ref[band] = np.unique(lc_sel['m5'])[0]
-
-            # Another interpolator, faster than griddata: regulargridinterpolator
-
-            # Fluxes and errors
-            zmin, zmax, zstep, nz = self.limVals(lc_sel, 'z')
-            phamin, phamax, phastep, npha = self.limVals(lc_sel, 'phase')
-
-            zstep = np.round(zstep, 3)
-            phastep = np.round(phastep, 3)
-
-            zv = np.linspace(zmin, zmax, nz)
-            # zv = np.round(zv,2)
-            # print(band,zv)
-            phav = np.linspace(phamin, phamax, npha)
-
-            index = np.lexsort((lc_sel['z'], lc_sel['phase']))
-            flux = np.reshape(lc_sel[index]['flux'], (npha, nz))
-            fluxerr = np.reshape(lc_sel[index]['fluxerr'], (npha, nz))
-
-            self.flux[band] = RegularGridInterpolator(
-                (phav, zv), flux, method=method, bounds_error=False, fill_value=0.)
-            self.fluxerr[band] = RegularGridInterpolator(
-                (phav, zv), fluxerr, method=method, bounds_error=False, fill_value=0.)
-
-            # Flux derivatives
-            self.param[band] = {}
-            for par in param_Fisher:
-                valpar = np.reshape(
-                    lc_sel[index]['d{}'.format(par)], (npha, nz))
-                self.param[band][par] = RegularGridInterpolator(
-                    (phav, zv), valpar, method=method, bounds_error=False, fill_value=0.)
-
-            # gamma estimator
-
-            """
-            rec = Table.read(gammaName, path='gamma_{}'.format(band))
-
-            rec['mag'] = rec['mag'].data.round(decimals=4)
-            rec['exptime'] = rec['exptime'].data.round(decimals=4)
-
-            magmin, magmax, magstep, nmag = self.limVals(rec, 'mag')
-            expmin, expmax, expstep, nexp = self.limVals(rec, 'exptime')
-            mag = np.linspace(magmin, magmax, nmag)
-            exp = np.linspace(expmin, expmax, nexp)
-
-            index = np.lexsort((np.round(rec['exptime'], 4), rec['mag']))
-            gammab = np.reshape(rec[index]['gamma'], (nmag, nexp))
-            self.gamma[band] = RegularGridInterpolator(
-                (mag, exp), gammab, method=method, bounds_error=False, fill_value=0.)
-            # print(band, gammab, mag, exp)
-            """
-
-    def limVals(self, lc, field):
-        """ Get unique values of a field in  a table
-
-        Parameters
-        ----------
-        lc: Table
-         astropy Table (here probably a LC)
-        field: str
-         name of the field of interest
-
-        Returns
-        -------
-        vmin: float
-         min value of the field
-        vmax: float
-         max value of the field
-        vstep: float
-         step value for this field (median)
-        nvals: int
-         number of unique values
-
-
-
-
-        """
-
-        lc.sort(field)
-        vals = np.unique(lc[field].data.round(decimals=4))
-        # print(vals)
-        vmin = np.min(vals)
-        vmax = np.max(vals)
-        vstep = np.median(vals[1:]-vals[:-1])
-
-        return vmin, vmax, vstep, len(vals)
-
-    def Read_Ref(self, fi, j=-1, output_q=None):
-        """" Load the reference file and
-        make a single astopy Table from a set of.
-
-        Parameters
-        ----------
-        fi: str,
-         name of the file to be loaded
-
-        Returns
-        -------
-        tab_tot: astropy table
-         single table = vstack of all the tables in fi.
-
-        """
-
-        tab_tot = Table()
-        """
-        keys=np.unique([int(z*100) for z in zvals])
-        print(keys)
-        """
-        f = h5py.File(fi, 'r')
-        keys = f.keys()
-        zvals = np.arange(0.01, 0.9, 0.01)
-        zvals_arr = np.array(zvals)
-
-        for kk in keys:
-
-            tab_b = Table.read(fi, path=kk)
-
-            if tab_b is not None:
-                tab_tot = vstack([tab_tot, tab_b], metadata_conflicts='silent')
-                """
-                diff = tab_b['z']-zvals_arr[:, np.newaxis]
-                # flag = np.abs(diff)<1.e-3
-                flag_idx = np.where(np.abs(diff) < 1.e-3)
-                if len(flag_idx[1]) > 0:
-                    tab_tot = vstack([tab_tot, tab_b[flag_idx[1]]])
-                """
-
-            """
-            print(flag,flag_idx[1])
-            print('there man',tab_b[flag_idx[1]])
-            mtile = np.tile(tab_b['z'],(len(zvals),1))
-            # print('mtile',mtile*flag)
-                
-            masked_array = np.ma.array(mtile,mask=~flag)
-            
-            print('resu masked',masked_array,masked_array.shape)
-            print('hhh',masked_array[~masked_array.mask])
-            
-            
-        for val in zvals:
-            print('hello',tab_b[['band','z','time']],'and',val)
-            if np.abs(np.unique(tab_b['z'])-val)<0.01:
-            # print('loading ref',np.unique(tab_b['z']))
-            tab_tot=vstack([tab_tot,tab_b])
-            break
-            """
-        if output_q is not None:
-            output_q.put({j: tab_tot})
-        else:
-            return tab_tot
-
-    def Read_Multiproc(self, tab):
-        """
-        Multiprocessing method to read references
-
-        Parameters
-        ---------------
-        tab: astropy Table of data
-
-        Returns
-        -----------
-        stacked astropy Table of data
-
-        """
-        # distrib=np.unique(tab['z'])
-        nlc = len(tab)
-        # n_multi=8
-        if nlc >= 8:
-            n_multi = min(nlc, 8)
-            nvals = nlc/n_multi
-            batch = range(0, nlc, nvals)
-            batch = np.append(batch, nlc)
-        else:
-            batch = range(0, nlc)
-
-        # lc_ref_tot={}
-        # print('there pal',batch)
-        result_queue = multiprocessing.Queue()
-        for i in range(len(batch)-1):
-
-            ida = int(batch[i])
-            idb = int(batch[i+1])
-
-            p = multiprocessing.Process(
-                name='Subprocess_main-'+str(i), target=self.Read_Ref, args=(tab[ida:idb], i, result_queue))
-            p.start()
-
-        resultdict = {}
-        for j in range(len(batch)-1):
-            resultdict.update(result_queue.get())
-
-        for p in multiprocessing.active_children():
-            p.join()
-
-        tab_res = Table()
-        for j in range(len(batch)-1):
-            if resultdict[j] is not None:
-                tab_res = vstack([tab_res, resultdict[j]])
-
-        return tab_res
-
-
-class LoadGamma:
-    """
-    class to load gamma and mag_to_flux values 
-    and make regulargrid out of it
-
-    Parameters
-    ---------------
-    bands: str
-      bands to consider
-    fDir: str
-      location dir of the gamma file
-    gammaName: str
-      name of the file containing gamma values
-    web_path: str
-        web server where the file could be loaded from.
-    telescope: Telescope
-      instrument throughput
-    """
-
-    def __init__(self, bands, fDir, gammaName, web_path, telescope):
-
-        self.gamma = {}
-        self.mag_to_flux = {}
-
-        check_get_file(web_path, fDir, gammaName)
-
-        gammaFullName = '{}/{}'.format(fDir, gammaName)
-        if not os.path.exists(gammaFullName):
-            self.generateGamma(bands, telescope, gammaFullName)
-
-        for band in bands:
-            rec = Table.read(gammaFullName,
-                             path='gamma_{}'.format(band))
-
-            rec['mag'] = rec['mag'].data.round(decimals=4)
-            rec['single_exptime'] = rec['single_exptime'].data.round(
-                decimals=4)
-
-            magmin, magmax, magstep, nmag = limVals(rec, 'mag')
-            expmin, expmax, expstep, nexpo = limVals(rec, 'single_exptime')
-            nexpmin, nexpmax, nexpstep, nnexp = limVals(rec, 'nexp')
-            mag = np.linspace(magmin, magmax, nmag)
-            exp = np.linspace(expmin, expmax, nexpo)
-            nexp = np.linspace(nexpmin, nexpmax, nnexp)
-
-            index = np.lexsort(
-                (rec['nexp'], np.round(rec['single_exptime'], 4), rec['mag']))
-            gammab = np.reshape(rec[index]['gamma'], (nmag, nexpo, nnexp))
-            fluxb = np.reshape(rec[index]['flux_e_sec'], (nmag, nexpo, nnexp))
-            self.gamma[band] = RegularGridInterpolator(
-                (mag, exp, nexp), gammab, method='linear', bounds_error=False, fill_value=0.)
-            self.mag_to_flux[band] = RegularGridInterpolator(
-                (mag, exp, nexp), fluxb, method='linear', bounds_error=False, fill_value=0.)
-
-    def generateGammas(self, bands, telescope, outName):
-        """
-        Method to generate gamma file (if does not exist)
-
-        Parameters
-        ---------------
-        bands: str
-          bands to consider
-        telescope: Telescope
-           instrument
-        outName: str
-           output file name
-
-        """
-        print('gamma file {} does not exist')
-        print('will generate it - few minutes')
-        mag_range = np.arange(13., 38., 0.05)
-        nexps = range(1, 500, 1)
-        single_exposure_time = [15., 30.]
-        Gamma(bands, telescope, outName,
-              mag_range=mag_range,
-              single_exposure_time=single_exposure_time, nexps=nexps)
-
-        print('end of gamma estimation')
-
-
-class LoadDust:
-
-    """
-    class to load dust correction file
-    and make regulargrid out of it
-
-    Parameters
-    ---------------
-    fDir: str
-      location directory of the file
-    fName: str
-      name of the file containing dust correction values
-    web_path: str
-      web server adress where the file could be retrieved
-    bands: str, opt
-       bands to consider (default: 'grizy')
-    """
-
-    def __init__(self, fDir, fName, web_path, bands='grizy'):
-
-        # check whether the file is available
-        # if not grab it from the web server
-        check_get_file(web_path, fDir, fName)
-
-        self.dustcorr = {}
-
-        tab = Table.read('{}/{}'.format(fDir, fName), path='dust')
-
-        for b in bands:
-            idx = tab['band'] == b
-            rec = tab[idx]
-            phasemin, phasemax, phasestep, nphase = limVals(rec, 'phase')
-            zmin, zmax, zstep, nz = limVals(rec, 'z')
-            ebvofMWmin, ebvofMWmax, ebvofMWstep, nebvofMW = limVals(
-                rec, 'ebvofMW')
-
-            phase = np.linspace(phasemin, phasemax, nphase)
-            z = np.linspace(zmin, zmax, nz)
-            ebvofMW = np.linspace(ebvofMWmin, ebvofMWmax, nebvofMW)
-
-            index = np.lexsort(
-                (rec['ebvofMW'], np.round(rec['z'], 4), rec['phase']))
-
-            self.dustcorr[b] = {}
-            for vv in ['flux', 'dx0', 'dx1', 'dcolor', 'ddaymax']:
-                ratio = np.reshape(
-                    rec[index]['ratio_{}'.format(vv)], (nphase, nz, nebvofMW))
-                self.dustcorr[b]['ratio_{}'.format(vv)] = RegularGridInterpolator(
-                    (phase, z, ebvofMW), ratio, method='linear', bounds_error=False, fill_value=0.)
-
-
 class Gamma:
-    """ 
+    """
     Class to estimate gamma parameters
     depending on mag and exposure time
 
@@ -2408,10 +2748,10 @@ class Gamma:
             idx = tab['band'] == band
             sel = Table(tab[idx])
             sel.write(fileout, path='gamma_{}'.format(band),
-                      append=True, compression=True)
+                      append=True, compression=True, serialize_meta=True)
 
     def loopGamma(self, bands, mag_range, single_exposure_time, nexps, telescope):
-        """ 
+        """
         gamma parameter estimation - loop on bands
 
         Parameters
@@ -2455,9 +2795,21 @@ class Gamma:
         for j in range(len(bands)):
             restot = vstack([restot, resultdict[j]])
 
+        # add zero points and mean wavelengths as metadata
+
+        dict_meta = {}
+        dict_meta['zp'] = {}
+        dict_meta['mean_wavelength'] = {}
+        bands = 'ugrizy'
+        for b in bands:
+            dict_meta['zp'][b] = telescope.zp(b)
+            dict_meta['mean_wavelength'][b] = telescope.mean_wavelength[b]
+
+        restot.meta = dict_meta
         return restot
 
-    def calcGamma(self, band, mag_range, single_exposure_time, nexps, telescope, j=-1, output_q=None):
+    def calcGamma(self, band, mag_range, single_exposure_time,
+                  nexps, telescope, j=-1, output_q=None):
         """ Gamma parameter estimation
 
         Parameters
@@ -2496,7 +2848,7 @@ class Gamma:
                         (band, mag, single_expo, nexp, gamma, flux_e))
 
         rec = Table(rows=gamm, names=[
-                    'band', 'mag', 'single_exptime', 'nexp', 'gamma', 'flux_e_sec'])
+            'band', 'mag', 'single_exptime', 'nexp', 'gamma', 'flux_e_sec'])
 
         if output_q is not None:
             output_q.put({j: rec})
@@ -2565,3 +2917,593 @@ class SNTimer:
         res = np.rec.fromrecords([self.r], names=self.names)
 
         return res
+
+
+class x1_color_dist:
+    """
+    class to estimate the (x1,color) distribution
+
+    Parameters
+    --------------
+    fichname: str
+      file with either proba parameters of (x1,color) distributions
+
+    """
+
+    def __init__(self, fichname, sigma_param):
+
+        if 'JLA' in fichname:
+            proba = self.get_proba_hist(fichname)
+        else:
+            proba = self.get_proba_param(fichname, sigma_param)
+
+        self.proba = proba
+
+    def func(self, par, par_mean, sigma):
+        """
+        Function to define the probability of a parameter
+
+        Parameters
+        --------------
+        par: float
+          parameter value
+        par_mean: float
+          mean value of the parameter
+        sigma: float
+           sigma of the distribution
+
+        Returns
+        ----------
+        exp(-(par-par_mean)**2/2/sigma**2
+
+        """
+        return np.exp(-(par-par_mean)**2/(2.*sigma**2))
+
+    def get_proba_param(self, fichname='x1_color_G10.csv', sigma_param={}):
+        """
+        Function to estimate the probability distributions of (x1,c)
+
+        Parameters
+        ---------------
+        fichname: str
+         file with parameters to construct proba distributions
+          csv file with the following columns
+         zrange,param,param_min,param_max,param_mean,param_mean_err,sigma_minus,sigma_minus_err,sigma_plus,sigma_plus_err
+
+        Probability destribution are estimated from
+        Measuring Type Ia Supernova Populations of Stretch and Color and Predicting Distance Biases - D.Scolnic and R.Kessler, The Astrophysical Journal Letters, Volume 822, Issue 2 (2016).
+
+        Returns
+        ----------
+        pandas df with the following columns
+        zrange, param, val, proba
+
+        with
+        zrange = lowz/highz
+        param = x1/color
+
+        """
+        x1_color = pd.read_csv(fichname, comment='#')
+
+        # color distrib
+
+        x1_color_probas = pd.DataFrame()
+
+        for io, row in x1_color.iterrows():
+            ppa = np.arange(row.param_min, row.param_mean, 0.001)
+            ppb = np.arange(row.param_mean, row.param_max, 0.001)
+            pp_all = np.concatenate((ppa, ppb))
+            res = pd.DataFrame(pp_all.tolist(), columns=['val'])
+            ppval = row.param_mean+sigma_param[row.param]*row.param_mean_err
+            # print('here',row.param,ppval,row.param_mean)
+            probaa = self.func(ppa, ppval, row.sigma_minus)
+            probab = self.func(ppb, ppval, row.sigma_plus)
+            proba_all = np.concatenate((probaa, probab))
+            res['proba'] = proba_all.tolist()
+            res['zrange'] = row.zrange
+            res['param'] = row.param
+            x1_color_probas = pd.concat((x1_color_probas, res))
+
+        """
+        import matplotlib.pyplot as plt
+        idx = x1_color_probas['zrange'] == 'lowz'
+        idx &= x1_color_probas['param'] == 'x1'
+        sel = x1_color_probas[idx]
+        idxb = x1_color_probas['zrange'] == 'highz'
+        idxb &= x1_color_probas['param'] == 'x1'
+        selb = x1_color_probas[idxb]
+        print(sel.columns)
+        plt.plot(sel['val'],sel['proba'])
+        plt.plot(selb['val'],selb['proba'])
+        plt.show()
+        """
+
+        return x1_color_probas
+
+    def get_proba_hist(self, fichname='jla_lcparams.txt'):
+        """
+        Function to estimate the probability distributions of (x1,c)
+
+        Parameters
+        ---------------
+        fichname: str
+          txt file with x1 and c distributions used to estimate probabilities
+
+
+        Returns
+        ----------
+        pandas df with the following columns
+        zrange, param, val, proba
+
+        with
+        zrange = lowz/highz
+        param = x1/color
+
+        """
+        x1_color = pd.read_csv(fichname, sep=' ')
+
+        df = pd.DataFrame()
+
+        for zrange in ['lowz', 'highz']:
+            for param in ['x1', 'color']:
+                rr = self.pdf(x1_color, param, zrange)
+                df = pd.concat((df, rr))
+
+        return df
+
+    def pdf(self, data, var, zrange='highz'):
+        """
+        Method to estimate a pdf from a distribution
+
+        Parameters
+        ---------------
+        data: pandas df
+          data to process
+        var: str
+          variable to consider
+        zrange: str, opt
+          zrange to consider (lowz, highz) (default: highz)
+
+
+        """
+        idx = data['zcmb'] >= 0.1
+        if zrange == 'highz':
+            data = data[idx]
+        else:
+            data = data[~idx]
+
+        nb = dict(zip(['lowz', 'highz'], [8, 11]))
+        min_var = data[var].min()
+        max_var = data[var].max()
+        nbins = nb[zrange]
+        bins = np.linspace(min_var, max_var, nbins)
+        group = data.groupby(pd.cut(data[var], bins))
+        plot_centers = (bins[:-1] + bins[1:])/2
+        plot_values = group[var].size()
+        from scipy.interpolate import interp1d
+        interp = interp1d(
+            plot_centers, plot_values, bounds_error=False, fill_value=0.)
+
+        pp = np.arange(min_var, max_var, 0.001)
+
+        df = pd.DataFrame(pp.tolist(), columns=['val'])
+
+        df['proba'] = interp(pp)
+        df['param'] = var
+        df['zrange'] = zrange
+
+        return df
+
+
+def get_colName(obs, what=['fieldRA', 'RA']):
+    """
+    function to get a column name containing what
+
+    Parameters
+    ---------------
+    obs: record array
+      data to process
+    what: list(str), opt
+      str to search in colnames (default: fieldRA,RA)
+
+    Returns
+    ----------
+    the list of col name if it exists (empty list otherwise)
+
+    """
+    llist = obs.dtype.names
+    matches = set(llist).intersection(set(what))
+
+    return list(matches)
+    """
+    filter_object = filter(lambda a: what in a, llist)
+
+    return list(filter_object)
+    """
+
+
+def n_z(data, var='z', bins=np.arange(0.005, 0.11, 0.01),
+        norm_factor=1, varname='nsn'):
+    """
+    Function to estimate n vs var bins.
+
+    Parameters
+    ----------
+    data : pandas df
+        Data to process.
+    var : str, optional
+        Variable of interest. The default is 'z'.
+    bins : array, optional
+        Bins. The default is np.arange(0.005, 0.11, 0.01).
+    norm_factor : float, optional
+        Normalization factor. The default is 1.
+    varname : str, optional
+        output varnam for n. The default is 'nsn'.
+
+    Returns
+    -------
+    df : pandas df
+        Output data.
+
+    """
+
+    group = data.groupby(pd.cut(data[var], bins))
+
+    _centers = (bins[:-1] + bins[1:])/2
+    _values = group[var].size()/norm_factor
+
+    df = pd.DataFrame(_centers, columns=[var])
+
+    df[varname] = list(_values)
+
+    return df
+
+
+def register_bands_sncosmo_old(sncosmo, telescope,
+                               airmass, aerosol, pwv, ozone):
+    """
+    Function to register throughputs in sncosmo
+
+    Parameters
+    ----------
+    sncosmo : sncosmo instance
+        DESCRIPTION.
+    telescope : Throughputs
+        instance of the class.
+    airmass : float
+        airmass value.
+    aerosol : float
+        aerosol value.
+    pwv : float
+        precipitable water vapour value.
+    ozone : float
+        ozone value.
+
+    Returns
+    -------
+    None.
+
+    """
+
+    # band registery in sncosmo
+    from astropy import units as u
+
+    telescope.new_atmosphere(site_name=telescope.site_name,
+                             airmass=airmass,
+                             aerosol=aerosol,
+                             pwv=pwv, ozone=ozone)
+    for band in 'grizy':
+        name = '{}::{}_{}'.format(
+            telescope.site_name, band, int(10*airmass))
+        throughput = telescope.throughputs[band]
+        bandcosmo = sncosmo.Bandpass(throughput.wavelen,
+                                     throughput.sb,
+                                     name=name,
+                                     wave_unit=u.nm)
+        sncosmo.registry.register(bandcosmo, force=True)
+
+
+def register_bands_sncosmo(sncosmo, telescope, bandname, band,
+                           airmass, pwv, ozone, aerosol):
+    """
+    Function to register throughputs in sncosmo
+
+    Parameters
+    ----------
+    sncosmo : sncosmo instance
+        DESCRIPTION.
+    telescope : Throughputs
+        instance of the class.
+    bandname: str
+        band name for sncosmo
+    airmass : float
+        airmass value.
+    aerosol : float
+        aerosol value.
+    pwv : float
+        precipitable water vapour value.
+    ozone : float
+        ozone value.
+
+    Returns
+    -------
+    None.
+
+    """
+
+    # band registery in sncosmo
+    from astropy import units as u
+
+    telescope.new_atmosphere(site_name=telescope.site_name,
+                             airmass=airmass,
+                             aerosol=aerosol,
+                             pwv=pwv, ozone=ozone)
+    throughput = telescope.throughputs[band]
+    bandcosmo = sncosmo.Bandpass(throughput.wavelen,
+                                 throughput.sb,
+                                 name=bandname,
+                                 wave_unit=u.nm)
+    sncosmo.registry.register(bandcosmo, force=True)
+
+
+def get_val(var):
+    """
+    Function to grab values from parser
+
+    Parameters
+    ----------
+    var : str
+        var to process.
+
+    Returns
+    -------
+    var : list(int)
+        Result.
+
+    """
+    if '-' in var:
+        seas_spl = var.split('-')
+        seas_min = int(seas_spl[0])
+        seas_max = int(seas_spl[1])
+        var = range(seas_min, seas_max+1)
+    else:
+        var = var.split(',')
+        var = list(map(int, var))
+
+    return var
+
+
+def load_config(yaml_config):
+    """
+
+
+    Parameters
+    ----------
+    yaml_config : str
+        yaml fine name
+
+    Returns
+    -------
+    config : dict
+        dict of the yaml file
+
+    """
+    import yaml
+    config = {}
+    if isinstance(yaml_config, dict):
+        config = yaml_config
+    else:
+        with open(yaml_config) as file:
+            config = yaml.full_load(file)
+
+    return config
+
+
+def clean_level(tt):
+    """
+    Function to clean the level
+
+    Parameters
+    ----------
+    tt : pandas df
+        Data to process.
+
+    Returns
+    -------
+    tt : pandas df
+        cleaned df.
+
+    """
+
+    tt = tt[tt.columns.drop(list(tt.filter(regex='level')))]
+
+    return tt
+
+
+def list_columns(list_col, col='PWV'):
+    """
+    Function to retrieve list(str) with col inside
+
+    Parameters
+    ----------
+    list_col : list(str)
+        list of columns
+    col : str, optional
+        substr to tag. The default is 'PWV'.
+
+    Returns
+    -------
+    res : list(str)
+        List of corresponding columns.
+
+    """
+
+    res = list(filter(lambda x: col in x, list_col))
+
+    return res
+
+
+class SN_simu_params:
+    def __init__(self, sn_params, cosmo_params,
+                 mjdCol, area, web_path, seasonCol='season'):
+        """
+        Wrapper class to estimate SN simulation parameters
+
+        Parameters
+        ----------
+        sn_params : dict
+            SN parameters.
+        cosmo_params : dict
+            cosmo parameters.
+        mjdCol : str
+            mjd col name.
+        area : float
+            pixel area.
+        web_path : str
+            web path link.
+        seasonCol : str, optional
+            season col name. The default is 'season'.
+
+        Returns
+        -------
+        None.
+
+        """
+
+        self.seasonCol = seasonCol
+        simuFile = sn_params['simuFile']
+        self.simuParamsFile = self.simu_params_from_file(simuFile)
+        self.gen_simu = SimuParameters(sn_params, cosmo_params,
+                                       mjdCol=mjdCol, area=area,
+                                       web_path=web_path)
+
+    def __call__(self, obs, seas):
+        """
+        Main method: estimation of simulation parameters
+
+        Parameters
+        ----------
+        obs : numpy array
+            Observations.
+        seas : int
+            season number.
+
+        Returns
+        -------
+        gen_pars : numpy array
+            List of simulation parameters.
+
+        """
+
+        if len(self.simuParamsFile) == 0:
+            gen_pars = self.get_params_season(obs, seas)
+        else:
+            gen_pars = self.get_params_from_file(obs, seas)
+
+        return gen_pars
+
+    def get_params_from_file(self, obs, seas):
+        """
+        Method to grab simu parameters from input file
+
+        Parameters
+        ----------
+        obs : numpy array
+            array of observations.
+        seas : int
+            season to process.
+
+        Returns
+        -------
+        sel : numpy array
+            array of simu parameters.
+
+        """
+
+        healpixID = obs['healpixID'].mean()
+
+        idx = self.simuParamsFile['healpixID'] == healpixID
+        idx &= self.simuParamsFile['season'] == seas
+
+        sel = self.simuParamsFile[idx]
+
+        return sel.to_records(index=False)
+
+    def get_params_season(self, obs, seas):
+        """
+        Method to grab simu params (estimated from obs) for a season
+
+        Parameters
+        ----------
+        obs : numpy array
+            Observations
+        seas : int
+            season of observation.
+
+        Returns
+        -------
+        gen_pars : numpy array
+            simulation parameters.
+
+        """
+
+        idxa = obs[self.seasonCol] == seas
+        obs_season = obs[idxa]
+
+        gen_pars = self.gen_simu.simuparams(obs_season)
+
+        if gen_pars is None:
+            return gen_pars
+
+        gen_pars = rf.append_fields(gen_pars,
+                                    'season',
+                                    [seas]*len(gen_pars))
+
+        return gen_pars
+
+    def simu_params_from_file(self, fName):
+        """
+        Method to grab simu parameters from file
+
+        Parameters
+        ----------
+        fName: str
+          file name to load.
+
+        Returns
+        -------
+        numpy array
+            array with simu parameters
+
+        """
+        # sn simu parameters from file
+        df = pd.DataFrame()
+
+        if fName != 'None':
+            df = pd.read_hdf(fName)
+
+        return df
+
+
+def test_multiproc(index='outa'):
+    """
+    Function useful to test multiprocessing
+
+    Parameters
+    ----------
+    index : str, optional
+        index string. The default is 'outa'.
+
+    Returns
+    -------
+    None.
+
+    """
+
+    print('starting', index)
+
+    for i in range(3000):
+        for j in range(3000):
+            k = i+j
+
+    print('finishing', index)
